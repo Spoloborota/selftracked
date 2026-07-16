@@ -1,0 +1,13 @@
+# Local agent handoff/context files — never commit
+/HANDOFF.md
+/.claude/settings.local.json
+
+# Build artifacts
+/bin/
+/dist/
+*.test
+
+# Local working files
+*.sqlite
+*.sqlite-journal
+.DS_Store
