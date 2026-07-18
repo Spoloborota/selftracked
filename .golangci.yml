@@ -1,0 +1,37 @@
+version: "2"
+
+# Posture: every linter on, then switch off the ones whose objection this
+# project has already answered — each with its reason, so a future reader can
+# re-open the argument instead of guessing why the check is absent.
+linters:
+  default: all
+  disable:
+    # Bans TODO/FIXME outright. Staged work is the method here: a TODO naming
+    # the stage that owns it is better than silence about the same gap.
+    - godox
+    # Requires an allowlist of permitted imports. The dependency policy lives
+    # in the specification and is enforced by scripts/check-pins.sh, which can
+    # state its reasons; a second list here would drift from the first.
+    - depguard
+    # Every struct literal must set every field. Zero values are load-bearing
+    # here — the schema's defaults mirror them deliberately.
+    - exhaustruct
+    # Minimum identifier length. Short names in short scopes read better, and
+    # this codebase is full of them (tx, db, id, fh).
+    # Blank-line placement. gofumpt already settles formatting; two opinions
+    # about whitespace is one too many.
+    - varnamelen
+    - wsl
+    - wsl_v5
+    - nlreturn
+    # Global state is genuinely used for build identity (version.Version is
+    # set by -ldflags at release time).
+    - gochecknoglobals
+    # Superseded by gomodguard_v2, which stays enabled by the default:all
+    # posture; running both only produces a deprecation warning per run.
+    - gomodguard
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt

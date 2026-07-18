@@ -1,0 +1,79 @@
+name: gates
+
+# Authored at stage S0; the three-platform matrix is a precondition of the
+# first push rather than of S0's closure, so this file is written and
+# reviewed before it has ever run (execution plan, D-EP8).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: go1.26.5
+  CGO_ENABLED: "0"
+
+jobs:
+  gates:
+    name: gates (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: build
+        run: go build -trimpath ./...
+
+      - name: vet
+        run: go vet ./...
+
+      - name: test
+        run: go test -race ./...
+
+      - name: lint
+        run: go tool golangci-lint run ./...
+
+      - name: modern idiom (both halves of the gate)
+        shell: bash
+        run: |
+          out="$(go fix -diff ./... 2>&1)"; status=$?
+          if [ -n "$out" ] || [ $status -ne 0 ]; then
+            printf '%s\n' "$out" >&2
+            echo "pending modernisations (exit $status)" >&2
+            exit 1
+          fi
+
+      - name: vulnerabilities
+        run: go tool govulncheck ./...
+
+  policy:
+    name: policy gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: dependency pins
+        run: ./scripts/check-pins.sh
+
+      - name: go fix exit-code behaviour on the pinned toolchain
+        run: ./scripts/probe-gofix.sh
+
+      - name: traceability accounting
+        run: python3 scripts/check-inventory.py

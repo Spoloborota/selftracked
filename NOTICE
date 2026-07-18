@@ -1,2 +1,25 @@
 selftracked
 Copyright 2026 Spoloborota
+
+This product is licensed under the Apache License, Version 2.0.
+
+Third-party dependencies
+------------------------
+
+Build-time tools, not linked into the binary:
+
+  github.com/golangci/golangci-lint  GPL-3.0-or-later  (run as a tool; its
+                                     source is neither imported nor
+                                     distributed with this project)
+  golang.org/x/vuln/cmd/govulncheck  BSD-3-Clause
+
+Planned runtime dependency (recorded here at first intake, per the
+specification's licensing deliverable):
+
+  modernc.org/sqlite                 BSD-3-Clause
+  modernc.org/libc                   BSD-3-Clause
+
+BSD-3-Clause is compatible with Apache-2.0 for distribution: it imposes no
+conditions Apache-2.0 does not already satisfy, and its attribution
+requirement is met by this file. Redistribution of a binary linking these
+libraries must retain their copyright notices, which this NOTICE carries.
