@@ -38,7 +38,12 @@ the project is in its specification-and-planning phase.
    afterwards, and anything touching privacy, security, or a deviation from
    the spec is ratified by the owner. The full protocol —
    `.claude/rules/critic-protocol.md`; the plan §5 is its authority.
-6. **Commits are owner-approved; agents do not push.**
+6. **Commit freely, never push.** Local commits are made as often as work
+   reaches a coherent state — they cost nothing and are the only restore
+   point untracked files do not have. **Publishing is a separate act and is
+   the owner's alone**: never run `git push`, and never suggest a workflow
+   whose next step is a push. A commit is invisible until pushed, which is
+   why the prohibition sits on the push and not on the commit.
 
 ## Assertion provenance — read this before asserting anything
 
