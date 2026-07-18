@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'test -f docs/v0-progress.md && { echo \"=== selftracked progress ledger (docs/v0-progress.md) — read before working, update before finishing ===\"; sed -n \"1,40p\" docs/v0-progress.md; } || true'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .claude/hooks/assertion_check.py"
+          }
+        ]
+      }
+    ]
+  }
+}

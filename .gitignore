@@ -1,13 +1,21 @@
 # Local agent handoff/context files — never commit
 /HANDOFF.md
 /.claude/settings.local.json
+/work/local/
 
 # Build artifacts
 /bin/
 /dist/
 *.test
+__pycache__/
+*.py[cod]
 
 # Local working files
 *.sqlite
 *.sqlite-journal
 .DS_Store
+
+# selftracked dogfooding: local per-machine artifacts (the tool's own design)
+.selftracked/db.sqlite
+.selftracked/dump.hash
+.selftracked/skip-pending
