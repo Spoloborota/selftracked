@@ -12,19 +12,16 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0 (the traceability inventory), S0 (repo bootstrap), S1a (the
-schema as text), S1b (the schema gates: 85 red fixtures, one subtest per
-inventory row), S1c (driver behaviour: the §16 re-verification items
-proven on the pinned driver, plus the §1.1 tier boundaries proven by
-demonstration). The whole S1 group is closed; `internal/schema` carries
-the DDL, the connection posture, and three test suites. All local,
-nothing pushed.
+**Done:** G0, S0, S1a, S1b, S1c, S2. The repository now carries the full
+schema layer (`internal/schema`: DDL, connection posture, three test
+suites) and the CLI skeleton (`internal/ref` grammar, `internal/cli`
+dispatcher with a closed registry and structural `--json`, the §6.1 exit
+mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
+built under both decided names). All local, nothing pushed.
 
-**Next:** S2 implementation — the dispatcher. The stage is open
-(`docs/stage-openings/s2.md`): 20 rows after five moves to verb stages;
-verb registry, §3.2 parsing obligations (a)–(c), the leading-dash rule,
-JSON errors, the §6.1 exit mapper, the version-gate stub, and the
-testscript e2e harness the DoD names.
+**Next:** S3 — serializer + `dump` (§8.1), plus the §16 cross-OS
+byte-equality obligation. 36 rows. Open per D-EP13:
+`docs/stage-openings/s3.md` committed before any code.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -43,7 +40,7 @@ section and the amendments log).
 | S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | All 10 rows `verified-by-command`. INV-053 closed once the owner ratified the spec amendment that made its claim true (spec rev 3.10) |
 | S1b — schema gates | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green (114 subtests, `-race`, fresh cache) · local run @ `ad8ef15`, no CI has run (D-EP8) | All 85 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1b.md`); two close critics ran; five mutation probes shown red. Adjudications recorded below |
 | S1c — driver behaviour | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e5b2006`, no CI has run (D-EP8) | All 9 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1c.md`); INV-010 → S7 at open; close critic re-ran all probes individually. Adjudications in the close entry below |
-| S2 — CLI dispatcher | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s2.md`). 20 rows after five moves (INV-048/049→S6, INV-050→S5b, INV-180/181→S5a) |
+| S2 — CLI dispatcher | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `739f8c9`, no CI has run (D-EP8) | All 20 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s2.md`); five moves at open; close critic ran every resolved command by name and probed the built binary by hand. Adjudications in the close entry |
 | S3 — serializer + `dump` | FULL | not started | — | — |
 | S4 — `load` + parser fuzzing | FULL | not started | — | — |
 | S5a — task-lifecycle verbs | FULL | not started | — | — |
@@ -171,6 +168,24 @@ settings and the new `_dqs=0` behavioural probe is the fifth —
 The Serialize byte-identity assertion is reasoned-sound but was not
 stress-run; if it ever flakes, the aborted-DELETE-between-snapshots
 reasoning in the close report is where to look first.
+
+S2 closed on one critic's report after the fixes landed. Accepted: the
+testscript dependency was filed as indirect while directly imported (go
+mod tidy; check-pins does not police tidiness); the opening record's two
+dependency-audit greps matched the wrong universe — golangci-lint's own
+transitive cobra and the sqlclosecheck linter's name — and were corrected
+to source-scoped commands; and the bare word "help", scope §3.2 (c) never
+granted, was removed outright rather than guarded — it had silently
+shadowed any future verb of that name, and deleting the special case
+dissolved the shadowing and the top-vs-subverb asymmetry at once.
+Refuted: -h consumed as a string flag's value (stdlib parsing is the
+design the spec adopts); the empty-string positional (the S2 rule
+concerns dash tokens; domains are the verbs' to validate, from S5a on);
+and strengthening the elision test past its disclosed mechanism-only
+scope — per-verb conformance re-proves at each verb stage, as the
+opening record stated. The critic also confirmed all five of the
+record's own re-check requests, the §3.2 (b) trio verbatim, and the
+extended→primary code masking against a live driver error.
 
 ## Parked — out of scope, no decision needed yet
 
