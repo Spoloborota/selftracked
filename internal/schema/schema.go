@@ -27,6 +27,11 @@ var ddl string
 // higher version is refused rather than guessed at.
 const Version = 1
 
+// ApplicationID is the file-identity magic ("STRK"); §8.5's loader stamps
+// it onto a rebuilt database, since dumps carry no PRAGMAs.
+// TestStampMatchesTheConstants keeps stampSQL's literal honest against it.
+const ApplicationID = 1398035019
+
 // stampSQL writes the file's identity and schema version. The application id
 // spells "STRK", so a database opened by mistake is recognised as foreign
 // rather than silently used. Both numbers are literal because PRAGMA takes no
@@ -74,6 +79,15 @@ func OpenRead(path string) (*sql.DB, error) { return open(path, readPragmas) }
 // OpenWrite opens a connection that takes the exclusive lock on its first
 // write and syncs fully.
 func OpenWrite(path string) (*sql.DB, error) { return open(path, writePragmas) }
+
+// loadPragmas are §8.5's additional hardening for building a database
+// from an untrusted dump: cell-level corruption checks on, memory mapping
+// off. trusted_schema is already off in the base DSN.
+const loadPragmas = "&_pragma=cell_size_check(1)" +
+	"&_pragma=mmap_size(0)"
+
+// OpenLoadBuild opens the hardened connection the §8.5 loader builds on.
+func OpenLoadBuild(path string) (*sql.DB, error) { return open(path, loadPragmas) }
 
 func open(path, extra string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", path+basePragmas+extra)

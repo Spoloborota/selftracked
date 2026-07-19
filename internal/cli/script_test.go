@@ -13,6 +13,7 @@ import (
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
+	"github.com/Spoloborota/selftracked/internal/load"
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
@@ -26,8 +27,10 @@ func TestMain(m *testing.M) {
 		// Fixture verbs for the dispatcher scenarios, plus the real catalog
 		// verbs as their stages land them — same wiring main.go uses.
 		r := fixtureRegistry()
-		if err := r.Register(dump.Verb()); err != nil {
-			panic(err)
+		for _, v := range []cli.Verb{dump.Verb(), load.Verb()} {
+			if err := r.Register(v); err != nil {
+				panic(err)
+			}
 		}
 		e := &cli.Env{Stdout: os.Stdout, Stderr: os.Stderr}
 		os.Exit(cli.Run(r, e, os.Args[1:]))

@@ -94,6 +94,13 @@ func WriteFiles(dir string, text []byte) error {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("dump: rename: %w", err)
 	}
+	return WriteSidecar(dir, text)
+}
+
+// WriteSidecar records the SHA-256 of the dump these bytes came from —
+// §8.4 names init, write verbs, dump and load as its writers; the
+// divergence matrix that READS it is S8b's.
+func WriteSidecar(dir string, text []byte) error {
 	sum := sha256.Sum256(text)
 	sidecar := filepath.Join(dir, hashFile)
 	content := []byte(hex.EncodeToString(sum[:]) + "\n")

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
+	"github.com/Spoloborota/selftracked/internal/load"
 )
 
 func main() {
@@ -24,6 +25,7 @@ func run() int {
 	// a gap: an agent never gets a verb that does not fully work.
 	for _, v := range []cli.Verb{
 		dump.Verb(),
+		load.Verb(),
 	} {
 		if err := reg.Register(v); err != nil {
 			// A registration failure is a build defect, not a runtime

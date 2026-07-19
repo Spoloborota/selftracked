@@ -1,0 +1,35 @@
+# S4: the load verb end to end. seeddb + dump produce the tracked pair;
+# load rebuilds the database from dump text through the whitelist parser.
+
+# Nothing to load yet.
+expectexit 1 selftracked load
+stderr '"code":"not-found"'
+
+seeddb
+expectexit 0 selftracked dump
+
+# The database exists: plain load refuses; --force replaces after the
+# discard summary (stderr), and the result serializes byte-identically.
+expectexit 1 selftracked load
+stderr '"code":"exists"'
+expectexit 0 selftracked load --force
+stderr 'discarding local database:'
+stdout 'loaded'
+expectexit 0 selftracked dump --stdout
+cp stdout after.out
+cmp after.out .selftracked/dump.sql
+
+# A fresh clone: dump.sql present, no database — plain load works.
+rm .selftracked/db.sqlite
+expectexit 0 selftracked load
+stdout 'loaded'
+exists .selftracked/db.sqlite
+
+# A tampered dump refuses with exit 2 and builds nothing.
+rm .selftracked/db.sqlite
+cp .selftracked/dump.sql good.sql
+exec sed s/append-only/append-onlY/ good.sql
+cp stdout .selftracked/dump.sql
+expectexit 2 selftracked load
+stderr '"code":"refused"'
+! exists .selftracked/db.sqlite
