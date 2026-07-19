@@ -1,6 +1,6 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 11.** Revision history: rev 1 →
+Status: **ACTIVE, revision 12.** Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →
@@ -10,9 +10,10 @@ amendment `stage-open-plan-crosscheck` (D-EP6) → rev 6 → amendment
 `review-proportionality-tiers` (D-EP7) → rev 7 → amendment
 `local-commits-and-interim-evidence` (D-EP8) → rev 8 → amendment
 `s0-minimal-package` (D-EP9) → rev 9 → amendment `split-s1` (D-EP10) →
-rev 10 → amendment `evidence-across-a-squash` (D-EP11, D-EP12) → this
+rev 10 → amendment `evidence-across-a-squash` (D-EP11, D-EP12) → rev 11 →
+amendment `stage-open-record` (D-EP13) → this
 revision. Governs the implementation of `docs/v0-spec.md`
-(revision 3.9) and the project's spec lifecycle beyond it. Derived from
+and the project's spec lifecycle beyond it. Derived from
 `docs/research/2026-07-18-spec-to-execution-planning.md`; tooling facts
 re-verified against primary sources on 2026-07-18 (see that document's
 Addendum). This document is itself governed: changes to a stage's scope or
@@ -230,6 +231,24 @@ two axes:
   accounting script cannot see this class: a stage id that exists is a stage
   id that passes.
 
+**The opening record** (D-EP13). The re-read's output is a committed
+artifact — `docs/stage-openings/<stage>.md`, the stage id lowercased —
+committed before the stage's (or sub-batch's) first implementation commit,
+where an implementation commit is any commit touching files the stage's
+verification commands examine. One line per inventory row: the content
+verdict (`ok`, or what was corrected), the placement verdict (`ok`, or
+where the row moved and why), and the concrete command or fixture the row's
+placeholder verification name resolved to. The record is a point-in-time
+trace of the open: the inventory stays authoritative for a row's current
+state, and a row handed to the stage after its open enters the close
+review through items (i)–(ii) below, not through the record. S0 and S1a
+both reached their close with rows their stage could not execute, because
+the re-read was the one step in this protocol whose omission left no
+trace — an exhaustive open and a skipped one produced the same visible
+state. The record does not make the verdicts true; it makes the check's
+execution observable, and gives the close review a document to sample
+instead of an absence to prove.
+
 G0 verified fidelity by sampling, not exhaustively — this is where the
 exhaustive check happens, at the moment the rows are about to be used and at
 a size one reviewer can hold (9–65 rows). A correction that changes what the
@@ -276,7 +295,10 @@ A stage (or sub-batch) is "done" only when, in order:
    (iv) deviations without an archived change — including in **generated
    artifacts** (PROMPT.md/AGENTS.md text count as surfaces);
    (v) a deviation sweep of the stage diff against the spec sections the
-   stage closes.
+   stage closes; (vi) the opening record (D-EP13) exists, predates the
+   stage's first implementation commit, covers every row the stage owned
+   at open, and its verdicts match what actually happened — moved rows
+   moved, corrected rows corrected.
 3. Inventory rows flip to `verified-by-command` with the evidence link;
    the ledger records the run.
 
@@ -323,7 +345,11 @@ extraction completeness — critic-checked, not machine-checked; (c2) row
 **placement** — the accounting script validates that a row's stage id
 exists, never that the obligation can be executed there; caught only by the
 stage-open placement check (§5, D-EP6) or a review that diffs assignments
-against this plan's stage text; (c3) **review tier selection** — a judgement
+against this plan's stage text — since D-EP13 the check's *execution* is
+visible (a committed opening record, one line per row), but verdict quality
+is not: an `ok` written without reading leaves the same record as one
+written after it, and only the close review's sampling of the record
+catches that; (c3) **review tier selection** — a judgement
 the accounting gate cannot see; under-selection is the tier system's own
 failure mode, guarded only by recording the tier before the work and
 resolving uncertainty upward (§5, D-EP7); (c5) **pre-push evidence is provisional** — it names commits that will not
@@ -352,7 +378,10 @@ its rows live on as imported stories/criteria), so post-S10 re-walks
 operate on tracker records, not on the markdown table. OpenSpec change
 directories archive as usual and never hold work tracking (§2.1). The
 progress ledger is deleted at S10; the amendments log moves into the
-tracker as events/worklog records of the governing epic. This plan
+tracker as events/worklog records of the governing epic. Opening records
+(`docs/stage-openings/`, D-EP13) freeze in git history as a procedural
+trace of the bootstrap — nothing from them migrates into `.selftracked/`,
+because they document how stages were opened, not tracker state. This plan
 document itself freezes at S10 close as the bootstrap's historical record
 — its stage table and artifact sections are not maintained further (they
 describe retired artifacts by then); only §2's lifecycle contract remains
@@ -428,3 +457,11 @@ close:
   convention with its validator deferred (§17). Before publication there is
   no durable commit for an anchor to name, so a gate built now would guard a
   period in which its subject cannot hold still.
+- **D-EP13 [DECIDED, ratified]** (amendment `stage-open-record`,
+  2026-07-19): the stage-open re-read produces a committed opening record —
+  `docs/stage-openings/<stage>.md`, one verdict line per row, written before
+  the stage's first implementation commit — and the close review verifies
+  the record against what actually happened. Raised after S0 and S1a both
+  reached their close with rows their stage could not execute: the re-read
+  was the only step in the protocol whose omission left no trace, and twice
+  it was omitted or truncated exactly where it mattered.

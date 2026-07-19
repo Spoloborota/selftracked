@@ -20,10 +20,11 @@ nothing pushed.
 **Next:** S1b — every gate the schema declares, with a red fixture each. It
 is the largest sub-batch at 89 rows. Open it the way the plan says to: read
 those rows against §5 of the specification (content) *and* against S1b's own
-scope text (placement), turn each row's fixture name into a real command, and
-only then write code. Both previous stages had rows that could not be
-executed where they sat, and both times the opening read is what should have
-caught it.
+scope text (placement), turn each row's fixture name into a real command,
+commit the opening record (`docs/stage-openings/s1b.md`, D-EP13), and only
+then write code. Both previous stages had rows that could not be executed
+where they sat, and both times the opening read is what should have caught
+it — which is why the read now leaves a committed record.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -69,6 +70,7 @@ been answered; the amendments log below records what was decided.
 | `nullable-columns-preamble` | **spec** §5 preamble + §8.1 | accepted 2026-07-19 — first amendment to the specification | spec rev 3.10 |
 | `evidence-across-a-squash` | execution plan §5, §8, §9, §10 | accepted 2026-07-19 (D-EP11, D-EP12) | plan rev 11 |
 | `import-date-bounds` | **spec** §6.2 `import` | accepted 2026-07-19 | spec rev 3.11 |
+| `stage-open-record` | execution plan §5, §8, §10 | accepted 2026-07-19 (D-EP13) | plan rev 12 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
