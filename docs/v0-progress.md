@@ -13,17 +13,14 @@ log artifact proving the verification commands exited 0 (plan §5).
 Read this section first; the tables below carry the detail.
 
 **Done:** G0 (the traceability inventory), S0 (repo bootstrap), S1a (the
-schema as text). The schema exists as `internal/schema` — embedded DDL,
-connection settings, `meta` seeding — with 12 commits of history, all local,
-nothing pushed.
+schema as text), S1b (the schema gates: 85 red fixtures in
+`internal/schema/gates_test.go`, one subtest per inventory row, full
+transition-matrix sweeps, raw-connection any-process probes, a
+deterministic hot-journal crash-recovery proof). All local, nothing pushed.
 
-**Next:** S1b implementation — every gate the schema declares, with a red
-fixture each. The stage is **open**: the D-EP13 opening record
-(`docs/stage-openings/s1b.md`) holds the per-row verdicts and the resolved
-commands. The open moved three rows to the stages that can execute them
-(INV-018→S7, INV-097→S5b, INV-143→S5a), and the owner's cardinality
-ruling moved INV-016 to S6, leaving S1b at 85, nothing blocked. Write the
-fixtures red-first from the record's command list.
+**Next:** S1c — driver behaviour, 10 rows, behavioural probes only. Open
+it per D-EP13: re-read its rows on both axes, resolve the probe names to
+commands, commit `docs/stage-openings/s1c.md` before any code.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -40,7 +37,7 @@ section and the amendments log).
 | G0 — traceability inventory | FULL | done | `python3 scripts/check-inventory.py` · 2026-07-19 · **exit 0, accounting clean** (545 rows, all 16 stages covered, 16 review-only obligations) · evidence link pending (no CI yet — S0 wires it) | Ratified by the owner 2026-07-19 (D-EP4). Three review passes done; findings applied. Fidelity was sampled, not exhaustive — each stage re-reads its own rows at open (plan §5). |
 | S0 — repo bootstrap | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e09204a`, **no CI has run** (D-EP8) | 5 of 8 rows `verified-by-command`; INV-492/499/513 stay `planned` — they assert CI gates that cannot be proven before the first push |
 | S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | All 10 rows `verified-by-command`. INV-053 closed once the owner ratified the spec amendment that made its claim true (spec rev 3.10) |
-| S1b — schema gates | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s1b.md`). 85 rows after three placement moves and INV-016's amendment-driven move to S6; red fixture each; nothing blocked |
+| S1b — schema gates | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green (114 subtests, `-race`, fresh cache) · local run @ `ad8ef15`, no CI has run (D-EP8) | All 85 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1b.md`); two close critics ran; five mutation probes shown red. Adjudications recorded below |
 | S1c — driver behaviour | FULL | not started | — | 10 rows, behavioural probes only |
 | S2 — CLI dispatcher | FULL | not started | — | — |
 | S3 — serializer + `dump` | FULL | not started | — | — |
@@ -123,6 +120,37 @@ events or a serializer that this stage does not build; they moved to the
 stages that first have the machinery, leaving S1a with ten rows it can
 actually execute. The stage-open placement check had not been run properly
 on all twenty-nine, which is how they survived to the close.
+
+S1b was the first stage under the D-EP13 opening record, and the open —
+not the close — is where its placement defects surfaced: three rows moved
+before any code existed, plus two document defects and one spec defect
+(the R4 pointer) found the same way. The close ran two fresh critics; the
+checklist critic re-ran the gates twice (once on a cleared test cache,
+after noting the Makefile's `test` target reports cached results) and
+enumerated every DDL gate against the fixture list — zero gates without a
+fixture. Accepted findings, applied before close: the crash-recovery
+fixture had claimed a mid-write kill it could not guarantee — it now
+holds an uncommitted spilled transaction at the kill and asserts the hot
+journal and the exact committed row count; the single-writer fixture
+lacked the release-on-close and blocked-reader halves; two refusals
+accepted any error; the raw-connection harness missed the trigger
+families; the opening record lacked INV-018's content verdict. Refuted:
+the "INV-160 tests no race" objection (the spec designs the contention
+away; the fixture asserts the observable outcome), exact-expression
+pinning of every CHECK (couples fixtures to SQLite's message format),
+and the test-scoped lint exclusion as a deviation (a global disable of
+the same linters is textually within §3.2's posture; a narrower scope
+excludes strictly less — flagged to the owner rather than amended).
+INV-030 was re-judged at close as the record requested: it stays at S1b,
+executable here and nowhere else without a plan §4 amendment. One
+process incident is on the record: the first suite commit rode in on a
+false green — a shell-chaining mistake read the wrong exit code while
+`make gates` was failing on lint — caught one commit later; exit codes
+are now taken from the command itself, not a pipeline tail. The
+before-first-write locking probe demanded by a critic proved
+unprovable: establishing an EXCLUSIVE-mode connection already excludes
+foreign writers (shared lock at open, held by the mode), recorded as an
+empirical note in the test rather than asserted away.
 
 ## Parked — out of scope, no decision needed yet
 
