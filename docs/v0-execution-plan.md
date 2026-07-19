@@ -1,6 +1,6 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 10.** Revision history: rev 1 →
+Status: **ACTIVE, revision 11.** Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →
@@ -10,7 +10,8 @@ amendment `stage-open-plan-crosscheck` (D-EP6) → rev 6 → amendment
 `review-proportionality-tiers` (D-EP7) → rev 7 → amendment
 `local-commits-and-interim-evidence` (D-EP8) → rev 8 → amendment
 `s0-minimal-package` (D-EP9) → rev 9 → amendment `split-s1` (D-EP10) →
-this revision. Governs the implementation of `docs/v0-spec.md`
+rev 10 → amendment `evidence-across-a-squash` (D-EP11, D-EP12) → this
+revision. Governs the implementation of `docs/v0-spec.md`
 (revision 3.9) and the project's spec lifecycle beyond it. Derived from
 `docs/research/2026-07-18-spec-to-execution-planning.md`; tooling facts
 re-verified against primary sources on 2026-07-18 (see that document's
@@ -252,6 +253,15 @@ A process whose lightest gear is heavy is not run carefully; it is run
 nominally or skipped with a reason invented at the time. Named tiers make
 that choice explicit and reviewable instead of silent.
 
+**The publication boundary** (D-EP11). Evidence recorded before the first
+push names commits a squash will delete, and a squash is many-to-one, so
+rewriting those references preserves nothing. Before the first push the gates
+run once against the squashed tree and every `verified-by-command` row is
+re-stamped with that commit; a row whose check now fails returns to `planned`
+and re-opens its stage. A row proven at one stage and quietly broken at a
+later one is what this single re-run catches, and nothing else in the process
+would.
+
 A stage (or sub-batch) is "done" only when, in order:
 
 1. Its verification commands exit 0 **on a clean checkout or CI** — and
@@ -316,7 +326,9 @@ stage-open placement check (§5, D-EP6) or a review that diffs assignments
 against this plan's stage text; (c3) **review tier selection** — a judgement
 the accounting gate cannot see; under-selection is the tier system's own
 failure mode, guarded only by recording the tier before the work and
-resolving uncertainty upward (§5, D-EP7); (c4) **interim evidence** — a stage closed on a local run is done on one
+resolving uncertainty upward (§5, D-EP7); (c5) **pre-push evidence is provisional** — it names commits that will not
+survive the squash, so a green ledger before publication is a weaker claim
+than the same ledger after (D-EP11); (c4) **interim evidence** — a stage closed on a local run is done on one
 machine's word; the ledger names the grade, and the first push is where
 every such claim meets a real matrix at once (D-EP8); (d) ledger
 "update it last" — convention, surfaced only at the next session's start;
@@ -396,7 +408,7 @@ close:
   owner-only. Rationale: CI-on-close fused a module skeleton to a
   publication decision, and approval-to-commit was buying nothing that the
   push prohibition did not already buy, while costing every restore point.
-- **D-EP9 [DECIDED]** (amendment `s0-minimal-package`, 2026-07-19): S0 ships
+- **D-EP9 [DECIDED, ratified]** (amendment `s0-minimal-package`, 2026-07-19): S0 ships
   a minimal package so its gates are not vacuous. Raised by the S0 close
   review, which found the package as unnamed scope; with no Go source at all,
   `make build lint test` would pass by examining nothing. A gate that passes
@@ -406,3 +418,13 @@ close:
   rows — more than either group already split for exceeding what one
   reviewer can hold. S0's close is the evidence: eight rows still produced
   six defects, four of them inside the stage's own gates.
+- **D-EP9 [RATIFIED by the owner, 2026-07-19]** — S0 ships a minimal package
+  so its gates are not vacuous.
+- **D-EP11 [DECIDED]** (amendment `evidence-across-a-squash`, 2026-07-19):
+  evidence recorded before the first push is provisional; the gates run once
+  against the squashed tree at the publication boundary and every verified
+  row is re-stamped against the commit that will actually be published.
+- **D-EP12 [DECIDED]**: the `as of dump <sha12>` anchor ships in v0 as a
+  convention with its validator deferred (§17). Before publication there is
+  no durable commit for an anchor to name, so a gate built now would guard a
+  period in which its subject cannot hold still.

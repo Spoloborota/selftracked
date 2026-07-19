@@ -14,7 +14,7 @@ log artifact proving the verification commands exited 0 (plan §5).
 |---|---|---|---|---|
 | G0 — traceability inventory | FULL | done | `python3 scripts/check-inventory.py` · 2026-07-19 · **exit 0, accounting clean** (545 rows, all 16 stages covered, 16 review-only obligations) · evidence link pending (no CI yet — S0 wires it) | Ratified by the owner 2026-07-19 (D-EP4). Three review passes done; findings applied. Fidelity was sampled, not exhaustive — each stage re-reads its own rows at open (plan §5). |
 | S0 — repo bootstrap | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e09204a`, **no CI has run** (D-EP8) | 5 of 8 rows `verified-by-command`; INV-492/499/513 stay `planned` — they assert CI gates that cannot be proven before the first push |
-| S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | 9 of 10 rows `verified-by-command`. INV-053 stays open: the §5 preamble contradicts the schema, and the fix is a spec amendment awaiting the owner — closing it by weakening the fixture would invert which artifact is authoritative |
+| S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | All 10 rows `verified-by-command`. INV-053 closed once the owner ratified the spec amendment that made its claim true (spec rev 3.10) |
 | S1b — schema gates | FULL | in progress | — | 89 rows, red fixture each |
 | S1c — driver behaviour | FULL | not started | — | 10 rows, behavioural probes only |
 | S2 — CLI dispatcher | FULL | not started | — | — |
@@ -42,7 +42,8 @@ log artifact proving the verification commands exited 0 (plan §5).
 | `local-commits-and-interim-evidence` | execution plan §4 (S0), §8, §10; `.claude/CLAUDE.md` rule 6 | accepted 2026-07-19 (D-EP8) | plan rev 8 |
 | `s0-minimal-package` | execution plan §4 (S0), §10 | applied 2026-07-19, **owner review pending** (D-EP9) | plan rev 9 |
 | `split-s1` | execution plan §4 (S1), §10 | accepted 2026-07-19 (D-EP10) | plan rev 10 |
-| `nullable-columns-preamble` | **spec** §5 preamble | **proposed, awaiting owner** — spec not edited | — |
+| `nullable-columns-preamble` | **spec** §5 preamble + §8.1 | accepted 2026-07-19 — first amendment to the specification | spec rev 3.10 |
+| `evidence-across-a-squash` | execution plan §5, §8, §9, §10 | accepted 2026-07-19 (D-EP11, D-EP12) | plan rev 11 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -108,12 +109,10 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 1. Task-level narrative dates sit outside the git-first import dating rule
    (task rows carry no commit citation) — accept as a stated v0 limitation,
    or extend the mechanism?
-2. The `as of dump <sha12>` anchor ships as a convention in v0 with its
-   validator deferred to the doc-lint core (spec §17) — accept, or pull the
-   gate into v0?
-3. Whether the English-only convention should name quoted owner decisions
+2. Whether the English-only convention should name quoted owner decisions
    explicitly: two amendment proposals had a verbatim non-English quote
-   pasted into them and removed on review. Parked here rather than fixed,
-   since it changes a stated convention.
-4. Ratification of D-EP9 (`s0-minimal-package`): applied so the tree is not
-   left with either unnamed scope or vacuous gates, but not yet reviewed.
+   pasted into them and removed on review.
+
+Answered 2026-07-19: the `as of dump <sha12>` anchor keeps its deferred
+validator (D-EP12); D-EP9 ratified; the §5 nullable-column wording corrected
+in the specification itself.

@@ -368,3 +368,82 @@ func TestCloseStampIsAnAccidentGuardNotAnAdversaryGuard(t *testing.T) {
 		t.Fatalf("the gate blocked a writer holding the marker, which it cannot do: %v", err)
 	}
 }
+
+func TestNoColumnStoresNullOutsideTheThreeThatMayNot(t *testing.T) {
+	t.Parallel()
+
+	db := fresh(t)
+	ctx := t.Context()
+
+	// The claim is about stored values, not column declarations, so the check
+	// reads rows rather than metadata — which is why it needs no exception
+	// list for the rowid aliases that accept NULL on the way in.
+	allowed := map[string]bool{
+		"tasks.dup_of":     true,
+		"tasks.epic":       true,
+		"worklog.corrects": true,
+	}
+
+	tables, err := db.QueryContext(ctx,
+		`SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+	if err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	defer func() { _ = tables.Close() }()
+
+	var names []string
+	for tables.Next() {
+		var name string
+		if err = tables.Scan(&name); err != nil {
+			t.Fatalf("scan table name: %v", err)
+		}
+		names = append(names, name)
+	}
+	if err = tables.Err(); err != nil {
+		t.Fatalf("iterate tables: %v", err)
+	}
+
+	for _, table := range names {
+		for _, col := range nullableColumns(t, db, table) {
+			qualified := table + "." + col
+			if allowed[qualified] {
+				continue
+			}
+			// The column may accept NULL; the claim is that no row carries one.
+			var stored int
+			q := `SELECT count(*) FROM "` + table + `" WHERE "` + col + `" IS NULL`
+			if err = db.QueryRowContext(ctx, q).Scan(&stored); err != nil {
+				t.Errorf("count nulls in %s: %v", qualified, err)
+				continue
+			}
+			if stored != 0 {
+				t.Errorf("%s stores %d NULLs; only tasks.dup_of, tasks.epic and worklog.corrects may", qualified, stored)
+			}
+		}
+	}
+}
+
+// nullableColumns reports the columns of one table that accept NULL.
+func nullableColumns(t *testing.T, db *sql.DB, table string) []string {
+	t.Helper()
+
+	rows, err := db.QueryContext(t.Context(),
+		`SELECT name FROM pragma_table_info(?) WHERE "notnull" = 0`, table)
+	if err != nil {
+		t.Fatalf("read %s columns: %v", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var cols []string
+	for rows.Next() {
+		var col string
+		if err = rows.Scan(&col); err != nil {
+			t.Fatalf("scan column: %v", err)
+		}
+		cols = append(cols, col)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatalf("iterate %s columns: %v", table, err)
+	}
+	return cols
+}

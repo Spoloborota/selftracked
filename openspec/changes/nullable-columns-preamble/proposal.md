@@ -1,7 +1,7 @@
 # Change: the §5 preamble's list of nullable columns is incomplete
 
 Target: `docs/v0-spec.md` §5 preamble (revision 3.9 → 3.10)
-Status: **proposed — awaiting owner review.** Not applied.
+Status: **accepted and applied** · 2026-07-19 · spec rev 3.9 → 3.10
 
 ## The defect
 
@@ -36,13 +36,35 @@ artifact is authoritative.
 Found while implementing S1a, by a reviewer comparing the fixture's wording
 against the schema it would run on.
 
-## Proposed wording
+## Correction to this proposal, found while presenting it
 
-> All tables `STRICT`; text columns `NOT NULL DEFAULT ''` unless stated. The
-> nullable columns are `tasks.dup_of`, `tasks.epic` and `worklog.corrects` —
-> each nullable because absence is meaningful there: no duplicate, no epic,
-> no row being corrected. (`tasks.id` is nullable on the way in as SQLite's
-> rowid alias, and is never null once a row exists.)
+The first draft treated this as §5 forgetting a column. Deeper reading found
+**§8.1 already lists all three** — "NULL only in `tasks.dup_of`/`tasks.epic`
+and `worklog.corrects`". So the specification did not disagree with itself
+about the schema; one of two sentences describing the same fact had gone
+stale, and the other said which. A full audit also found three more columns
+SQLite reports as nullable — `tasks.id`, `artifacts.id`, `events.seq` — the
+rowid aliases, which accept NULL on insert (verified: the insert succeeds and
+SQLite fills the value) and never store one.
+
+That changed the fix from "add a name" to "say the true thing", because a
+sentence listing declared-nullable columns cannot be written without an
+exception list, and an exception list inside a fixture is where a future
+reader weakens the check without understanding why it was there.
+
+## Applied wording
+
+§5 preamble now speaks of **stored** values rather than column declarations,
+which makes it true without exceptions:
+
+> No column ever **stores** NULL except `tasks.dup_of`, `tasks.epic` and
+> `worklog.corrects`, where absence is the meaning… (Columns declared
+> `INTEGER PRIMARY KEY` accept NULL on the way in — SQLite fills the rowid —
+> but no stored row carries one, so a check written against stored values
+> needs no exception list.)
+
+§8.1 was reworded to match, since it describes the same fact from the
+serializer's side and would otherwise be the next sentence to go stale.
 
 ## Consequence for the inventory
 
@@ -51,6 +73,8 @@ NULL and no other does, with `tasks.id` excluded by name and reason.
 
 ## Ratification
 
-Awaiting the owner. The specification is not edited until then; INV-053 stays
-`planned` and S1a closes with that row open rather than by adjusting the
-fixture to match a sentence the schema contradicts.
+Owner, 2026-07-19, choosing between a minimal name-addition, a name-addition
+with a rowid caveat, and the stored-values rewording: **"apply the third"** — the
+third. The reasoning offered and accepted was that a claim needing an
+exception list in its fixture is a claim that will be weakened later by
+someone who does not know why the exception is there.
