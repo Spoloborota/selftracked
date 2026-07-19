@@ -56,13 +56,21 @@ func TestCreateBuildsEveryObjectTheDDLDeclares(t *testing.T) {
 
 	live := liveObjects(t, fresh(t))
 
-	declared := schema.Objects()
-	if len(declared) == 0 {
-		t.Fatal("the DDL declares no objects; the parser or the file is wrong")
-	}
-	for _, name := range declared {
+	for _, name := range wantObjects {
 		if !live[name] {
-			t.Errorf("the DDL declares %q but a fresh database does not have it", name)
+			t.Errorf("the schema must contain %q; a fresh database does not have it", name)
+		}
+	}
+
+	// The DDL parser and the golden list must agree too, or Objects() could
+	// drift away from the thing the serializer will rely on.
+	declared := map[string]bool{}
+	for _, n := range schema.Objects() {
+		declared[n] = true
+	}
+	for _, name := range wantObjects {
+		if !declared[name] {
+			t.Errorf("Objects() does not report %q, which the schema must contain", name)
 		}
 	}
 }
@@ -73,7 +81,7 @@ func TestAFreshDatabaseHasNothingTheDDLDidNotAskFor(t *testing.T) {
 	live := liveObjects(t, fresh(t))
 
 	declared := map[string]bool{}
-	for _, n := range schema.Objects() {
+	for _, n := range wantObjects {
 		declared[n] = true
 	}
 
@@ -85,7 +93,7 @@ func TestAFreshDatabaseHasNothingTheDDLDidNotAskFor(t *testing.T) {
 	}
 	sort.Strings(extra)
 	for _, name := range extra {
-		t.Errorf("a fresh database has %q, which the DDL does not declare", name)
+		t.Errorf("a fresh database has %q, which the schema does not declare", name)
 	}
 }
 
@@ -192,5 +200,171 @@ func TestOpenReportsAnUnusablePath(t *testing.T) {
 		if err = db.PingContext(context.Background()); err == nil {
 			t.Fatal("opening a database under a missing directory reported no error")
 		}
+	}
+}
+
+// pragmaOnSecondConnection forces the pool to hand out a connection other
+// than the first, because the failure being guarded against is precisely a
+// later connection born without the settings.
+func pragmaOnSecondConnection(t *testing.T, db *sql.DB, pragma string) string {
+	t.Helper()
+
+	held, err := db.Conn(t.Context())
+	if err != nil {
+		t.Fatalf("hold the first connection: %v", err)
+	}
+	defer func() { _ = held.Close() }()
+
+	second, err := db.Conn(t.Context())
+	if err != nil {
+		t.Fatalf("open a second connection: %v", err)
+	}
+	defer func() { _ = second.Close() }()
+
+	var value string
+	if err = second.QueryRowContext(t.Context(), "PRAGMA "+pragma).Scan(&value); err != nil {
+		t.Fatalf("read PRAGMA %s: %v", pragma, err)
+	}
+	return value
+}
+
+func TestEveryConnectionCarriesTheRequiredPragmas(t *testing.T) {
+	t.Parallel()
+
+	db := fresh(t)
+
+	for pragma, want := range map[string]string{
+		"foreign_keys":       "1",
+		"recursive_triggers": "1",
+		"trusted_schema":     "0",
+		"busy_timeout":       "5000",
+	} {
+		if got := pragmaOnSecondConnection(t, db, pragma); got != want {
+			t.Errorf("second pooled connection: %s = %q, want %q", pragma, got, want)
+		}
+	}
+}
+
+func TestJournalModeIsNotWAL(t *testing.T) {
+	t.Parallel()
+
+	// WAL is ruled out deliberately: it is a persistent flag, it leaves -wal
+	// and -shm files beside the database, and it does not work on network
+	// filesystems. Setting it would be silent and hard to undo.
+	if got := pragmaOnSecondConnection(t, fresh(t), "journal_mode"); got == "wal" {
+		t.Errorf("journal_mode = %q; the specification rules WAL out", got)
+	}
+}
+
+func TestWriteConnectionsLockExclusivelyAndSyncFully(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	db, err := schema.Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err = schema.Create(t.Context(), db); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	_ = db.Close()
+
+	w, err := schema.OpenWrite(path)
+	if err != nil {
+		t.Fatalf("OpenWrite: %v", err)
+	}
+	defer func() { _ = w.Close() }()
+
+	if got := pragmaOnSecondConnection(t, w, "locking_mode"); got != "exclusive" {
+		t.Errorf("write connection: locking_mode = %q, want exclusive", got)
+	}
+	if got := pragmaOnSecondConnection(t, w, "synchronous"); got != "2" {
+		t.Errorf("write connection: synchronous = %q, want 2 (FULL)", got)
+	}
+}
+
+func TestReadConnectionsRefuseToWrite(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	db, err := schema.Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if err = schema.Create(t.Context(), db); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	_ = db.Close()
+
+	r, err := schema.OpenRead(path)
+	if err != nil {
+		t.Fatalf("OpenRead: %v", err)
+	}
+	defer func() { _ = r.Close() }()
+
+	_, err = r.ExecContext(t.Context(),
+		`INSERT INTO meta (key, value) VALUES ('x', 'y')`)
+	if err == nil {
+		t.Fatal("a read connection accepted a write; query_only is not in force")
+	}
+}
+
+func TestStrictTablesRejectAWrongTypedValue(t *testing.T) {
+	t.Parallel()
+
+	db := fresh(t)
+
+	// STRICT binds any process, not just the verbs — that is the point of
+	// putting the constraint in the schema rather than in the code above it.
+	_, err := db.ExecContext(t.Context(),
+		`INSERT INTO tasks (id, title, status, created_at, updated_at)
+		 VALUES ('not-an-integer', 't', 'OPEN', 'now', 'now')`)
+	if err == nil {
+		t.Fatal("a text value was accepted into an INTEGER column; STRICT is not in force")
+	}
+}
+
+func TestCloseStampIsAnAccidentGuardNotAnAdversaryGuard(t *testing.T) {
+	t.Parallel()
+
+	db := fresh(t)
+	ctx := t.Context()
+
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO epics (slug, goal, created_at)
+		 VALUES ('e', 'a goal', '2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatalf("seed an epic: %v", err)
+	}
+
+	// An epic that never ran cannot be closed — the matrix says dissolve it
+	// instead — so activate it first; that transition is legal and needs no
+	// marker, which is itself worth seeing.
+	if _, err := db.ExecContext(ctx,
+		`UPDATE epics SET status = 'ACTIVE' WHERE slug = 'e'`); err != nil {
+		t.Fatalf("activate the epic: %v", err)
+	}
+
+	// Closing means status and stamp together — the table's own CHECK ties
+	// them — so the update below is the shape the verb would write, and the
+	// only thing standing between it and success is the close gate.
+	const closeIt = `UPDATE epics
+	                 SET status = 'CLOSED', close_sweep = '2026-01-01'
+	                 WHERE slug = 'e'`
+
+	// The accident it stops: closing without going through the verb.
+	_, err := db.ExecContext(ctx, closeIt)
+	if err == nil {
+		t.Fatal("an epic was closed without the verb; the close gate did not fire")
+	}
+
+	// The adversary it does not stop, stated honestly: a writer that sets the
+	// same marker the verb sets walks straight through. Detection of that is
+	// R12's job, not this trigger's.
+	if _, err = db.ExecContext(ctx,
+		`INSERT INTO meta (key, value) VALUES ('active_verb', 'epic-close')`); err != nil {
+		t.Fatalf("set the verb marker: %v", err)
+	}
+	if _, err = db.ExecContext(ctx, closeIt); err != nil {
+		t.Fatalf("the gate blocked a writer holding the marker, which it cannot do: %v", err)
 	}
 }

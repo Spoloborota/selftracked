@@ -29,9 +29,15 @@ toolchain=$(awk '/^toolchain /{print $2}' "$MOD")
 echo "$toolchain" | grep -Eq '^go1\.[0-9]+\.[0-9]+$' \
   || fail "toolchain '$toolchain' is not an exact version (want go1.N.P)"
 
-# 2 + 3. driver pins, checked only once the driver is actually a dependency
-driver=$(awk '/modernc\.org\/sqlite /{print $2}' "$MOD" | head -1)
-libc=$(awk '/modernc\.org\/libc /{print $2}' "$MOD" | head -1)
+# 2 + 3. driver pins, checked only once the driver is actually a dependency.
+# Versions come from `go list -m`, not from parsing go.mod: the file has
+# several legal layouts — a bare `require x v1` line, a parenthesised block,
+# with or without an `// indirect` comment — and a text parser that assumes
+# one of them reads the wrong field when `go mod tidy` picks another. That
+# happened: tidy promoted the driver to a direct require and the gate started
+# comparing a module path against a version floor.
+driver=$(go list -m -f '{{.Version}}' modernc.org/sqlite 2>/dev/null || true)
+libc=$(go list -m -f '{{.Version}}' modernc.org/libc 2>/dev/null || true)
 if [ -n "$driver" ]; then
   lowest=$(printf '%s\n%s\n' "$DRIVER_MIN" "$driver" | sort -V | head -1)
   [ "$lowest" = "$DRIVER_MIN" ] \

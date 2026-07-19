@@ -41,19 +41,42 @@ var ErrNotEmpty = errors.New("database already has schema objects")
 // DDL returns the compiled-in schema definition.
 func DDL() string { return ddl }
 
-// dsnPragmas are applied to every connection in the pool, not once at open:
-// a pooled connection that missed them enforces nothing, and foreign keys
-// default to off in SQLite.
-const dsnPragmas = "?_pragma=foreign_keys(1)" +
-	"&_pragma=recursive_triggers(1)" +
-	"&_pragma=journal_mode(WAL)" +
-	"&_pragma=synchronous(NORMAL)" +
-	"&_pragma=busy_timeout(5000)"
+// basePragmas travel in the DSN so that every connection the pool opens
+// carries them — including one opened long after the first. A connection
+// that missed them enforces nothing, and SQLite defaults foreign keys to off.
+//
+// Journal mode is deliberately absent: the specification rules WAL out (it is
+// a persistent flag, it litters -wal/-shm files, and it does not work on
+// network filesystems), so the default rollback journal stands.
+const basePragmas = "?_pragma=foreign_keys(1)" +
+	"&_pragma=recursive_triggers(1)" + // without it INSERT OR REPLACE bypasses delete triggers
+	"&_pragma=trusted_schema(0)" +
+	"&_pragma=busy_timeout(5000)" +
+	"&_dqs=0" // a bare string is never silently a string literal
 
-// Open opens the database at path, applying the connection settings the
-// specification requires. It does not create the schema; see Create.
-func Open(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path+dsnPragmas)
+// readPragmas make a connection refuse to write at all, so a read verb that
+// tries becomes an error rather than a surprise.
+const readPragmas = "&_pragma=query_only(1)"
+
+// writePragmas take the exclusive lock at the connection's first write and
+// hold it until close, and make durability the priority over throughput.
+const writePragmas = "&_pragma=locking_mode(EXCLUSIVE)" +
+	"&_pragma=synchronous(FULL)"
+
+// Open opens the database at path with the settings every connection needs.
+// It does not create the schema; see Create. For verbs, prefer OpenRead or
+// OpenWrite, which add the half the specification requires of each.
+func Open(path string) (*sql.DB, error) { return open(path, "") }
+
+// OpenRead opens a connection that cannot write.
+func OpenRead(path string) (*sql.DB, error) { return open(path, readPragmas) }
+
+// OpenWrite opens a connection that takes the exclusive lock on its first
+// write and syncs fully.
+func OpenWrite(path string) (*sql.DB, error) { return open(path, writePragmas) }
+
+func open(path, extra string) (*sql.DB, error) {
+	db, err := sql.Open("sqlite", path+basePragmas+extra)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}

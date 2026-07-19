@@ -13,11 +13,12 @@ Build-time tools, not linked into the binary:
                                      distributed with this project)
   golang.org/x/vuln/cmd/govulncheck  BSD-3-Clause
 
-Planned runtime dependency (recorded here at first intake, per the
-specification's licensing deliverable):
+Runtime dependency, linked into the binary:
 
-  modernc.org/sqlite                 BSD-3-Clause
-  modernc.org/libc                   BSD-3-Clause
+  modernc.org/sqlite v1.54.0         BSD-3-Clause
+  modernc.org/libc v1.74.1           BSD-3-Clause
+  modernc.org/mathutil               BSD-3-Clause
+  modernc.org/memory                 BSD-3-Clause
 
 BSD-3-Clause is compatible with Apache-2.0 for distribution: it imposes no
 conditions Apache-2.0 does not already satisfy, and its attribution
