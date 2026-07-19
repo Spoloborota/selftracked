@@ -34,6 +34,22 @@ linters:
     # Superseded by gomodguard_v2, which stays enabled by the default:all
     # posture; running both only produces a deprecation warning per run.
     - gomodguard
+  exclusions:
+    rules:
+      # Table-driven fixture suites are this project's test idiom (one
+      # subtest per inventory row, S1b onward). A fixture table IS one long
+      # function of repeated literals by design: splitting it to satisfy a
+      # length ceiling scatters the row<->subtest mapping, and hoisting SQL
+      # status strings into constants makes each fixture read as
+      # indirection instead of as the statement under test. Production code
+      # keeps all four checks.
+      - path: '_test\.go'
+        linters:
+          - funlen
+          - gocognit
+          - cyclop
+          - goconst
+          - maintidx
 
 formatters:
   enable:

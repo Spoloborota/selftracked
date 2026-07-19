@@ -7,11 +7,14 @@
 package schema_test
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +25,7 @@ import (
 // exec1 runs a statement that must succeed.
 func exec1(t *testing.T, db *sql.DB, query string, args ...any) {
 	t.Helper()
-	if _, err := db.Exec(query, args...); err != nil {
+	if _, err := db.ExecContext(t.Context(), query, args...); err != nil {
 		t.Fatalf("setup %q: %v", query, err)
 	}
 }
@@ -32,7 +35,7 @@ func exec1(t *testing.T, db *sql.DB, query string, args ...any) {
 // for the same write and either message proves the write did not land).
 func refuse(t *testing.T, db *sql.DB, wantSub, query string, args ...any) {
 	t.Helper()
-	_, err := db.Exec(query, args...)
+	_, err := db.ExecContext(t.Context(), query, args...)
 	if err == nil {
 		t.Fatalf("%q succeeded; want refusal containing %q", query, wantSub)
 	}
@@ -66,7 +69,7 @@ func addTask(t *testing.T, db *sql.DB, status string, dupOf any) int64 {
 		note = "note"
 	}
 	var id int64
-	err := db.QueryRow(`INSERT INTO tasks (title, status, status_note, dup_of, created_at, updated_at)
+	err := db.QueryRowContext(t.Context(), `INSERT INTO tasks (title, status, status_note, dup_of, created_at, updated_at)
 	                    VALUES ('t', ?, ?, ?, 'd', 'd') RETURNING id`, status, note, dupOf).Scan(&id)
 	if err != nil {
 		t.Fatalf("seed task %s: %v", status, err)
@@ -74,25 +77,19 @@ func addTask(t *testing.T, db *sql.DB, status string, dupOf any) int64 {
 	return id
 }
 
-func addStory(t *testing.T, db *sql.DB, epic, id, status string) {
+func addStory(t *testing.T, db *sql.DB, status string) {
 	t.Helper()
 	blocked := ""
 	if status == "BLOCKED" {
 		blocked = "reason"
 	}
 	exec1(t, db, `INSERT INTO stories (epic, id, title, status, blocked) VALUES (?, ?, 't', ?, ?)`,
-		epic, id, status, blocked)
+		"e", "S1", status, blocked)
 }
 
-func addArtifact(t *testing.T, db *sql.DB, relpath string) int64 {
+func addArtifact(t *testing.T, db *sql.DB, relpath string) {
 	t.Helper()
-	var id int64
-	err := db.QueryRow(`INSERT INTO artifacts (class, scope, relpath) VALUES ('research', '', ?)
-	                    RETURNING id`, relpath).Scan(&id)
-	if err != nil {
-		t.Fatalf("seed artifact: %v", err)
-	}
-	return id
+	exec1(t, db, `INSERT INTO artifacts (class, scope, relpath) VALUES ('research', '', ?)`, relpath)
 }
 
 func seedPathDict(t *testing.T, db *sql.DB) {
@@ -111,76 +108,112 @@ type gateCase struct {
 }
 
 func TestGates(t *testing.T) {
+	t.Parallel()
 	cases := []gateCase{
 		// --- meta / path_dictionary ---
-		{name: "meta-duplicate-key-rejected",
-			stmt: `INSERT INTO meta (key, value) VALUES ('schema_version', '9')`, wantSub: "UNIQUE"},
-		{name: "path_dictionary-duplicate-class-scope-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { seedPathDict(t, db) },
+		{
+			name: "meta-duplicate-key-rejected",
+			stmt: `INSERT INTO meta (key, value) VALUES ('schema_version', '9')`, wantSub: "UNIQUE",
+		},
+		{
+			name:    "path_dictionary-duplicate-class-scope-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); seedPathDict(t, db) },
 			stmt:    `INSERT INTO path_dictionary (class, scope, root) VALUES ('research', '', 'elsewhere')`,
-			wantSub: "UNIQUE"},
-		{name: "path_dictionary-ephemeral-out-of-range-rejected",
+			wantSub: "UNIQUE",
+		},
+		{
+			name:    "path_dictionary-ephemeral-out-of-range-rejected",
 			stmt:    `INSERT INTO path_dictionary (class, scope, root, ephemeral) VALUES ('run', '', 'work/runs', 2)`,
-			wantSub: "CHECK"},
+			wantSub: "CHECK",
+		},
 
 		// --- epics ---
-		{name: "epics-duplicate-slug-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+		{
+			name:    "epics-duplicate-slug-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO epics (slug, goal, created_at) VALUES ('e', 'goal2', 'd')`,
-			wantSub: "UNIQUE"},
-		{name: "epics-empty-goal-rejected",
-			stmt: `INSERT INTO epics (slug, goal, created_at) VALUES ('e', '', 'd')`, wantSub: "CHECK"},
-		{name: "epics-status-enum-rejects-unknown-value",
-			stmt: `INSERT INTO epics (slug, goal, status, created_at) VALUES ('e', 'g', 'SHIPPED', 'd')`, wantSub: "CHECK"},
-		{name: "epics-close_sweep-status-mismatch-rejected",
+			wantSub: "UNIQUE",
+		},
+		{
+			name: "epics-empty-goal-rejected",
+			stmt: `INSERT INTO epics (slug, goal, created_at) VALUES ('e', '', 'd')`, wantSub: "CHECK",
+		},
+		{
+			name: "epics-status-enum-rejects-unknown-value",
+			stmt: `INSERT INTO epics (slug, goal, status, created_at) VALUES ('e', 'g', 'SHIPPED', 'd')`, wantSub: "CHECK",
+		},
+		{
+			name: "epics-close_sweep-status-mismatch-rejected",
 			// Both directions of the biconditional: a sweep without CLOSED,
 			// and CLOSED without a sweep (the INSERT path, where the
 			// close-gate trigger does not sit — the CHECK alone must hold).
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				refuse(t, db, "CHECK", `INSERT INTO epics (slug, goal, status, close_sweep, created_at)
 				                        VALUES ('e1', 'g', 'BACKLOG', '2026-07-19', 'd')`)
 			},
 			stmt:    `INSERT INTO epics (slug, goal, status, close_sweep, created_at) VALUES ('e2', 'g', 'CLOSED', '', 'd')`,
-			wantSub: "CHECK"},
-		{name: "epics-paused-dissolved-without-note-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "epics-paused-dissolved-without-note-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				refuse(t, db, "CHECK", `INSERT INTO epics (slug, goal, status, created_at) VALUES ('e1', 'g', 'DISSOLVED', 'd')`)
 			},
 			stmt:    `INSERT INTO epics (slug, goal, status, created_at) VALUES ('e2', 'g', 'PAUSED', 'd')`,
-			wantSub: "CHECK"},
+			wantSub: "CHECK",
+		},
 
 		// --- epic_criteria ---
-		{name: "epic_criteria-orphan-epic-rejected",
+		{
+			name:    "epic_criteria-orphan-epic-rejected",
 			stmt:    `INSERT INTO epic_criteria (epic, seq, criterion) VALUES ('ghost', 1, '$ true')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "epic_criteria-duplicate-epic-seq-rejected",
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name: "epic_criteria-duplicate-epic-seq-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "BACKLOG")
 				exec1(t, db, `INSERT INTO epic_criteria (epic, seq, criterion) VALUES ('e', 1, 'c1')`)
 			},
 			stmt:    `INSERT INTO epic_criteria (epic, seq, criterion) VALUES ('e', 1, 'c2')`,
-			wantSub: "UNIQUE"},
-		{name: "epic_criteria-empty-criterion-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "UNIQUE",
+		},
+		{
+			name:    "epic_criteria-empty-criterion-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO epic_criteria (epic, seq, criterion) VALUES ('e', 1, '')`,
-			wantSub: "CHECK"},
-		{name: "epic_criteria-met-out-of-range-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "CHECK",
+		},
+		{
+			name:    "epic_criteria-met-out-of-range-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO epic_criteria (epic, seq, criterion, met) VALUES ('e', 1, 'c', 2)`,
-			wantSub: "CHECK"},
-		{name: "epic_criteria-met-without-evidence-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "CHECK",
+		},
+		{
+			name:    "epic_criteria-met-without-evidence-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO epic_criteria (epic, seq, criterion, met, evidence) VALUES ('e', 1, 'c', 1, '')`,
-			wantSub: "CHECK"},
+			wantSub: "CHECK",
+		},
 
 		// --- tasks ---
-		{name: "tasks-empty-title-rejected",
-			stmt: `INSERT INTO tasks (title, created_at, updated_at) VALUES ('', 'd', 'd')`, wantSub: "CHECK"},
-		{name: "tasks-status-enum-rejects-unknown-value",
+		{
+			name: "tasks-empty-title-rejected",
+			stmt: `INSERT INTO tasks (title, created_at, updated_at) VALUES ('', 'd', 'd')`, wantSub: "CHECK",
+		},
+		{
+			name:    "tasks-status-enum-rejects-unknown-value",
 			stmt:    `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'SHIPPED', 'd', 'd')`,
-			wantSub: "CHECK"},
-		{name: "tasks-duplicate-status-dup_of-mismatch-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "tasks-duplicate-status-dup_of-mismatch-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				id := addTask(t, db, "OPEN", nil)
 				// direction 1: dup_of set while status is not DUPLICATE
 				refuse(t, db, "CHECK", `INSERT INTO tasks (title, status, dup_of, created_at, updated_at)
@@ -188,198 +221,281 @@ func TestGates(t *testing.T) {
 			},
 			// direction 2: DUPLICATE without dup_of
 			stmt:    `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'DUPLICATE', 'd', 'd')`,
-			wantSub: "CHECK"},
-		{name: "tasks-done-wontdo-without-note-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "tasks-done-wontdo-without-note-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
-				refuse(t, db, "CHECK", `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'WONT-DO', 'd', 'd')`)
+				t.Helper()
+				refuse(t, db, "CHECK",
+					`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'WONT-DO', 'd', 'd')`)
 			},
 			stmt:    `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'DONE', 'd', 'd')`,
-			wantSub: "CHECK"},
-		{name: "tasks-self-referential-dup_of-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "tasks-self-referential-dup_of-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				id := addTask(t, db, "OPEN", nil)
 				refuse(t, db, "CHECK", `UPDATE tasks SET status='DUPLICATE', dup_of=? WHERE id=?`, id, id)
 			},
 			// The INSERT path cannot know its own id in advance, so the
 			// self-reference is probed by number: id 1 in an empty table.
-			stmt:    `INSERT INTO tasks (id, title, status, dup_of, created_at, updated_at) VALUES (7, 't', 'DUPLICATE', 7, 'd', 'd')`,
-			wantSub: "CHECK"},
-		{name: "tasks-parked-on-illegal-status-rejected",
+			stmt: `INSERT INTO tasks (id, title, status, dup_of, created_at, updated_at)
+			       VALUES (7, 't', 'DUPLICATE', 7, 'd', 'd')`,
+			wantSub: "CHECK",
+		},
+		{
+			name: "tasks-parked-on-illegal-status-rejected",
 			stmt: `INSERT INTO tasks (title, status, status_note, parked, created_at, updated_at)
 			       VALUES ('t', 'DONE', 'n', 'later', 'd', 'd')`,
-			wantSub: "CHECK"},
-		{name: "tasks-dup_of-orphan-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "tasks-dup_of-orphan-rejected",
 			stmt: `INSERT INTO tasks (title, status, dup_of, created_at, updated_at)
 			       VALUES ('t', 'DUPLICATE', 999, 'd', 'd')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "tasks-orphan-epic-rejected",
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name:    "tasks-orphan-epic-rejected",
 			stmt:    `INSERT INTO tasks (title, epic, created_at, updated_at) VALUES ('t', 'ghost', 'd', 'd')`,
-			wantSub: "FOREIGN KEY"},
+			wantSub: "FOREIGN KEY",
+		},
 
 		// --- task_links ---
-		{name: "task_links-duplicate-triple-rejected",
+		{
+			name: "task_links-duplicate-triple-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				a, b := addTask(t, db, "OPEN", nil), addTask(t, db, "OPEN", nil)
 				exec1(t, db, `INSERT INTO task_links (from_task, to_task, type) VALUES (?, ?, 'depends')`, a, b)
 			},
 			stmt:    `INSERT INTO task_links (from_task, to_task, type) VALUES (1, 2, 'depends')`,
-			wantSub: "UNIQUE"},
-		{name: "task_links-self-link-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addTask(t, db, "OPEN", nil) },
+			wantSub: "UNIQUE",
+		},
+		{
+			name:    "task_links-self-link-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addTask(t, db, "OPEN", nil) },
 			stmt:    `INSERT INTO task_links (from_task, to_task, type) VALUES (1, 1, 'relates')`,
-			wantSub: "CHECK"},
-		{name: "task_links-type-enum-rejects-unknown-value",
+			wantSub: "CHECK",
+		},
+		{
+			name: "task_links-type-enum-rejects-unknown-value",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addTask(t, db, "OPEN", nil)
 				addTask(t, db, "OPEN", nil)
 			},
 			stmt:    `INSERT INTO task_links (from_task, to_task, type) VALUES (1, 2, 'blocks')`,
-			wantSub: "CHECK"},
-		{name: "task_links-orphan-from_task-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addTask(t, db, "OPEN", nil) },
+			wantSub: "CHECK",
+		},
+		{
+			name:    "task_links-orphan-from_task-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addTask(t, db, "OPEN", nil) },
 			stmt:    `INSERT INTO task_links (from_task, to_task, type) VALUES (999, 1, 'depends')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "task_links-orphan-to_task-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addTask(t, db, "OPEN", nil) },
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name:    "task_links-orphan-to_task-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addTask(t, db, "OPEN", nil) },
 			stmt:    `INSERT INTO task_links (from_task, to_task, type) VALUES (1, 999, 'depends')`,
-			wantSub: "FOREIGN KEY"},
+			wantSub: "FOREIGN KEY",
+		},
 
 		// --- stories ---
-		{name: "stories-orphan-epic-rejected",
-			stmt: `INSERT INTO stories (epic, id, title) VALUES ('ghost', 'S1', 't')`, wantSub: "FOREIGN KEY"},
-		{name: "stories-id-format-rejects-non-matching",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+		{
+			name: "stories-orphan-epic-rejected",
+			stmt: `INSERT INTO stories (epic, id, title) VALUES ('ghost', 'S1', 't')`, wantSub: "FOREIGN KEY",
+		},
+		{
+			name:    "stories-id-format-rejects-non-matching",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO stories (epic, id, title) VALUES ('e', 'X1', 't')`,
-			wantSub: "CHECK"},
-		{name: "stories-empty-title-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "CHECK",
+		},
+		{
+			name:    "stories-empty-title-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO stories (epic, id, title) VALUES ('e', 'S1', '')`,
-			wantSub: "CHECK"},
-		{name: "stories-status-enum-rejects-unknown-value",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "CHECK",
+		},
+		{
+			name:    "stories-status-enum-rejects-unknown-value",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S1', 't', 'SHIPPED')`,
-			wantSub: "CHECK"},
-		{name: "stories-in-progress-with-blocked-text-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "CHECK",
+		},
+		{
+			name:    "stories-in-progress-with-blocked-text-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO stories (epic, id, title, status, blocked) VALUES ('e', 'S1', 't', 'IN-PROGRESS', 'stuck')`,
-			wantSub: "CHECK"},
-		{name: "stories-duplicate-epic-id-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "stories-duplicate-epic-id-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "BACKLOG")
-				addStory(t, db, "e", "S1", "PLANNED")
+				addStory(t, db, "PLANNED")
 			},
 			stmt:    `INSERT INTO stories (epic, id, title) VALUES ('e', 'S1', 'again')`,
-			wantSub: "UNIQUE"},
-		{name: "stories-second-in-progress-same-epic-rejected",
+			wantSub: "UNIQUE",
+		},
+		{
+			name: "stories-second-in-progress-same-epic-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
-				addStory(t, db, "e", "S1", "IN-PROGRESS")
+				addStory(t, db, "IN-PROGRESS")
 			},
 			stmt:    `INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S2', 't', 'IN-PROGRESS')`,
-			wantSub: "UNIQUE"},
+			wantSub: "UNIQUE",
+		},
 
 		// --- worklog ---
-		{name: "worklog-orphan-epic-rejected",
+		{
+			name: "worklog-orphan-epic-rejected",
 			stmt: `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('ghost', 1, 'S1', 'd', 'DONE')`,
 			// The contiguity trigger runs BEFORE INSERT and its subquery on an
 			// absent epic yields seq 1, so the FK is what refuses this row.
-			wantSub: "FOREIGN KEY"},
-		{name: "worklog-state-enum-rejects-unknown-value",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "ACTIVE") },
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name:    "worklog-state-enum-rejects-unknown-value",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "ACTIVE") },
 			stmt:    `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'SHIPPED')`,
-			wantSub: "CHECK"},
-		{name: "worklog-duplicate-epic-seq-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "worklog-duplicate-epic-seq-rejected",
 			// A duplicate seq is also non-contiguous, so the trigger refuses
 			// it before the PRIMARY KEY can; the PK itself is asserted by
 			// introspection in TestWorklogPrimaryKeyColumns below. Either
 			// gate refusing proves the duplicate cannot land.
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
 				exec1(t, db, `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'IN-PROGRESS')`)
 			},
 			stmt:    `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'DONE')`,
-			wantSub: ""},
-		{name: "worklog-story-orphan-not-schema-rejected-caught-by-R4",
+			wantSub: "",
+		},
+		{
+			name: "worklog-story-orphan-not-schema-rejected-caught-by-R4",
 			// GREEN by design: the FK-free column is a stated limitation
 			// (INV-109); the compensating check is R4, owned by its own rows.
-			setup: func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "ACTIVE") },
+			setup: func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "ACTIVE") },
 			stmt:  `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S99', 'd', 'IN-PROGRESS')`,
-			green: true},
+			green: true,
+		},
 
 		// --- artifacts & links ---
-		{name: "artifacts-archived-out-of-range-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { seedPathDict(t, db) },
+		{
+			name:    "artifacts-archived-out-of-range-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); seedPathDict(t, db) },
 			stmt:    `INSERT INTO artifacts (class, scope, relpath, archived) VALUES ('research', '', 'x.md', 2)`,
-			wantSub: "CHECK"},
-		{name: "artifacts-orphan-class-scope-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name:    "artifacts-orphan-class-scope-rejected",
 			stmt:    `INSERT INTO artifacts (class, scope, relpath) VALUES ('nosuch', '', 'x.md')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "artifacts-duplicate-class-scope-relpath-rejected",
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name: "artifacts-duplicate-class-scope-relpath-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addArtifact(t, db, "x.md")
 			},
 			stmt:    `INSERT INTO artifacts (class, scope, relpath) VALUES ('research', '', 'x.md')`,
-			wantSub: "UNIQUE"},
-		{name: "task_artifacts-role-enum-rejects-unknown-value",
+			wantSub: "UNIQUE",
+		},
+		{
+			name: "task_artifacts-role-enum-rejects-unknown-value",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addTask(t, db, "OPEN", nil)
 				addArtifact(t, db, "x.md")
 			},
 			stmt:    `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 1, 'muse')`,
-			wantSub: "CHECK"},
-		{name: "task_artifacts-duplicate-task-artifact-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "task_artifacts-duplicate-task-artifact-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addTask(t, db, "OPEN", nil)
 				addArtifact(t, db, "x.md")
 				exec1(t, db, `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 1, 'home')`)
 			},
 			stmt:    `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 1, 'evidence')`,
-			wantSub: "UNIQUE"},
-		{name: "task_artifacts-orphan-task-rejected",
+			wantSub: "UNIQUE",
+		},
+		{
+			name: "task_artifacts-orphan-task-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addArtifact(t, db, "x.md")
 			},
 			stmt:    `INSERT INTO task_artifacts (task, artifact, role) VALUES (999, 1, 'home')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "task_artifacts-orphan-artifact-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addTask(t, db, "OPEN", nil) },
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name:    "task_artifacts-orphan-artifact-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addTask(t, db, "OPEN", nil) },
 			stmt:    `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 999, 'home')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "epic_artifacts-role-enum-rejects-unknown-value",
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name: "epic_artifacts-role-enum-rejects-unknown-value",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addEpic(t, db, "e", "BACKLOG")
 				addArtifact(t, db, "x.md")
 			},
 			stmt:    `INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('e', 1, 'muse')`,
-			wantSub: "CHECK"},
-		{name: "epic_artifacts-duplicate-epic-artifact-rejected",
+			wantSub: "CHECK",
+		},
+		{
+			name: "epic_artifacts-duplicate-epic-artifact-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addEpic(t, db, "e", "BACKLOG")
 				addArtifact(t, db, "x.md")
 				exec1(t, db, `INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('e', 1, 'home')`)
 			},
 			stmt:    `INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('e', 1, 'evidence')`,
-			wantSub: "UNIQUE"},
-		{name: "epic_artifacts-orphan-epic-rejected",
+			wantSub: "UNIQUE",
+		},
+		{
+			name: "epic_artifacts-orphan-epic-rejected",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addArtifact(t, db, "x.md")
 			},
 			stmt:    `INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('ghost', 1, 'home')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "epic_artifacts-orphan-artifact-rejected",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name:    "epic_artifacts-orphan-artifact-rejected",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('e', 999, 'home')`,
-			wantSub: "FOREIGN KEY"},
-		{name: "two-home-links-one-task-both-succeed",
+			wantSub: "FOREIGN KEY",
+		},
+		{
+			name: "two-home-links-one-task-both-succeed",
 			// GREEN by design (INV-543): several narrative homes are legal.
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addTask(t, db, "OPEN", nil)
 				addArtifact(t, db, "a.md")
@@ -387,131 +503,181 @@ func TestGates(t *testing.T) {
 				exec1(t, db, `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 1, 'home')`)
 			},
 			stmt:  `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 2, 'home')`,
-			green: true},
+			green: true,
+		},
 
 		// --- events ---
-		{name: "events-event-enum-rejects-unknown-value",
+		{
+			name:    "events-event-enum-rejects-unknown-value",
 			stmt:    `INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'destroy')`,
-			wantSub: "CHECK"},
+			wantSub: "CHECK",
+		},
 
 		// --- append-only / no-delete triggers ---
-		{name: "worklog-update-raises-abort",
+		{
+			name: "worklog-update-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
 				exec1(t, db, `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'IN-PROGRESS')`)
 			},
 			stmt:    `UPDATE worklog SET note = 'edited' WHERE epic = 'e' AND seq = 1`,
-			wantSub: "worklog is append-only"},
-		{name: "worklog-delete-raises-abort",
+			wantSub: "worklog is append-only",
+		},
+		{
+			name: "worklog-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
 				exec1(t, db, `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'IN-PROGRESS')`)
 			},
 			stmt:    `DELETE FROM worklog WHERE epic = 'e'`,
-			wantSub: "worklog is append-only"},
-		{name: "events-update-raises-abort",
+			wantSub: "worklog is append-only",
+		},
+		{
+			name: "events-update-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				exec1(t, db, `INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
 			},
 			stmt:    `UPDATE events SET detail = 'edited' WHERE seq = 1`,
-			wantSub: "events is append-only"},
-		{name: "events-delete-raises-abort",
+			wantSub: "events is append-only",
+		},
+		{
+			name: "events-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				exec1(t, db, `INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
 			},
 			stmt:    `DELETE FROM events`,
-			wantSub: "events is append-only"},
-		{name: "tasks-delete-raises-abort",
-			setup:   func(t *testing.T, db *sql.DB) { addTask(t, db, "OPEN", nil) },
+			wantSub: "events is append-only",
+		},
+		{
+			name:    "tasks-delete-raises-abort",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addTask(t, db, "OPEN", nil) },
 			stmt:    `DELETE FROM tasks`,
-			wantSub: "never deleted"},
-		{name: "epics-delete-raises-abort",
-			setup:   func(t *testing.T, db *sql.DB) { addEpic(t, db, "e", "BACKLOG") },
+			wantSub: "never deleted",
+		},
+		{
+			name:    "epics-delete-raises-abort",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addEpic(t, db, "e", "BACKLOG") },
 			stmt:    `DELETE FROM epics`,
-			wantSub: "never deleted"},
-		{name: "stories-delete-raises-abort",
+			wantSub: "never deleted",
+		},
+		{
+			name: "stories-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "BACKLOG")
-				addStory(t, db, "e", "S1", "PLANNED")
+				addStory(t, db, "PLANNED")
 			},
 			stmt:    `DELETE FROM stories`,
-			wantSub: "never deleted"},
-		{name: "epic_criteria-delete-raises-abort",
+			wantSub: "never deleted",
+		},
+		{
+			name: "epic_criteria-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "BACKLOG")
 				exec1(t, db, `INSERT INTO epic_criteria (epic, seq, criterion) VALUES ('e', 1, 'c')`)
 			},
 			stmt:    `DELETE FROM epic_criteria`,
-			wantSub: "never deleted"},
-		{name: "artifacts-delete-raises-abort",
+			wantSub: "never deleted",
+		},
+		{
+			name: "artifacts-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addArtifact(t, db, "x.md")
 			},
 			stmt:    `DELETE FROM artifacts`,
-			wantSub: "never deleted"},
-		{name: "task_links-delete-raises-abort",
+			wantSub: "never deleted",
+		},
+		{
+			name: "task_links-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				a, b := addTask(t, db, "OPEN", nil), addTask(t, db, "OPEN", nil)
 				exec1(t, db, `INSERT INTO task_links (from_task, to_task, type) VALUES (?, ?, 'relates')`, a, b)
 			},
 			stmt:    `DELETE FROM task_links`,
-			wantSub: "never deleted"},
-		{name: "task_artifacts-delete-raises-abort",
+			wantSub: "never deleted",
+		},
+		{
+			name: "task_artifacts-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addTask(t, db, "OPEN", nil)
 				addArtifact(t, db, "x.md")
 				exec1(t, db, `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 1, 'home')`)
 			},
 			stmt:    `DELETE FROM task_artifacts`,
-			wantSub: "never deleted"},
-		{name: "epic_artifacts-delete-raises-abort",
+			wantSub: "never deleted",
+		},
+		{
+			name: "epic_artifacts-delete-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				seedPathDict(t, db)
 				addEpic(t, db, "e", "BACKLOG")
 				addArtifact(t, db, "x.md")
 				exec1(t, db, `INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('e', 1, 'home')`)
 			},
 			stmt:    `DELETE FROM epic_artifacts`,
-			wantSub: "never deleted"},
-		{name: "path_dictionary-delete-raises-abort",
-			setup:   func(t *testing.T, db *sql.DB) { seedPathDict(t, db) },
+			wantSub: "never deleted",
+		},
+		{
+			name:    "path_dictionary-delete-raises-abort",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); seedPathDict(t, db) },
 			stmt:    `DELETE FROM path_dictionary`,
-			wantSub: "never deleted"},
+			wantSub: "never deleted",
+		},
 
 		// --- worklog seq contiguity ---
-		{name: "worklog-insert-non-contiguous-seq-raises-abort",
+		{
+			name: "worklog-insert-non-contiguous-seq-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
 				addEpic(t, db, "e2", "ACTIVE")
 				exec1(t, db, `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'IN-PROGRESS')`)
 				// a gap
-				refuse(t, db, "contiguous", `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 3, 'S1', 'd', 'DONE')`)
+				refuse(t, db, "contiguous",
+					`INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 3, 'S1', 'd', 'DONE')`)
 				// zero on a fresh epic
-				refuse(t, db, "contiguous", `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e2', 0, 'S1', 'd', 'IN-PROGRESS')`)
+				refuse(t, db, "contiguous",
+					`INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e2', 0, 'S1', 'd', 'IN-PROGRESS')`)
 				// contiguity is per epic: e2 starts at 1 regardless of e
 				exec1(t, db, `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e2', 1, 'S1', 'd', 'IN-PROGRESS')`)
 			},
 			stmt:    `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'DONE')`,
-			wantSub: "contiguous"},
+			wantSub: "contiguous",
+		},
 
 		// --- the IN-REVIEW exit note ---
-		{name: "tasks-inreview-exit-without-note-raises-abort",
-			setup:   func(t *testing.T, db *sql.DB) { addTask(t, db, "IN-REVIEW", nil) },
+		{
+			name:    "tasks-inreview-exit-without-note-raises-abort",
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addTask(t, db, "IN-REVIEW", nil) },
 			stmt:    `UPDATE tasks SET status = 'OPEN', status_note = '' WHERE id = 1`,
-			wantSub: "requires the owner verdict"},
-		{name: "illegal-transition-from-inreview-reports-transition-error-not-note-error",
+			wantSub: "requires the owner verdict",
+		},
+		{
+			name: "illegal-transition-from-inreview-reports-transition-error-not-note-error",
 			// INV-160: the note trigger's legal-target clause must stay
 			// silent on a matrix-illegal move, so the transition trigger
 			// reports it whatever SQLite's (undocumented) firing order is.
-			setup:   func(t *testing.T, db *sql.DB) { addTask(t, db, "IN-REVIEW", nil) },
+			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); addTask(t, db, "IN-REVIEW", nil) },
 			stmt:    `UPDATE tasks SET status = 'LABEL', status_note = '' WHERE id = 1`,
-			wantSub: "illegal status transition"},
+			wantSub: "illegal status transition",
+		},
 
 		// --- the epic close gate ---
-		{name: "epics-close-fields-written-outside-epic-close-raises-abort",
+		{
+			name: "epics-close-fields-written-outside-epic-close-raises-abort",
 			setup: func(t *testing.T, db *sql.DB) {
+				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
 				// close_sweep alone, status untouched: still gated
 				refuse(t, db, "written only by epic close",
@@ -523,11 +689,13 @@ func TestGates(t *testing.T) {
 				addEpic(t, db, "e2", "ACTIVE")
 			},
 			stmt:    `UPDATE epics SET status = 'CLOSED', close_sweep = '2026-07-19' WHERE slug = 'e2'`,
-			wantSub: "written only by epic close"},
+			wantSub: "written only by epic close",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			db := fresh(t)
 			if tc.setup != nil {
 				tc.setup(t, db)
@@ -549,18 +717,11 @@ func TestGates(t *testing.T) {
 // companion columns already bound), so CHECK constraints never mask the
 // transition verdict under test.
 func sweepTransitions(t *testing.T, statuses []string, legal map[string][]string,
-	wantSub string, run func(t *testing.T, db *sql.DB, from, to string) error) {
+	wantSub string, run func(t *testing.T, db *sql.DB, from, to string) error,
+) {
 	t.Helper()
 	isLegal := func(from, to string) bool {
-		if from == to {
-			return true
-		}
-		for _, ok := range legal[from] {
-			if to == ok {
-				return true
-			}
-		}
-		return false
+		return from == to || slices.Contains(legal[from], to)
 	}
 	for _, from := range statuses {
 		for _, to := range statuses {
@@ -579,7 +740,9 @@ func sweepTransitions(t *testing.T, statuses []string, legal map[string][]string
 }
 
 func TestGatesTasksTransitionMatrix(t *testing.T) {
+	t.Parallel()
 	t.Run("tasks-illegal-status-transition-raises-abort", func(t *testing.T) {
+		t.Parallel()
 		statuses := []string{"OPEN", "IN-REVIEW", "NEEDS-TRIAGE", "DONE", "WONT-DO", "DUPLICATE", "LABEL"}
 		legal := map[string][]string{
 			"OPEN":         {"IN-REVIEW", "NEEDS-TRIAGE", "DONE", "WONT-DO", "DUPLICATE"},
@@ -591,6 +754,7 @@ func TestGatesTasksTransitionMatrix(t *testing.T) {
 		}
 		sweepTransitions(t, statuses, legal, "illegal status transition",
 			func(t *testing.T, db *sql.DB, from, to string) error {
+				t.Helper()
 				other := addTask(t, db, "OPEN", nil) // dup_of target
 				var fromDup any
 				if from == "DUPLICATE" {
@@ -606,15 +770,19 @@ func TestGatesTasksTransitionMatrix(t *testing.T) {
 				if to == "DUPLICATE" {
 					dup = other
 				}
-				_, err := db.Exec(`UPDATE tasks SET status=?, status_note=?, dup_of=? WHERE id=?`,
-					to, note, dup, id)
-				return err
+				if _, err := db.ExecContext(t.Context(), `UPDATE tasks SET status=?, status_note=?, dup_of=? WHERE id=?`,
+					to, note, dup, id); err != nil {
+					return fmt.Errorf("transition update: %w", err)
+				}
+				return nil
 			})
 	})
 }
 
 func TestGatesStoriesTransitionMatrix(t *testing.T) {
+	t.Parallel()
 	t.Run("stories-illegal-status-transition-raises-abort", func(t *testing.T) {
+		t.Parallel()
 		statuses := []string{"PLANNED", "READY", "BLOCKED", "IN-PROGRESS", "DONE", "DISSOLVED"}
 		legal := map[string][]string{
 			"PLANNED":     {"READY", "BLOCKED", "DISSOLVED"},
@@ -624,21 +792,26 @@ func TestGatesStoriesTransitionMatrix(t *testing.T) {
 		}
 		sweepTransitions(t, statuses, legal, "illegal story transition",
 			func(t *testing.T, db *sql.DB, from, to string) error {
+				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
-				addStory(t, db, "e", "S1", from)
+				addStory(t, db, from)
 				blocked := ""
 				if to == "BLOCKED" {
 					blocked = "reason"
 				}
-				_, err := db.Exec(`UPDATE stories SET status=?, blocked=? WHERE epic='e' AND id='S1'`,
-					to, blocked)
-				return err
+				if _, err := db.ExecContext(t.Context(), `UPDATE stories SET status=?, blocked=? WHERE epic='e' AND id='S1'`,
+					to, blocked); err != nil {
+					return fmt.Errorf("transition update: %w", err)
+				}
+				return nil
 			})
 	})
 }
 
 func TestGatesEpicsTransitionMatrix(t *testing.T) {
+	t.Parallel()
 	t.Run("epics-illegal-status-transition-raises-abort", func(t *testing.T) {
+		t.Parallel()
 		statuses := []string{"BACKLOG", "ACTIVE", "PAUSED", "CLOSED", "DISSOLVED"}
 		legal := map[string][]string{
 			"BACKLOG": {"ACTIVE", "DISSOLVED"},
@@ -647,6 +820,7 @@ func TestGatesEpicsTransitionMatrix(t *testing.T) {
 		}
 		sweepTransitions(t, statuses, legal, "illegal epic transition",
 			func(t *testing.T, db *sql.DB, from, to string) error {
+				t.Helper()
 				addEpic(t, db, "e", from)
 				// The close gate is a different trigger with its own fixture;
 				// satisfy it here so the matrix verdict is what surfaces.
@@ -665,9 +839,11 @@ func TestGatesEpicsTransitionMatrix(t *testing.T) {
 				if from == "CLOSED" && to == "CLOSED" {
 					sweep = "2026-07-19"
 				}
-				_, err := db.Exec(`UPDATE epics SET status=?, status_note=?, close_sweep=? WHERE slug='e'`,
-					to, note, sweep)
-				return err
+				if _, err := db.ExecContext(t.Context(), `UPDATE epics SET status=?, status_note=?, close_sweep=? WHERE slug='e'`,
+					to, note, sweep); err != nil {
+					return fmt.Errorf("transition update: %w", err)
+				}
+				return nil
 			})
 	})
 }
@@ -675,13 +851,15 @@ func TestGatesEpicsTransitionMatrix(t *testing.T) {
 // --- vocabulary closure and the legal unknown (INV-005) ---
 
 func TestGatesStatusVocabulary(t *testing.T) {
+	t.Parallel()
 	t.Run("status-vocabulary-closed-and-needs-triage-legal", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		// "Unknown" is a legal state, spelled NEEDS-TRIAGE, and it is the
 		// default: a task inserted with no status lands there.
 		exec1(t, db, `INSERT INTO tasks (title, created_at, updated_at) VALUES ('t', 'd', 'd')`)
 		var got string
-		if err := db.QueryRow(`SELECT status FROM tasks WHERE id = 1`).Scan(&got); err != nil {
+		if err := db.QueryRowContext(t.Context(), `SELECT status FROM tasks WHERE id = 1`).Scan(&got); err != nil {
 			t.Fatal(err)
 		}
 		if got != "NEEDS-TRIAGE" {
@@ -697,9 +875,11 @@ func TestGatesStatusVocabulary(t *testing.T) {
 // --- single status home (INV-015) ---
 
 func TestGatesTasksSingleStatusHome(t *testing.T) {
+	t.Parallel()
 	t.Run("tasks-single-status-home", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
-		rows, err := db.Query(`SELECT name FROM pragma_table_info('tasks') WHERE name LIKE '%status%'`)
+		rows, err := db.QueryContext(t.Context(), `SELECT name FROM pragma_table_info('tasks') WHERE name LIKE '%status%'`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -727,7 +907,9 @@ func TestGatesTasksSingleStatusHome(t *testing.T) {
 // --- STRICT per table (INV-052) ---
 
 func TestGatesStrictPerTable(t *testing.T) {
+	t.Parallel()
 	t.Run("strict-rejects-wrong-type-per-table", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		seedPathDict(t, db)
 		addEpic(t, db, "e", "ACTIVE")
@@ -751,7 +933,7 @@ func TestGatesStrictPerTable(t *testing.T) {
 			"events":          `INSERT INTO events (at, entity, event, detail) VALUES ('d', '#1', 'create', x'00')`,
 		}
 		for table, stmt := range wrong {
-			if _, err := db.Exec(stmt); err == nil {
+			if _, err := db.ExecContext(t.Context(), stmt); err == nil {
 				t.Errorf("%s: wrong-typed write accepted; STRICT should refuse", table)
 			}
 		}
@@ -769,21 +951,25 @@ func TestGatesStrictPerTable(t *testing.T) {
 func autoincrementNeverReuses(t *testing.T, db *sql.DB, table string) {
 	t.Helper()
 	var ddl string
-	if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&ddl); err != nil {
+	err := db.QueryRowContext(t.Context(),
+		`SELECT sql FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&ddl)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(ddl, "AUTOINCREMENT") {
 		t.Fatalf("%s: AUTOINCREMENT missing from its declaration", table)
 	}
 	var seq, maxID int64
-	if err := db.QueryRow(`SELECT seq FROM sqlite_sequence WHERE name=?`, table).Scan(&seq); err != nil {
+	err = db.QueryRowContext(t.Context(),
+		`SELECT seq FROM sqlite_sequence WHERE name=?`, table).Scan(&seq)
+	if err != nil {
 		t.Fatalf("%s: no sqlite_sequence row after an insert: %v", table, err)
 	}
 	col := "id"
 	if table == "events" {
 		col = "seq"
 	}
-	if err := db.QueryRow(`SELECT COALESCE(MAX(` + col + `),0) FROM ` + table).Scan(&maxID); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT COALESCE(MAX(`+col+`),0) FROM `+table).Scan(&maxID); err != nil {
 		t.Fatal(err)
 	}
 	if seq < maxID {
@@ -792,18 +978,22 @@ func autoincrementNeverReuses(t *testing.T, db *sql.DB, table string) {
 }
 
 func TestGatesAutoincrement(t *testing.T) {
+	t.Parallel()
 	t.Run("tasks-id-never-reused", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		addTask(t, db, "OPEN", nil)
 		autoincrementNeverReuses(t, db, "tasks")
 	})
 	t.Run("artifacts-id-never-reused", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		seedPathDict(t, db)
 		addArtifact(t, db, "x.md")
 		autoincrementNeverReuses(t, db, "artifacts")
 	})
 	t.Run("events-seq-never-reused", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		exec1(t, db, `INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
 		autoincrementNeverReuses(t, db, "events")
@@ -813,10 +1003,13 @@ func TestGatesAutoincrement(t *testing.T) {
 // --- the events_entity index (INV-136) ---
 
 func TestGatesEventsEntityIndex(t *testing.T) {
+	t.Parallel()
 	t.Run("events_entity-index-present", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		var tbl string
-		err := db.QueryRow(`SELECT tbl_name FROM sqlite_master WHERE type='index' AND name='events_entity'`).Scan(&tbl)
+		err := db.QueryRowContext(t.Context(),
+			`SELECT tbl_name FROM sqlite_master WHERE type='index' AND name='events_entity'`).Scan(&tbl)
 		if err != nil {
 			t.Fatalf("events_entity index absent: %v", err)
 		}
@@ -829,8 +1022,9 @@ func TestGatesEventsEntityIndex(t *testing.T) {
 // --- worklog PK, asserted where the contiguity trigger masks it ---
 
 func TestWorklogPrimaryKeyColumns(t *testing.T) {
+	t.Parallel()
 	db := fresh(t)
-	rows, err := db.Query(`SELECT name FROM pragma_table_info('worklog') WHERE pk > 0 ORDER BY pk`)
+	rows, err := db.QueryContext(t.Context(), `SELECT name FROM pragma_table_info('worklog') WHERE pk > 0 ORDER BY pk`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -854,16 +1048,19 @@ func TestWorklogPrimaryKeyColumns(t *testing.T) {
 // --- identity pragmas mirror the meta table (INV-032) ---
 
 func TestGatesIdentityMirrorsMeta(t *testing.T) {
+	t.Parallel()
 	db := fresh(t)
 	var userVersion int
-	if err := db.QueryRow(`PRAGMA user_version`).Scan(&userVersion); err != nil {
+	if err := db.QueryRowContext(t.Context(), `PRAGMA user_version`).Scan(&userVersion); err != nil {
 		t.Fatal(err)
 	}
 	var metaVersion string
-	if err := db.QueryRow(`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&metaVersion); err != nil {
+	err := db.QueryRowContext(t.Context(),
+		`SELECT value FROM meta WHERE key = 'schema_version'`).Scan(&metaVersion)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if fmt.Sprint(userVersion) != metaVersion {
+	if strconv.Itoa(userVersion) != metaVersion {
 		t.Fatalf("user_version %d does not mirror meta schema_version %q", userVersion, metaVersion)
 	}
 }
@@ -871,7 +1068,9 @@ func TestGatesIdentityMirrorsMeta(t *testing.T) {
 // --- views (INV-165, INV-166) ---
 
 func TestGatesViews(t *testing.T) {
+	t.Parallel()
 	t.Run("v_ready-excludes-blocked-parked-non-open-tasks", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		in := addTask(t, db, "OPEN", nil) // plain OPEN: ready
 		parked := addTask(t, db, "OPEN", nil)
@@ -884,7 +1083,7 @@ func TestGatesViews(t *testing.T) {
 		freed := addTask(t, db, "OPEN", nil) // depends only on a terminal task: ready
 		exec1(t, db, `INSERT INTO task_links (from_task, to_task, type) VALUES (?, ?, 'depends')`, freed, doneDep)
 
-		rows, err := db.Query(`SELECT id FROM v_ready ORDER BY id`)
+		rows, err := db.QueryContext(t.Context(), `SELECT id FROM v_ready ORDER BY id`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -907,10 +1106,11 @@ func TestGatesViews(t *testing.T) {
 		}
 	})
 	t.Run("v_backlog-excludes-label-tasks", func(t *testing.T) {
+		t.Parallel()
 		db := fresh(t)
 		open := addTask(t, db, "OPEN", nil)
 		addTask(t, db, "LABEL", nil)
-		rows, err := db.Query(`SELECT id, ref FROM v_backlog ORDER BY id`)
+		rows, err := db.QueryContext(t.Context(), `SELECT id, ref FROM v_backlog ORDER BY id`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -933,7 +1133,7 @@ func TestGatesViews(t *testing.T) {
 			t.Fatalf("v_backlog ids=%v refs=%v; want the one non-LABEL task as #id", ids, refs)
 		}
 		// The projection is the seven named columns, no more.
-		cols, err := db.Query(`SELECT name FROM pragma_table_info('v_backlog')`)
+		cols, err := db.QueryContext(t.Context(), `SELECT name FROM pragma_table_info('v_backlog')`)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -988,10 +1188,12 @@ func freshAt(t *testing.T) (*sql.DB, string) {
 }
 
 func TestGatesBindAnyProcess(t *testing.T) {
+	t.Parallel()
 	t.Run("raw-connection-rejects-check-strict-notnull-wip", func(t *testing.T) {
+		t.Parallel()
 		db, dir := freshAt(t)
 		addEpic(t, db, "e", "ACTIVE")
-		addStory(t, db, "e", "S1", "IN-PROGRESS")
+		addStory(t, db, "IN-PROGRESS")
 		raw := rawConn(t, dir)
 		// CHECK
 		refuse(t, raw, "CHECK", `INSERT INTO tasks (title, created_at, updated_at) VALUES ('', 'd', 'd')`)
@@ -1003,14 +1205,16 @@ func TestGatesBindAnyProcess(t *testing.T) {
 		refuse(t, raw, "UNIQUE", `INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S2', 't', 'IN-PROGRESS')`)
 	})
 	t.Run("raw-sql-write-violating-any-CHECK-rejected", func(t *testing.T) {
+		t.Parallel()
 		db, dir := freshAt(t)
 		id := addTask(t, db, "OPEN", nil)
 		raw := rawConn(t, dir)
 		// Every CHECK family the enforcement map names, one violating write
 		// each, all through the pragma-free connection.
 		checks := map[string]string{
-			"closed vocabulary":  `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'SHIPPED', 'd', 'd')`,
-			"DUPLICATE<->dup_of": `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'DUPLICATE', 'd', 'd')`,
+			"closed vocabulary": `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'SHIPPED', 'd', 'd')`,
+			"DUPLICATE<->dup_of": `INSERT INTO tasks (title, status, created_at, updated_at)
+			                      VALUES ('t', 'DUPLICATE', 'd', 'd')`,
 			"DONE/WONT-DO=>note": `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t', 'DONE', 'd', 'd')`,
 			"PAUSED/DISSOLVED=>note": `INSERT INTO epics (slug, goal, status, created_at)
 			                          VALUES ('p', 'g', 'PAUSED', 'd')`,
@@ -1018,19 +1222,21 @@ func TestGatesBindAnyProcess(t *testing.T) {
 			"met=>evidence":  `INSERT INTO epic_criteria (epic, seq, criterion, met) VALUES ('ghost', 1, 'c', 1)`,
 			"non-empty title": `INSERT INTO tasks (title, created_at, updated_at)
 			                   VALUES ('', 'd', 'd')`,
-			"non-empty goal":     `INSERT INTO epics (slug, goal, created_at) VALUES ('g2', '', 'd')`,
-			"parked-only-on-open": fmt.Sprintf(`UPDATE tasks SET status='DONE', status_note='n', parked='later' WHERE id=%d`, id),
+			"non-empty goal": `INSERT INTO epics (slug, goal, created_at) VALUES ('g2', '', 'd')`,
+			"parked-only-on-open": fmt.Sprintf(
+				`UPDATE tasks SET status='DONE', status_note='n', parked='later' WHERE id=%d`, id),
 		}
 		for family, stmt := range checks {
-			if _, err := raw.Exec(stmt); err == nil || !strings.Contains(err.Error(), "CHECK") {
+			if _, err := raw.ExecContext(t.Context(), stmt); err == nil || !strings.Contains(err.Error(), "CHECK") {
 				t.Errorf("%s: want a CHECK refusal on the raw connection, got %v", family, err)
 			}
 		}
 	})
 	t.Run("raw-sql-second-in-progress-story-same-epic-rejected", func(t *testing.T) {
+		t.Parallel()
 		db, dir := freshAt(t)
 		addEpic(t, db, "e", "ACTIVE")
-		addStory(t, db, "e", "S1", "IN-PROGRESS")
+		addStory(t, db, "IN-PROGRESS")
 		raw := rawConn(t, dir)
 		refuse(t, raw, "UNIQUE", `INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S2', 't', 'IN-PROGRESS')`)
 	})
@@ -1039,7 +1245,9 @@ func TestGatesBindAnyProcess(t *testing.T) {
 // --- single writer: the exclusive lock (INV-174) ---
 
 func TestGatesSecondWriterBlocked(t *testing.T) {
+	t.Parallel()
 	t.Run("second-writer-connection-blocked-by-exclusive-lock", func(t *testing.T) {
+		t.Parallel()
 		if testing.Short() {
 			t.Skip("waits out busy_timeout")
 		}
@@ -1059,7 +1267,9 @@ func TestGatesSecondWriterBlocked(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = c1.Close() }()
-		if _, err := c1.ExecContext(t.Context(), `INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`); err != nil {
+		_, err = c1.ExecContext(t.Context(),
+			`INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
+		if err != nil {
 			t.Fatal(err)
 		}
 
@@ -1069,7 +1279,7 @@ func TestGatesSecondWriterBlocked(t *testing.T) {
 		}
 		defer func() { _ = w2.Close() }()
 		start := time.Now()
-		_, err = w2.Exec(`INSERT INTO events (at, entity, event) VALUES ('d', '#2', 'create')`)
+		_, err = w2.ExecContext(t.Context(), `INSERT INTO events (at, entity, event) VALUES ('d', '#2', 'create')`)
 		if err == nil {
 			t.Fatalf("second writer landed a write while the first holds the exclusive lock")
 		}
@@ -1093,7 +1303,9 @@ func TestGatesSecondWriterBlocked(t *testing.T) {
 // S1a's TestJournalModeIsNotWAL by asserting no -wal/-shm litter appears
 // through actual write traffic.
 func TestGatesJournalRecovery(t *testing.T) {
+	t.Parallel()
 	t.Run("no-wal-shm-and-hot-journal-recovery", func(t *testing.T) {
+		t.Parallel()
 		if os.Getenv("GATES_CRASH_CHILD") == "1" {
 			crashChildMain()
 			return
@@ -1113,7 +1325,9 @@ func TestGatesJournalRecovery(t *testing.T) {
 		}
 
 		marker := filepath.Join(dir, "child-committed")
-		cmd := exec.Command(os.Args[0], "-test.run", "TestGatesJournalRecovery")
+		// The child is this same test binary re-executed; os.Args[0] is not
+		// user input, and the env-var paths point into t.TempDir().
+		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run", "TestGatesJournalRecovery") //nolint:gosec
 		cmd.Env = append(os.Environ(),
 			"GATES_CRASH_CHILD=1", "GATES_CRASH_DB="+path, "GATES_CRASH_MARKER="+marker)
 		if err := cmd.Start(); err != nil {
@@ -1147,14 +1361,14 @@ func TestGatesJournalRecovery(t *testing.T) {
 		}
 		defer func() { _ = re.Close() }()
 		var verdict string
-		if err := re.QueryRow(`PRAGMA integrity_check`).Scan(&verdict); err != nil {
+		if err := re.QueryRowContext(t.Context(), `PRAGMA integrity_check`).Scan(&verdict); err != nil {
 			t.Fatal(err)
 		}
 		if verdict != "ok" {
 			t.Fatalf("integrity_check after crash = %q; want ok", verdict)
 		}
 		var count int
-		if err := re.QueryRow(`SELECT count(*) FROM events`).Scan(&count); err != nil {
+		if err := re.QueryRowContext(t.Context(), `SELECT count(*) FROM events`).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
 		if count < 25 {
@@ -1184,11 +1398,15 @@ func crashChildMain() {
 		os.Exit(1)
 	}
 	for i := 1; ; i++ {
-		if _, err := db.Exec(`INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`); err != nil {
+		_, err := db.ExecContext(context.Background(),
+			`INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
+		if err != nil {
 			os.Exit(1)
 		}
 		if i == 25 {
-			if err := os.WriteFile(os.Getenv("GATES_CRASH_MARKER"), nil, 0o644); err != nil {
+			// The marker path is set by the parent test and points into its
+			// t.TempDir(); nothing here is user input.
+			if err := os.WriteFile(os.Getenv("GATES_CRASH_MARKER"), nil, 0o600); err != nil { //nolint:gosec
 				os.Exit(1)
 			}
 		}
