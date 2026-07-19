@@ -1,15 +1,19 @@
 package cli_test
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
+	"github.com/Spoloborota/selftracked/internal/dump"
+	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
 // TestMain installs the real entrypoint under BOTH of its §6.1 names —
@@ -19,8 +23,14 @@ import (
 // dispatcher's contract, which no future verb changes.
 func TestMain(m *testing.M) {
 	entry := func() {
+		// Fixture verbs for the dispatcher scenarios, plus the real catalog
+		// verbs as their stages land them — same wiring main.go uses.
+		r := fixtureRegistry()
+		if err := r.Register(dump.Verb()); err != nil {
+			panic(err)
+		}
 		e := &cli.Env{Stdout: os.Stdout, Stderr: os.Stderr}
-		os.Exit(cli.Run(fixtureRegistry(), e, os.Args[1:]))
+		os.Exit(cli.Run(r, e, os.Args[1:]))
 	}
 	testscript.Main(m, map[string]func(){
 		"selftracked": entry,
@@ -53,6 +63,29 @@ func TestScripts(t *testing.T) {
 				}
 				if got != want {
 					ts.Fatalf("exit %d, want %d", got, want)
+				}
+			},
+			// seeddb builds .selftracked/db.sqlite with one of everything —
+			// there are no creating verbs until S5a, and the dump scenarios
+			// need data to serialize.
+			"seeddb": func(ts *testscript.TestScript, neg bool, args []string) {
+				if neg || len(args) != 0 {
+					ts.Fatalf("usage: seeddb")
+				}
+				dir := ts.MkAbs(".selftracked")
+				ts.Check(os.MkdirAll(dir, 0o750))
+				db, err := schema.Open(filepath.Join(dir, "db.sqlite"))
+				ts.Check(err)
+				defer func() { _ = db.Close() }()
+				ctx := context.Background()
+				ts.Check(schema.Create(ctx, db))
+				for _, stmt := range []string{
+					`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e', 'goal', 'ACTIVE', 'd')`,
+					`INSERT INTO tasks (title, epic, created_at, updated_at) VALUES ('t', 'e', 'd', 'd')`,
+					`INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`,
+				} {
+					_, err := db.ExecContext(ctx, stmt)
+					ts.Check(err)
 				}
 			},
 		},

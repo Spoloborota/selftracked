@@ -1,0 +1,23 @@
+# S3: the dump verb end to end — file + sidecar landing, --stdout,
+# determinism run to run, and the refusal without an instance. The database
+# is prebuilt by the harness's seeddb command (no create verbs until S5a).
+
+# Without an instance directory: a refusal, exit 1.
+expectexit 1 selftracked dump
+stderr '"code":"not-found"'
+
+seeddb
+expectexit 0 selftracked dump
+exists .selftracked/dump.sql
+exists .selftracked/dump.hash
+grep 'selftracked dump schema_version=1' .selftracked/dump.sql
+
+# --stdout prints the same bytes the file got (golden cmp, INV-500).
+expectexit 0 selftracked dump --stdout
+cp stdout first.out
+cmp first.out .selftracked/dump.sql
+
+# Determinism: a second run over the unchanged database is byte-identical.
+expectexit 0 selftracked dump --stdout
+cp stdout second.out
+cmp first.out second.out
