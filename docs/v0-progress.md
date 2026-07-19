@@ -19,12 +19,10 @@ dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S5b — relation/artifact/dictionary verbs (`rel`, `link`/
-`unlink`, `paths`, `config`, `stale`). Open per D-EP13. NOTE: `rel rm`
-and `unlink` are blocked on the pending
-`link-tables-are-relations-not-history` amendment; if it is still
-unratified at the S5b open, those two land as interim refusals like
-reopen-of-DUPLICATE did.
+**Next:** S5b implementation — `rel`, `link`/`unlink` (+archive),
+`paths`, `config`, `stale`, `log`, all on the S5a pipeline. The stage is
+open (`docs/stage-openings/s5b.md`), 31 rows; the ratified link-tables
+amendment unblocked `rel rm` and `unlink`.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -47,7 +45,7 @@ artifacts first, the owner reviews after the fact and may revert.
 | S3 — serializer + `dump` | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `d20ecf1`, no CI has run (D-EP8) | 19 of 22 rows `verified-by-command`; INV-494/497/507 stay `planned` (CI-half rows, the S0 precedent). Two close-critic mutants killed; adjudications in the close entry |
 | S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 19 of 20 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job). Gained INV-346/347/489 at the S5a open — load behaviours mis-filed on S5a, already built and tested here. Security-class review: no parser bypass |
 | S5a — task-lifecycle verbs | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `0699fba`, no CI has run (D-EP8) | All 40 rows `verified-by-command`. Opened per D-EP13; 18 placement moves at open; close critic hand-drove the binary and found five resolved-but-unfixtured rows plus a latent §6.1 order inversion — all closed before the flip. Adjudications in the close entry |
-| S5b — relation/artifact/dictionary verbs | FULL | not started | — | — |
+| S5b — relation/artifact/dictionary verbs | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s5b.md`). 31 rows after INV-247 → S8a; the amendment's inverted link-table rows close here |
 | S6 — epic/story/worklog/criteria verbs | FULL | not started | — | — |
 | S7 — `verify` | FULL | not started | — | — |
 | S8a — `init` scaffold + generated docs | FULL | not started | — | — |

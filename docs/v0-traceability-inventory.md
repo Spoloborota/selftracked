@@ -49,10 +49,10 @@ accounting check counts them so the proportion stays visible.
 | S3 | 22 |
 | S4 | 20 |
 | S5a | 40 |
-| S5b | 32 |
+| S5b | 31 |
 | S6 | 80 |
 | S7 | 37 |
-| S8a | 38 |
+| S8a | 39 |
 | S8b | 35 |
 | S8c | 27 |
 | S9 | 27 |
@@ -332,7 +332,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-244 | §6.2; cf. §11.3 | `block --reason` is not owner-only — §11.3 uses it for any blocker, not just owner questions | stated-limitation | S8a | fx-story-block-reason-not-owner-only | planned |  |
 | INV-245 | §6.2; cf. §12 | The `PO:` prefix convention applies wherever an owner verdict is recorded: unblock resolutions, IN-REVIEW exit notes, and question-task titles | catalog-convention | S6 | fx-po-prefix-applies-across-three-surfaces | planned |  |
 | INV-246 | §6.2 | The schema cannot distinguish verdicts from other free text — the `PO:` prefix is what makes owner ratifications machine-findable in the trail afterward | stated-limitation | S6 | fx-po-prefix-schema-cannot-distinguish-verdict | planned |  |
-| INV-247 | §6.2 | The `PO:` literal token is deliberately locale-fixed for greppability; a non-English crew adapts the literal in its prompt config, not per-use | stated-limitation | S5b | fx-po-literal-locale-fixed-adapt-in-config | planned |  |
+| INV-247 | §6.2 | The `PO:` literal token is deliberately locale-fixed for greppability; a non-English crew adapts the literal in its prompt config, not per-use | stated-limitation | S8a | fx-po-literal-locale-fixed-adapt-in-config | planned |  |
 | INV-248 | §6.2 | Presence of `--resolution` text is verb-enforced only (per the enforcement map), not DB-enforced | stated-limitation | S6 | fx-story-unblock-resolution-verb-enforced-only | planned |  |
 | INV-249 | §6.2 | Every `story` subverb takes SLUG SID except `add`, which takes SLUG only | catalog-convention | S6 | fx-story-subverb-positional-shape | planned |  |
 | INV-250 | §6.2; §17 | `story move/split` is an explicitly deferred subverb — not implemented in v0's story catalog | deferral-boundary | deferred | fx-story-move-split-deferred | planned |  |
