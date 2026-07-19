@@ -1,6 +1,6 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 9.** Revision history: rev 1 →
+Status: **ACTIVE, revision 10.** Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →
@@ -9,7 +9,8 @@ closed → amendment `plan-accounting-scope` (D-EP4, D-EP5) → rev 5 →
 amendment `stage-open-plan-crosscheck` (D-EP6) → rev 6 → amendment
 `review-proportionality-tiers` (D-EP7) → rev 7 → amendment
 `local-commits-and-interim-evidence` (D-EP8) → rev 8 → amendment
-`s0-minimal-package` (D-EP9) → this revision. Governs the implementation of `docs/v0-spec.md`
+`s0-minimal-package` (D-EP9) → rev 9 → amendment `split-s1` (D-EP10) →
+this revision. Governs the implementation of `docs/v0-spec.md`
 (revision 3.9) and the project's spec lifecycle beyond it. Derived from
 `docs/research/2026-07-18-spec-to-execution-planning.md`; tooling facts
 re-verified against primary sources on 2026-07-18 (see that document's
@@ -178,7 +179,9 @@ produce those states).
 | Stage | Scope (closes — inventory refines) | DoD sketch & verification |
 |---|---|---|
 | **S0** | Repo bootstrap: go.mod (toolchain pin §3.2), Makefile catalog, golangci config, CI skeleton (build/vet/test, `go fix -diff` both-checks, govulncheck), README skeleton, LICENSE/NOTICE intake, and a minimal package carrying the binary's build identity so the build/vet/test/lint gates operate on real code rather than an empty match set (D-EP9) | `make build lint test fix-check` exit 0 on a clean checkout — **interim evidence, sufficient to close S0** (D-EP8); the CI workflow is authored here but the three-platform matrix is a precondition of the FIRST PUSH, not of this closure; the §16 `go fix -diff` exit-code re-verification runs here (a red-input probe confirming exit 1 on the pinned toolchain) |
-| **S1** | Schema package: embedded DDL v1 (§5 verbatim), open/create, PRAGMA choreography, meta seeding; §16 driver re-verification items (Serialize/Deserialize roundtrip, result codes, RETURNING, recursive_triggers) | Red fixture per **every** trigger AND CHECK constraint (the §5 enforcement map is the checklist, not the illustrative shortlist); driver re-checks pass as tests |
+| **S1a** | The schema as text: embedded DDL v1 (§5 verbatim), database open/create, PRAGMA choreography, `meta` seeding, views. The SQLite driver becomes a dependency here, so its pins and the licensing intake land with it | A fresh database contains every object §5 declares — object-by-object comparison against the compiled-in DDL; `meta` carries its seeded system rows |
+| **S1b** | The gates: every CHECK, uniqueness and referential constraint, and every trigger | Red fixture per gate — a gate that cannot be shown failing is decoration (§7); the §5 enforcement map is the checklist, not the illustrative shortlist |
+| **S1c** | Driver behaviour: the §16 re-verification items the specification refuses to assume — Serialize/Deserialize roundtrip on the full schema, extended vs primary result codes, RETURNING via Query, the recursive_triggers/REPLACE regression | Each re-verification item passes as a test against the real schema on the pinned driver; a probe that cannot run fails rather than reporting success |
 | **S2** | Dispatcher: verb registry, §3.2 parsing obligations (a)–(c) plus the leading-dash shape rule, JSON errors, §6.1 exit contract, version-gate **stub** | testscript usage-error matrix: exact exit codes, JSON-only output, `-h` behavior |
 | **S3** | Serializer + `dump` (§8.1); §16 cross-OS byte-equality | Golden dump `cmp`; determinism matrix incl. Windows; serializer mutation tests |
 | **S4** | `load` (§8.5) + whitelist-parser fuzzing; VACUUM/rename flow re-verification; load-side skip-marker conversion (the marker's writer verb arrives at S8b — the fixture writes the marker file by hand) | dump→load→dump byte-equal; fuzz target in CI; red fixtures (PRAGMA smuggling, missing meta rows, forged boundary); marker-conversion fixture |
@@ -398,3 +401,8 @@ close:
   review, which found the package as unnamed scope; with no Go source at all,
   `make build lint test` would pass by examining nothing. A gate that passes
   over nothing produces evidence without content.
+- **D-EP10 [DECIDED]** (amendment `split-s1`, 2026-07-19): S1 splits into
+  S1a (the schema as text), S1b (the gates), S1c (the driver). It held 129
+  rows — more than either group already split for exceeding what one
+  reviewer can hold. S0's close is the evidence: eight rows still produced
+  six defects, four of them inside the stage's own gates.
