@@ -19,10 +19,10 @@ dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S6 — epic/story/worklog/criteria verbs, the largest verb
-stage (80 rows): the epic lifecycle with close's atomic retro (including
-the ratified condition 6), the story state machine with WIP/DoR, worklog
-appends with corrections, runnable criteria. Open per D-EP13.
+**Next:** S6 implementation — the epic lifecycle with the atomic
+six-condition close, the story machine with WIP/DoR, worklog V-rows and
+corrections, runnable criteria, and edit's epic/story fields. The stage
+is open (`docs/stage-openings/s6.md`), 73 rows.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -46,7 +46,7 @@ artifacts first, the owner reviews after the fact and may revert.
 | S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 19 of 20 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job). Gained INV-346/347/489 at the S5a open — load behaviours mis-filed on S5a, already built and tested here. Security-class review: no parser bypass |
 | S5a — task-lifecycle verbs | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `0699fba`, no CI has run (D-EP8) | All 40 rows `verified-by-command`. Opened per D-EP13; 18 placement moves at open; close critic hand-drove the binary and found five resolved-but-unfixtured rows plus a latent §6.1 order inversion — all closed before the flip. Adjudications in the close entry |
 | S5b — relation/artifact/dictionary verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `b051a2a`, no CI has run (D-EP8) | All 31 rows `verified-by-command`. Two amendments applied under D-EP14 during the stage; close critic found four blockers (symlink containment escape, root-move-into-existing-dir corruption, --with-files zero coverage, untested epic-link path) — all fixed before the flip |
-| S6 — epic/story/worklog/criteria verbs | FULL | not started | — | — |
+| S6 — epic/story/worklog/criteria verbs | FULL | in progress | — | Opened 2026-07-20 per D-EP13 (`docs/stage-openings/s6.md`). 73 rows after seven moves (importer → S9, §12 trace → S12, R10 exclusion → S7); the S5a-deferred edit fields land here |
 | S7 — `verify` | FULL | not started | — | — |
 | S8a — `init` scaffold + generated docs | FULL | not started | — | — |
 | S8b — hooks + sidecar matrix | FULL | not started | — | — |

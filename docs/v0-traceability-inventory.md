@@ -50,15 +50,15 @@ accounting check counts them so the proportion stays visible.
 | S4 | 20 |
 | S5a | 40 |
 | S5b | 31 |
-| S6 | 80 |
-| S7 | 37 |
+| S6 | 73 |
+| S7 | 38 |
 | S8a | 39 |
 | S8b | 35 |
 | S8c | 27 |
-| S9 | 27 |
+| S9 | 30 |
 | S10 | 1 |
 | S11 | 25 |
-| S12 | 8 |
+| S12 | 11 |
 | deferred | 28 |
 
 | Kind | Rows |
@@ -202,7 +202,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-114 | §5.7 worklog | A correction row must name the seq of an ORIGINAL (non-correction) row, never another correction row — so correction chains cannot form | verb-contract | S6 | fixture: worklog-correction-of-correction-refused | planned |  |
 | INV-115 | §5.7 worklog | Correction volume is unbounded by design; no rule treats N corrections of one row as anomalous | stated-limitation | S6 | fixture: worklog-many-corrections-of-one-row-not-flagged | planned |  |
 | INV-116 | §5.7 worklog; §6.2; cf. §5.7 | A correction row is excluded from R6's state-consistency accounting by name | verb-contract | S7 | fixture: R6-ignores-correction-rows | planned |  |
-| INV-117 | §5.7 worklog | A correction row is excluded from R10's idle-clock: an unrelated historical correction must not reset an ACTIVE epic's idle timer | verb-contract | S6 | fixture: R10-idle-clock-unaffected-by-unrelated-correction | planned |  |
+| INV-117 | §5.7 worklog | A correction row is excluded from R10's idle-clock: an unrelated historical correction must not reset an ACTIVE epic's idle timer | verb-contract | S7 | fixture: R10-idle-clock-unaffected-by-unrelated-correction | planned |  |
 | INV-118 | §5.7 worklog | A correction row is excluded from §6.4 close rule (2): a correction mirroring a non-terminal row appended after a story's DONE row does not reopen the story | verb-contract | S6 | fixture: correction-after-done-row-does-not-reopen-story | planned |  |
 | INV-119 | §5.7 worklog | Rework of a DONE story must be a NEW story; the old story's history is never altered | verb-contract | S6 | fixture: rework-of-done-story-creates-new-story-id | planned |  |
 | INV-120 | §5.8 artifacts | artifacts.archived CHECK IN (0,1) | schema-gate | S1b | fixture: artifacts-archived-out-of-range-rejected | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
@@ -345,7 +345,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-257 | §6.2 | The true historical date of a corrected fact belongs in the correction row's `note` as content, sourced per PROMPT.md provenance rules (git/mtime, never session narrative) | process | S6 | fx-worklog-correction-historical-date-in-note | planned |  |
 | INV-258 | §6.2 | A correction row's own `date` column stays the append date regardless of what historical date its `note` records | stated-limitation | S6 | fx-worklog-correction-date-column-is-append-date | planned |  |
 | INV-259 | §6.2 | `import --legacy` accepts synthesized timestamps (events-marked), `commits='legacy: …'`, and insertion of terminal states | verb-contract | S9 | fx-import-legacy-flag-relaxations | planned |  |
-| INV-260 | §6.2 | Import date priority order per worklog row: (1) newest resolvable cited commit's git author date (author over committer, since a rebase must not rewrite worklog chronology; "newest" meaning a multi-commit/`a..b` citation is dated by its finish), else (2) the row's explicit date field, else (3) the import time | verb-contract | S6 | fx-import-date-priority-git-first | planned |  |
+| INV-260 | §6.2 | Import date priority order per worklog row: (1) newest resolvable cited commit's git author date (author over committer, since a rebase must not rewrite worklog chronology; "newest" meaning a multi-commit/`a..b` citation is dated by its finish), else (2) the row's explicit date field, else (3) the import time | verb-contract | S9 | fx-import-date-priority-git-first | planned |  |
 | INV-261 | §6.2 | When the git author date and the explicit date field both exist and disagree on the calendar day (UTC), the importer warns, git wins, and both values are recorded | verify-rule | S9 | fx-import-calendar-day-disagreement-warn | planned |  |
 | INV-262 | §6.2 | Non-sha placeholder tokens in a commits cell (e.g. prose like "see commit", template leftovers) resolve nothing and fall through to `commits='legacy: …'` | verb-contract | S9 | fx-import-placeholder-token-fallthrough | planned |  |
 | INV-263 | §6.2; cf. §7 R5 | An unresolvable sha-shaped token (a typo) is left verbatim rather than falling through to `legacy:`; full `verify` (R5) flags it, and rewriting it to `legacy:` would mask the typo | verb-contract | S7 | fx-import-typo-sha-left-verbatim | planned |  |
@@ -354,8 +354,8 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-266 | §6.2 | Best-effort honesty caveat: plain rebases preserve author dates but squash-merges rewrite them, so recovered dates are only primary-source approximations | stated-limitation | S9 | fx-import-best-effort-date-approximation | planned |  |
 | INV-267 | §6.2 | Task rows have no commits cell at all, so task dates come only from explicit fields or import time — task-level narrative-date contamination is out of git-first's reach in v0 | stated-limitation | S9 | fx-import-task-date-out-of-git-first-reach | planned |  |
 | INV-268 | §6.2 | Dual date-regime disclosure: the `date` column means "when the increment finished" for imported rows but "when recorded" for live rows — one column, two regimes, read uniformly downstream | stated-limitation | S9 | fx-import-dual-date-regime-disclosure | planned |  |
-| INV-269 | §6.2 | The importer must append worklog rows in ascending per-epic order (the contiguity trigger fires on INSERT) | schema-gate | S6 | fx-import-ascending-worklog-order | planned |  |
-| INV-270 | §6.2 | The importer must materialize a story for every referenced story id | verb-contract | S6 | fx-import-materializes-referenced-stories | planned |  |
+| INV-269 | §6.2 | The importer must append worklog rows in ascending per-epic order (the contiguity trigger fires on INSERT) | schema-gate | S9 | fx-import-ascending-worklog-order | planned |  |
+| INV-270 | §6.2 | The importer must materialize a story for every referenced story id | verb-contract | S9 | fx-import-materializes-referenced-stories | planned |  |
 | INV-271 | §6.2 | `dump`/`load` catalog entries are stub cross-references to §8 for their full contract; the only signatures given here are `dump [--stdout]` and `load [--force]` | catalog-convention | S4 | fx-dumpload-signature-stub-crossref-sec8 | verified-by-command | local: `make gates` @ 4ee8f22 (interim, D-EP8) |
 | INV-272 | §6.2 | `verify` catalog entry is a stub cross-reference to §7 for its full contract; signature is `verify [--quiet] [--fast]` | catalog-convention | S7 | fx-verify-signature-stub-crossref-sec7 | planned |  |
 | INV-273 | §6.2 | `prime` catalog entry is a stub cross-reference to §11.1 for its full contract; signature is `prime` (no args) | catalog-convention | S8c | fx-prime-signature-stub-crossref-sec11-1 | planned |  |
@@ -566,9 +566,9 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-478 | §11.3 | Drift rule: a new idea while working is handled as `create` + park, one command | process | S8a | test: doc/prompt review confirming this exact two-effect one-command guidance is present | planned |  |
 | INV-479 | §11.3 | End-every-session bookkeeping-commit rule: the dump refreshed by the session's last write must reach git (§8.3) | process | S8a | test: perform a write verb without a final commit, assert verify reports a dirty dump; confirm skill instructs a closing commit to clear it | planned |  |
 | INV-480 | §11.3 | PO-absent branch: when every remaining story is blocked and in_review is non-empty → stop; ensure each open question is an IN-REVIEW task (so they surface in every future prime); if an in-progress story is what blocks, `story block --reason` it to free the WIP slot; do not pivot to out-of-scope work; never answer PO questions | process | S8a | test: construct all-blocked-stories + non-empty in_review scenario, confirm documented guidance is to stop rather than pivot, and that story block is used to free WIP if a story is in-progress | planned |  |
-| INV-481 | §12 | §12's end-to-end trace (T0–T10, a generic host `acme-api`) plays the role of an onboarding/illustrative walkthrough of the mechanisms already specified per-verb elsewhere (§5–§11), tying them into one working-day narrative rather than introducing new obligations | process | S6 | review: confirm no T-scenario step introduces a rule absent from §5-§11 (cross-check each T-step against its cited section) | planned |  |
-| INV-482 | §12 | The T0–T10 scenario sequence is designated e2e test material: each T-step (adoption, park, research-link refusal, epic+criteria, WIP enforcement, commit+done, paths move, staleness, compaction survival via prime, atomic epic close, log archaeology) corresponds to one testscript-style scenario, taken as a whole trace rather than decomposed per verb | process | S6 | test: confirm a testscript e2e suite scenario exists that walks the T0-T10 sequence end-to-end against the real binary in a fresh temp repo | planned |  |
-| INV-483 | §12 | The friction-comparison table (file-baseline pain point vs. selftracked mechanism, 9 rows) is presented as a summary/rhetorical artifact restating already-specified mechanisms (verbs, indexes, triggers) — not itself a new obligation | process | S6 | review: spot-check each table row's "mechanism here" cell against its corresponding §5-§11 rule to confirm no new claim is introduced only here | planned |  |
+| INV-481 | §12 | §12's end-to-end trace (T0–T10, a generic host `acme-api`) plays the role of an onboarding/illustrative walkthrough of the mechanisms already specified per-verb elsewhere (§5–§11), tying them into one working-day narrative rather than introducing new obligations | process | S12 | review: confirm no T-scenario step introduces a rule absent from §5-§11 (cross-check each T-step against its cited section) | planned |  |
+| INV-482 | §12 | The T0–T10 scenario sequence is designated e2e test material: each T-step (adoption, park, research-link refusal, epic+criteria, WIP enforcement, commit+done, paths move, staleness, compaction survival via prime, atomic epic close, log archaeology) corresponds to one testscript-style scenario, taken as a whole trace rather than decomposed per verb | process | S12 | test: confirm a testscript e2e suite scenario exists that walks the T0-T10 sequence end-to-end against the real binary in a fresh temp repo | planned |  |
+| INV-483 | §12 | The friction-comparison table (file-baseline pain point vs. selftracked mechanism, 9 rows) is presented as a summary/rhetorical artifact restating already-specified mechanisms (verbs, indexes, triggers) — not itself a new obligation | process | S12 | review: spot-check each table row's "mechanism here" cell against its corresponding §5-§11 rule to confirm no new claim is introduced only here | planned |  |
 | INV-484 | §14 | Privacy warning: `dump.sql`/`STATE.md` publish task titles, notes, PO decisions, worklog text — including `events.detail` payloads (verdicts, resolutions, `edit` old/new-value prefixes accumulating append-only across every historical edit, §5.9) and user-authored structured fields (criteria commands, DoD, consumes/produces) that may contain local paths if written carelessly — when the repo is public; append-only + git history make it permanent | stated-limitation | S8a | test: write a note containing a local path, commit, confirm it appears verbatim in dump.sql/STATE.md and persists across subsequent edits in history | planned |  |
 | INV-485 | §14 | `init` and PROMPT.md carry this privacy warning; `redact` tooling is deferred (§17) | deliverable | S8a | test: run `init` in a fresh repo, confirm generated PROMPT.md contains the privacy warning text; confirm no `redact` verb exists | planned |  |
 | INV-486 | §14 | The pre-commit hook visibly stages the refreshed dump (an echoed line) — review `git diff --staged` before pushing sensitive repos | verify-rule | S8b | test: run a commit through the pre-commit hook, assert an echoed line reporting the staged dump appears in hook output | planned |  |
