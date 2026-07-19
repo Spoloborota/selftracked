@@ -85,7 +85,15 @@ func storyConditions(ctx context.Context, tx *sql.Tx, slug string) ([]string, er
 			stories))
 	}
 	if terminal < stories {
-		blockers = append(blockers, fmt.Sprintf("(1) %d stor(y/ies) not terminal", stories-terminal))
+		nrows, err := tx.QueryContext(ctx,
+			`SELECT id FROM stories WHERE epic = ? AND status NOT IN ('DONE','DISSOLVED') ORDER BY id`, slug)
+		if err != nil {
+			return nil, fmt.Errorf("close conditions: %w", err)
+		}
+		blockers, err = drainStrings(nrows, blockers, "(1) story %s is not terminal")
+		if err != nil {
+			return nil, err
+		}
 	}
 	return blockers, nil
 }

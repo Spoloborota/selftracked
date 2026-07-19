@@ -7,13 +7,16 @@ expectexit 0 selftracked epic activate flow
 expectexit 0 selftracked story add flow --title one
 expectexit 0 selftracked story add flow --title two
 
-# No DoD, not Ready (the command-or-invariant rule's tooth).
-expectexit 1 selftracked story ready flow S1
-stderr 'no DoD'
+# ready needs only DoR (PLANNED's empty blocked field); a DoD may be set
+# but is not required (an over-strict gate was removed at close review).
 expectexit 0 selftracked edit epic:flow/S1 --dod '$ go test ./...'
-expectexit 0 selftracked edit epic:flow/S2 --dod '$ go test ./...'
 expectexit 0 selftracked story ready flow S1
 expectexit 0 selftracked story ready flow S2
+
+# Wrong-source refusals: ready only from PLANNED, and a re-affirming
+# call cannot append a duplicate episode (INV-119).
+expectexit 1 selftracked story ready flow S1
+stderr wrong-state
 
 # WIP=1 per epic: the second start refuses naming the occupant.
 expectexit 0 selftracked story start flow S1
@@ -45,8 +48,9 @@ expectexit 0 selftracked story unblock flow S2 --resolution 'outage cleared at 0
 dumpdiff before-unblock.sql .selftracked/dump.sql 1 2
 
 # DONE is terminal: rework is a NEW story, never a reopened old one.
+# The verb's source guard catches it before the schema trigger would.
 expectexit 1 selftracked story ready flow S1
-stderr 'illegal story transition'
+stderr 'S1 is DONE'
 
 # dissolve appends its own worklog row.
 expectexit 0 selftracked story start flow S2

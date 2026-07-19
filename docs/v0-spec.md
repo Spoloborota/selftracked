@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.15 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.16 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -33,8 +33,9 @@ triggers, entities keep theirs (amendment
 `link-tables-are-relations-not-history`) → rev 3.14 → S5b found the
 spec obliging `paths`/`config` to write events R8 must then flag — no §4
 form exists for their subjects; instance-scoped events are carved out of
-R8 by event type (amendment `instance-scoped-events-and-r8`) → this
-revision. Implementation has
+R8 by event type (amendment `instance-scoped-events-and-r8`) → rev 3.15 → the S6 close
+found DoD-is-a-command unmachine-checkable (amendment
+`dod-shape-is-authoring-convention`) → this revision. Implementation has
 started; §5's schema and §3.1's connection posture are built.
 
 Markers: **[DECIDED]** — settled by the owner. **[RESOLVED-BY-EVIDENCE]** —
@@ -122,7 +123,7 @@ prose documents.
 |---|---|
 | **Task** | Atomic tracked unit, id `#NN`; lives in the backlog (single status home). |
 | **Epic** | A goal decomposing into ≥2 stories; carries goal, machine-checkable acceptance criteria, stories, worklog, retro/close. |
-| **Story** | One increment of an epic (`S1`…); DoD is a command/invariant, never prose. |
+| **Story** | One increment of an epic (`S1`…); DoD is a command/invariant, never prose — an authoring discipline (PROMPT.md-enforced), not a schema/verb gate, since no check distinguishes a command from prose. |
 | **Worklog** | Append-only ledger of execution episodes; done is proven by a commit range a fresh agent can `git show`. The worklog is *history*; `stories.status` is the one current-state surface. |
 | **Retro/close** | Atomic close-out: executable criteria check + status sweep + dated stamp, one transaction. |
 | **Artifact** | A file/directory referenced as `class[@scope]:relpath`. |

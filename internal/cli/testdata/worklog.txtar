@@ -28,6 +28,10 @@ stderr 'mirrors the corrected row'
 expectexit 0 selftracked worklog add wl --story S1 --state DONE --corrects 2 --commits abc --gate g --note 'true date: 2026-07-01 (git author date of abc)'
 grep 'true date: 2026-07-01' .selftracked/dump.sql
 
+# A correction targeting a DIFFERENT story is refused (cross-story).
+expectexit 1 selftracked worklog add wl --story S2 --state DONE --corrects 2
+stderr 'belongs to story S1, not S2'
+
 # Correcting a correction: refused, chains cannot form.
 expectexit 1 selftracked worklog add wl --story S1 --state DONE --corrects 3
 stderr 'itself a correction'

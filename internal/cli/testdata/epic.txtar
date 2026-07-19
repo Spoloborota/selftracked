@@ -25,7 +25,7 @@ expectexit 0 selftracked criteria add demo-run --text '$ true'
 expectexit 0 selftracked create --title homed --status OPEN --epic demo-run
 expectexit 1 selftracked epic close demo-run
 stderr '\(6\)'
-stderr '\(1\)'
+stderr '\(1\) story S1 is not terminal'
 stderr '\(4\)'
 
 # edit's S6 half: the epic goal, with the bounded old-new event.
@@ -55,3 +55,30 @@ stderr 'illegal epic transition'
 # active_verb never leaks into the dump (the close wrote and deleted it
 # inside one transaction).
 ! grep 'VALUES ..active_verb' .selftracked/dump.sql
+
+# epic dissolve: preconditions, then the auto-DISSOLVE cascade with a
+# worklog row per story, all in one transaction.
+expectexit 0 selftracked epic create doomed --goal g
+expectexit 0 selftracked epic activate doomed
+expectexit 0 selftracked story add doomed --title a
+expectexit 0 selftracked story add doomed --title b
+expectexit 0 selftracked edit epic:doomed/S1 --dod '$ true'
+expectexit 0 selftracked story ready doomed S1
+expectexit 0 selftracked story start doomed S1
+expectexit 0 selftracked create --title clinger --status OPEN --epic doomed
+
+# refuses while a story is IN-PROGRESS and a task is homed; a PARKED
+# homed task gets the unpark/detach remedy in its blocker line.
+expectexit 0 selftracked park 3 --why 'later'
+expectexit 1 selftracked epic dissolve doomed --why 'pivoted'
+stderr 'S1 is IN-PROGRESS'
+stderr '#3'
+stderr 'unpark it or edit --detach'
+
+# clear the blockers; the cascade auto-DISSOLVES PLANNED/READY/BLOCKED
+# stories, each with its own worklog row.
+expectexit 0 selftracked story block doomed S1 --reason 'giving up'
+expectexit 0 selftracked edit 3 --detach
+expectexit 0 selftracked epic dissolve doomed --why 'pivoted'
+stdout 'DISSOLVED'
+grep 'DISSOLVED., .., .., .., NULL, .auto-dissolved with the epic: pivoted' .selftracked/dump.sql

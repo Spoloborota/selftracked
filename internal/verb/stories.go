@@ -6,6 +6,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 )
@@ -131,57 +133,62 @@ func storyAdd(e *cli.Env, slug, title string) error {
 	return nil
 }
 
-// storyTransition updates status (+blocked) — the §5.7 matrix trigger is
-// the arbiter — and optionally appends the episode row.
-func storyTransition(slug, sid, target, blocked string, episode *Event, worklogState, note string) error {
-	return Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
-		ctx := context.Background()
-		res, err := tx.ExecContext(ctx,
-			`UPDATE stories SET status = ?, blocked = ? WHERE epic = ? AND id = ?`,
-			target, blocked, slug, sid)
-		if err != nil {
-			return nil, err //nolint:wrapcheck // the matrix trigger speaks through the mapper
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return nil, refuse("not-found", "no story %s in epic %q", sid, slug)
-		}
-		if worklogState != "" {
-			if err := appendWorklog(ctx, tx, slug, sid, worklogState, "", "", "", note); err != nil {
-				return nil, err
-			}
-		}
-		if episode != nil {
-			return []Event{*episode}, nil
-		}
-		return nil, nil
-	})
+// move is one story transition: its legal source statuses, the target,
+// the blocked-field value, the episode row it appends (empty = none), and
+// its events detail.
+type move struct {
+	sources []string
+	target  string
+	blocked string
+	worklog string
+	note    string
+	detail  string
+	commits string
+	gate    string
+	review  string
 }
 
-// storyReadyVerb: PLANNED → READY. The DoD-is-a-command rule (§2) gets
-// its tooth here: a story with an empty dod field is not Ready — there
-// is nothing executable to be ready FOR.
+// moveStory applies a transition INSIDE tx after guarding the source
+// status: the §5.7 trigger treats a same-status write as a legal no-op,
+// so a verb that only trusted the trigger could re-affirm DONE/BLOCKED
+// forever and append a duplicate episode each time (INV-119). The guard
+// refuses any status that is not a declared source for this move.
+func moveStory(ctx context.Context, tx *sql.Tx, slug, sid string, m move) ([]Event, error) {
+	var cur string
+	err := tx.QueryRowContext(ctx,
+		`SELECT status FROM stories WHERE epic = ? AND id = ?`, slug, sid).Scan(&cur)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, refuse("not-found", "no story %s in epic %q", sid, slug)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("story transition: %w", err)
+	}
+	if !slices.Contains(m.sources, cur) {
+		return nil, refuse("wrong-state", "story %s is %s; this transition applies from %s",
+			sid, cur, strings.Join(m.sources, "/"))
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE stories SET status = ?, blocked = ? WHERE epic = ? AND id = ?`,
+		m.target, m.blocked, slug, sid); err != nil {
+		return nil, err //nolint:wrapcheck // the matrix trigger speaks through the mapper
+	}
+	if m.worklog != "" {
+		if err := appendWorklog(ctx, tx, slug, sid, m.worklog, m.commits, m.gate, m.review, m.note); err != nil {
+			return nil, err
+		}
+	}
+	return []Event{{Entity: storyEntity(slug, sid), Event: evStory, Detail: m.detail}}, nil
+}
+
+// storyReadyVerb: PLANNED → READY. No worklog row — no worklog state
+// exists for this transition (§6.2). (The spec's readiness precondition
+// is DoR, the empty-blocked field, which PLANNED already satisfies; a
+// DoD-content gate would be unspecified scope.)
 func storyReadyVerb(e *cli.Env, slug, sid string) error {
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
-		ctx := context.Background()
-		var dod string
-		err := tx.QueryRowContext(ctx,
-			`SELECT dod FROM stories WHERE epic = ? AND id = ?`, slug, sid).Scan(&dod)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, refuse("not-found", "no story %s in epic %q", sid, slug)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("story ready: %w", err)
-		}
-		if dod == "" {
-			return nil, refuse("no-dod",
-				"story %s has no DoD; set one with edit --dod (a command or invariant, never prose)", sid)
-		}
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE stories SET status = 'READY' WHERE epic = ? AND id = ?`, slug, sid); err != nil {
-			return nil, err //nolint:wrapcheck // the matrix trigger speaks through the mapper
-		}
-		// No worklog row: no worklog state exists for this transition (§6.2).
-		return []Event{{Entity: storyEntity(slug, sid), Event: evStory, Detail: "ready"}}, nil
+		return moveStory(context.Background(), tx, slug, sid, move{
+			sources: []string{storyPlanned}, target: storyReady, detail: "ready",
+		})
 	})
 	if err != nil {
 		return err
@@ -232,8 +239,14 @@ func storyBlock(e *cli.Env, slug, sid, reason string) error {
 	if err := validateText("--reason", reason); err != nil {
 		return err
 	}
-	ev := Event{Entity: storyEntity(slug, sid), Event: evStory, Detail: "block: " + reason}
-	if err := storyTransition(slug, sid, storyBlocked, reason, &ev, "BLOCKED-ON-OWNER", reason); err != nil {
+	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
+		return moveStory(context.Background(), tx, slug, sid, move{
+			sources: []string{storyPlanned, storyReady, storyInProgress},
+			target:  storyBlocked, blocked: reason,
+			worklog: "BLOCKED-ON-OWNER", note: reason, detail: "block: " + reason,
+		})
+	})
+	if err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintf(e.Stdout, "%s/%s -> BLOCKED\n", slug, sid)
@@ -251,8 +264,12 @@ func storyUnblock(e *cli.Env, slug, sid, resolution string) error {
 	if err := validateText("--resolution", resolution); err != nil {
 		return err
 	}
-	ev := Event{Entity: storyEntity(slug, sid), Event: evStory, Detail: resolution}
-	if err := storyTransition(slug, sid, storyReady, "", &ev, "", ""); err != nil {
+	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
+		return moveStory(context.Background(), tx, slug, sid, move{
+			sources: []string{storyBlocked}, target: storyReady, detail: resolution,
+		})
+	})
+	if err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintf(e.Stdout, "%s/%s -> READY\n", slug, sid)
@@ -271,22 +288,11 @@ func storyDoneVerb(e *cli.Env, slug, sid, commits, gate, review string) error {
 		}
 	}
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
-		ctx := context.Background()
-		res, err := tx.ExecContext(ctx,
-			`UPDATE stories SET status = 'DONE' WHERE epic = ? AND id = ?`, slug, sid)
-		if err != nil {
-			return nil, err //nolint:wrapcheck // the matrix trigger speaks through the mapper
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return nil, refuse("not-found", "no story %s in epic %q", sid, slug)
-		}
-		if err := appendWorklog(ctx, tx, slug, sid, storyDone, commits, gate, review, ""); err != nil {
-			return nil, err
-		}
-		return []Event{{
-			Entity: storyEntity(slug, sid), Event: evStory,
-			Detail: "done: " + commits + "; gate: " + gate,
-		}}, nil
+		return moveStory(context.Background(), tx, slug, sid, move{
+			sources: []string{storyInProgress}, target: storyDone,
+			worklog: storyDone, commits: commits, gate: gate, review: review,
+			detail: "done: " + commits + "; gate: " + gate,
+		})
 	})
 	if err != nil {
 		return err
@@ -302,8 +308,13 @@ func storyDissolve(e *cli.Env, slug, sid, why string) error {
 	if err := validateText("--why", why); err != nil {
 		return err
 	}
-	ev := Event{Entity: storyEntity(slug, sid), Event: evStory, Detail: "dissolve: " + why}
-	if err := storyTransition(slug, sid, "DISSOLVED", "", &ev, "DISSOLVED", why); err != nil {
+	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
+		return moveStory(context.Background(), tx, slug, sid, move{
+			sources: []string{storyPlanned, storyReady, storyBlocked, storyInProgress},
+			target:  "DISSOLVED", worklog: "DISSOLVED", note: why, detail: "dissolve: " + why,
+		})
+	})
+	if err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintf(e.Stdout, "%s/%s -> DISSOLVED\n", slug, sid)
