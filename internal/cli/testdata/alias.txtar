@@ -1,0 +1,10 @@
+# §6.1: strk is the same dispatcher under its decided alias. (INV-176.)
+
+expectexit 0 strk -h
+stdout 'verbs:'
+
+expectexit 2 strk frobnicate
+stderr '"code":"usage"'
+
+expectexit 0 strk duo add x
+stdout 'added x'

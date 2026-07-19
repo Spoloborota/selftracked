@@ -1,0 +1,6 @@
+# §6.1: the error is exactly {"error":{"code","message"}} — one object,
+# one line, nothing else anywhere. (INV-178.)
+
+expectexit 2 selftracked frobnicate
+! stdout .
+stderr '\{"error":\{"code":"usage","message":".*"\}\}'

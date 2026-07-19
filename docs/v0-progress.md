@@ -20,10 +20,11 @@ demonstration). The whole S1 group is closed; `internal/schema` carries
 the DDL, the connection posture, and three test suites. All local,
 nothing pushed.
 
-**Next:** S2 — CLI dispatcher: verb registry, §3.2 parsing obligations
-(a)–(c) plus the leading-dash shape rule, JSON errors, §6.1 exit
-contract, version-gate stub. 25 rows. Open per D-EP13:
-`docs/stage-openings/s2.md` committed before any code.
+**Next:** S2 implementation — the dispatcher. The stage is open
+(`docs/stage-openings/s2.md`): 20 rows after five moves to verb stages;
+verb registry, §3.2 parsing obligations (a)–(c), the leading-dash rule,
+JSON errors, the §6.1 exit mapper, the version-gate stub, and the
+testscript e2e harness the DoD names.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting

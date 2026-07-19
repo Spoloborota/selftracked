@@ -1,0 +1,18 @@
+# §6.2: the subverb token pops before positionals; every pair has a
+# statically known arity checked both ways. (INV-182, INV-183.)
+
+expectexit 0 selftracked duo add x
+stdout 'added x'
+
+expectexit 0 selftracked duo list
+stdout 'listed'
+
+expectexit 2 selftracked duo nope
+stderr '"code":"usage"'
+stderr 'nope'
+
+expectexit 2 selftracked duo add
+stderr 'expects 1'
+
+expectexit 2 selftracked duo list surplus
+stderr 'unexpected argument'

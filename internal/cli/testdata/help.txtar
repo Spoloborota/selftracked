@@ -1,0 +1,13 @@
+# §3.2 (c): help is stdout usage, exit 0 — not a JSON error. (INV-038.)
+
+expectexit 0 selftracked -h
+stdout 'verbs:'
+! stderr .
+
+expectexit 0 selftracked probe -h
+stdout 'usage: probe A B'
+! stderr .
+
+expectexit 0 selftracked probe a b -h
+stdout 'usage: probe A B'
+! stderr .

@@ -23,6 +23,11 @@ help: ## List the targets
 build: ## Compile every package
 	$(GO) build -trimpath $(PKGS)
 
+.PHONY: binaries
+binaries: ## Build bin/selftracked and its strk alias from the one main
+	$(GO) build -trimpath -o bin/selftracked ./cmd/selftracked
+	$(GO) build -trimpath -o bin/strk ./cmd/selftracked
+
 .PHONY: test
 test: ## Run the tests
 	$(GO) test -race $(PKGS)

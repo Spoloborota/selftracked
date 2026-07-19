@@ -1,0 +1,27 @@
+# §3.2 (a) and the leading-dash rule, end to end. (INV-036, INV-039.)
+
+# Too few positionals: a usage refusal, never an index panic.
+expectexit 2 selftracked probe onlyone
+stderr 'expects 2'
+
+# Leftover tokens are never silently dropped.
+expectexit 2 selftracked probe a b extra
+stderr 'unexpected argument'
+
+# Leftovers after flags refuse too.
+expectexit 2 selftracked probe a b --note n trailing
+stderr 'unexpected argument'
+
+# A dash token is never popped as a positional.
+expectexit 2 selftracked probe --note x a
+stderr 'cannot be a positional'
+
+# A literal -- ends flag parsing; what follows is a leftover.
+expectexit 2 selftracked probe a b -- sneaky
+stderr 'unexpected argument'
+
+# §3.2 (b): a flag-parse error is the JSON object, exit 2 — never the
+# stdlib's plain-text print.
+expectexit 2 selftracked probe a b --bogus
+! stdout .
+stderr '"code":"usage"'

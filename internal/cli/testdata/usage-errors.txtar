@@ -1,0 +1,12 @@
+# The dispatcher's refusal shape: exit 2, the JSON error object on stderr,
+# nothing on stdout. (INV-002 unknown-verb closure; INV-178 shape; INV-179.)
+
+expectexit 2 selftracked
+! stdout .
+stderr '"error"'
+stderr '"code":"usage"'
+
+expectexit 2 selftracked frobnicate
+! stdout .
+stderr '"code":"usage"'
+stderr 'frobnicate'
