@@ -19,9 +19,10 @@ dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S4 — `load` + whitelist-parser fuzzing (§8.5: the parser is
-the security boundary). 18 rows after the S3 open moved three loader
-rows here. Open per D-EP13: `docs/stage-openings/s4.md` before any code.
+**Next:** S4 implementation — the §8.5 whitelist loader (the security
+boundary), its fuzz target, the load guard, and the DB-only R-rules
+subset that load's abort path needs (S7 wraps `verify` around the same
+code later). The stage is open: `docs/stage-openings/s4.md`, 17 rows.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -42,7 +43,7 @@ section and the amendments log).
 | S1c — driver behaviour | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e5b2006`, no CI has run (D-EP8) | All 9 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1c.md`); INV-010 → S7 at open; close critic re-ran all probes individually. Adjudications in the close entry below |
 | S2 — CLI dispatcher | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `739f8c9`, no CI has run (D-EP8) | All 20 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s2.md`); five moves at open; close critic ran every resolved command by name and probed the built binary by hand. Adjudications in the close entry |
 | S3 — serializer + `dump` | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `d20ecf1`, no CI has run (D-EP8) | 19 of 22 rows `verified-by-command`; INV-494/497/507 stay `planned` (CI-half rows, the S0 precedent). Two close-critic mutants killed; adjudications in the close entry |
-| S4 — `load` + parser fuzzing | FULL | not started | — | — |
+| S4 — `load` + parser fuzzing | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s4.md`). 17 rows after INV-277 → S5a; S4 births the shared R-rules subset load needs (S7 wraps the verb later) |
 | S5a — task-lifecycle verbs | FULL | not started | — | — |
 | S5b — relation/artifact/dictionary verbs | FULL | not started | — | — |
 | S6 — epic/story/worklog/criteria verbs | FULL | not started | — | — |

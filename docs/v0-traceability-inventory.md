@@ -47,8 +47,8 @@ accounting check counts them so the proportion stays visible.
 | S1c | 9 |
 | S2 | 20 |
 | S3 | 22 |
-| S4 | 18 |
-| S5a | 57 |
+| S4 | 17 |
+| S5a | 58 |
 | S5b | 27 |
 | S6 | 73 |
 | S7 | 36 |
@@ -362,7 +362,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-274 | §6.2 | `state` regenerates STATE.md via deterministic rendering: fixed sections, fixed ordering, last 10 events | deliverable | S8c | fx-state-deterministic-render-fixed-sections | planned |  |
 | INV-275 | §6.2; cf. §7 R14 | R14 checks that STATE.md byte-matches its DB-derived render | verify-rule | S7 | fx-state-r14-matches-db | planned |  |
 | INV-276 | §6.2 | `gate skip-mark` writes the gitignored `.selftracked/skip-pending` marker file and performs no DB write mid-commit | schema-gate | S8b | fx-gate-skip-mark-writes-marker-no-db-write | planned |  |
-| INV-277 | §6.2 | The next write verb, or `load` (which runs after a divergence), converts the pending skip marker into a `gate-skip` events row | verb-contract | S4 | fx-gate-skip-marker-converted-to-events-row | planned |  |
+| INV-277 | §6.2 | The next write verb, or `load` (which runs after a divergence), converts the pending skip marker into a `gate-skip` events row | verb-contract | S5a | fx-gate-skip-marker-converted-to-events-row | planned |  |
 | INV-278 | §6.2; cf. §7 R15 | `verify` (including `--fast`, via R15) reports a pending skip marker while it remains unconverted | verify-rule | S7 | fx-gate-skip-r15-reports-pending-marker | planned |  |
 | INV-279 | §6.2 | Honest limit: the skip marker is per-machine — a skip followed by nothing is visible only on the machine that performed the skip | stated-limitation | S8b | fx-gate-skip-marker-per-machine-visibility-limit | planned |  |
 | INV-280 | §6.3 | §6.3's worked CLI examples are illustrative only, not an independent contract — each obligation they demonstrate (WIP-limit refusal, DONE --note requirement, reopen-only path, link file-existence refusal, park semantics) is already specified by its own §6.2 catalog row, so the example block adds no new normative rule beyond illustration | stated-limitation | S6 | review: §6.3 is illustrative — message text is asserted only via implementation-owned golden files (S6 DoD), never as a spec contract | planned |  |
