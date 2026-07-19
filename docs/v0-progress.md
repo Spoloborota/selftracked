@@ -19,11 +19,13 @@ dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S5a — task-lifecycle verbs (create/show/list/ready/set-status/
-reopen/park/unpark/edit) + events + the write-verb pipeline with the
-version-gate and divergence stubs. 58 rows after the moves into it — the
-largest verb sub-batch. Open per D-EP13: `docs/stage-openings/s5a.md`
-before any code.
+**Next:** S5a implementation — nine task-lifecycle verbs (create, show,
+list, ready, set-status, reopen, park, unpark, edit), the events
+pipeline, and the shared write-verb harness with the §8.4 divergence
+core. The stage is open (`docs/stage-openings/s5a.md`), 40 rows after an
+18-row placement correction. This is the first stage that writes to the
+database through the verb pipeline; the harness it builds is reused by
+every later write verb.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -44,8 +46,8 @@ section and the amendments log).
 | S1c — driver behaviour | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e5b2006`, no CI has run (D-EP8) | All 9 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1c.md`); INV-010 → S7 at open; close critic re-ran all probes individually. Adjudications in the close entry below |
 | S2 — CLI dispatcher | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `739f8c9`, no CI has run (D-EP8) | All 20 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s2.md`); five moves at open; close critic ran every resolved command by name and probed the built binary by hand. Adjudications in the close entry |
 | S3 — serializer + `dump` | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `d20ecf1`, no CI has run (D-EP8) | 19 of 22 rows `verified-by-command`; INV-494/497/507 stay `planned` (CI-half rows, the S0 precedent). Two close-critic mutants killed; adjudications in the close entry |
-| S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 16 of 17 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job, the S0 precedent). Security-class close review: no parser bypass, four hardenings applied. Adjudications in the close entry |
-| S5a — task-lifecycle verbs | FULL | not started | — | — |
+| S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 19 of 20 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job). Gained INV-346/347/489 at the S5a open — load behaviours mis-filed on S5a, already built and tested here. Security-class review: no parser bypass |
+| S5a — task-lifecycle verbs | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s5a.md`). 40 rows after the build's largest placement move (18 rows out: epic/story/worklog → S6, rel → S5b, verify → S7, docs/init → S8a, gate → S8b, skill → S8c, load behaviours → S4) |
 | S5b — relation/artifact/dictionary verbs | FULL | not started | — | — |
 | S6 — epic/story/worklog/criteria verbs | FULL | not started | — | — |
 | S7 — `verify` | FULL | not started | — | — |
