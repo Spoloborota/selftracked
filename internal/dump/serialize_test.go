@@ -124,8 +124,15 @@ func TestSerializer(t *testing.T) {
 		t.Parallel()
 		db := fresh(t)
 		out := serialize(t, db)
-		if !strings.Contains(out, schema.DDL()) {
-			t.Fatal("the compiled-in DDL does not appear verbatim in the dump")
+		// Not just presence: the DDL appears EXACTLY once, and immediately
+		// after the header line — a duplicated block passed the old
+		// Contains check (found by the S3 close review, empirically).
+		if n := strings.Count(out, schema.DDL()); n != 1 {
+			t.Fatalf("the compiled-in DDL appears %d times; want exactly once", n)
+		}
+		_, rest, ok := strings.Cut(out, "\n")
+		if !ok || !strings.HasPrefix(rest, schema.DDL()) {
+			t.Fatal("the DDL block does not directly follow the header line")
 		}
 	})
 
@@ -153,13 +160,24 @@ func TestSerializer(t *testing.T) {
 
 	t.Run("dump-rows-ordered-by-full-pk-events-bounded", func(t *testing.T) {
 		t.Parallel()
-		// Explicit ids inserted high-first; the dump must sort by PK.
+		// Explicit ids inserted high-first; the dump must sort by PK — and
+		// this fixture owns BOTH halves of its row: the events tail is
+		// bounded below by the archive boundary in the same breath.
 		db := fresh(t)
 		exec1(t, db, `INSERT INTO tasks (id, title, created_at, updated_at) VALUES (5, 'five', 'd', 'd')`)
 		exec1(t, db, `INSERT INTO tasks (id, title, created_at, updated_at) VALUES (2, 'two', 'd', 'd')`)
+		exec1(t, db, `INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
+		exec1(t, db, `INSERT INTO events (at, entity, event) VALUES ('d', '#2', 'create')`)
+		exec1(t, db, `UPDATE meta SET value = '1' WHERE key = 'events_archived_through'`)
 		out := serialize(t, db)
 		if strings.Index(out, "'two'") > strings.Index(out, "'five'") {
 			t.Fatal("tasks are not in PK order")
+		}
+		if strings.Contains(out, "VALUES (1, 'd', '#1'") {
+			t.Fatal("an event at the boundary was serialized; the bound is exclusive")
+		}
+		if !strings.Contains(out, "VALUES (2, 'd', '#2'") {
+			t.Fatal("the live event above the boundary is missing")
 		}
 	})
 
@@ -210,6 +228,14 @@ func TestSerializer(t *testing.T) {
 		//nolint:dupword // two adjacent NULL columns is the point
 		if !strings.Contains(serialize(t, db), "NULL, NULL, 'd', 'd');") {
 			t.Fatal("the no-epic task's dup_of/epic did not serialize as NULL")
+		}
+		// And the worklog seed row pins corrects' NULL by POSITION — a NULL
+		// drifting into any other column changes this exact line (the close
+		// review found table-granularity too weak).
+		wantWorklog := "INSERT INTO worklog (epic, seq, story, date, state, commits, gate, review, corrects, note)" +
+			" VALUES ('e', 1, 'S1', 'd', 'IN-PROGRESS', '', '', '', NULL, '');"
+		if !strings.Contains(serialize(t, db), wantWorklog) {
+			t.Fatalf("the worklog row's NULL is not exactly at corrects; want line %q", wantWorklog)
 		}
 	})
 
