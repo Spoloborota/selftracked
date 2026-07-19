@@ -253,6 +253,65 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
+	t.Run("statement-boundary-delimiters-inside-a-string-stay-data", func(t *testing.T) {
+		t.Parallel()
+		// The security keystone: a string value carrying the exact
+		// statement-boundary delimiters () VALUES ( and ); must round-trip
+		// as ONE literal, never split into a smuggled second statement.
+		// Hand-verified during the S4 close review; pinned here.
+		db := buildFrom(t, goodDump(t))
+		evil := `x) VALUES (99); DROP TABLE tasks; --`
+		if _, err := db.ExecContext(t.Context(),
+			`INSERT INTO tasks (title, created_at, updated_at) VALUES (?, 'd', 'd')`, evil); err != nil {
+			t.Fatal(err)
+		}
+		text, err := dump.Serialize(t.Context(), db)
+		if err != nil {
+			t.Fatal(err)
+		}
+		parsed, err := load.Parse(text)
+		if err != nil {
+			t.Fatalf("Parse: %v", err)
+		}
+		var found bool
+		for _, ins := range parsed.Inserts {
+			for _, v := range ins.Values {
+				if s, ok := v.(string); ok && s == evil {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Fatal("the boundary-delimiter string was mis-split, not preserved as one value")
+		}
+	})
+
+	t.Run("adversarial-non-grammar-inputs-refused", func(t *testing.T) {
+		t.Parallel()
+		// The permissiveness gaps the close review found, now hard refusals.
+		text := string(goodDump(t))
+		if !strings.Contains(text, "'d', 'd');") {
+			t.Fatal("could not locate the data body")
+		}
+		cases := map[string][]byte{
+			// A raw newline inside a value desyncs the line parser → refused.
+			"embedded-newline": []byte(strings.Replace(text,
+				"'it''s quoted'", "'it''s\nquoted'", 1)),
+			// A blank line mid-body is not the serializer's grammar.
+			"blank-line-mid-body": []byte(strings.Replace(text,
+				"INSERT INTO events", "\nINSERT INTO events", 1)),
+			// Non-canonical integer spellings the serializer never emits.
+			"leading-zero-int": []byte(strings.Replace(text,
+				"VALUES (1, 'it''s quoted'", "VALUES (01, 'it''s quoted'", 1)),
+		}
+		for name, bad := range cases {
+			if string(bad) == text {
+				t.Fatalf("%s: mutation did not apply", name)
+			}
+			wantRefused(t, bad, "refused")
+		}
+	})
+
 	t.Run("load-connection-hardening-active", func(t *testing.T) {
 		t.Parallel()
 		db, err := schema.OpenLoadBuild(filepath.Join(t.TempDir(), "probe.sqlite"))

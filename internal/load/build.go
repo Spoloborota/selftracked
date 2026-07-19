@@ -55,6 +55,12 @@ func Build(ctx context.Context, dir string, d *Dump) (string, error) {
 // schema package owns the DSN grammar, so the hardening pragmas live
 // there (OpenLoadBuild) and sqlite3_limit caps are applied per connection
 // here.
+//
+// SQLITE_DBCONFIG_DEFENSIVE is deliberately NOT set: it is unreachable
+// through modernc.org/sqlite (its only sqlite3_db_config binding is an
+// unexported method on an unexported type — verified against v1.54.0), so
+// the whitelist parser, not a defensive-mode flag, is the primary defense
+// against a malicious dump (§8.5).
 func openHardened(path string) (*sql.DB, error) {
 	db, err := schema.OpenLoadBuild(path)
 	if err != nil {
@@ -100,7 +106,13 @@ func build(ctx context.Context, db *sql.DB, d *Dump) error {
 		return fmt.Errorf("load: apply DDL: %w", err)
 	}
 	for _, ins := range d.Inserts {
-		cols := expectedColumns[ins.Table]
+		// Defense in depth: Parse already rejects unknown tables, but Build
+		// must not trust a *Dump it did not parse (a future rebuild path
+		// could hand-build one). An unknown table has no canonical columns.
+		cols, known := expectedColumns[ins.Table]
+		if !known {
+			return fmt.Errorf("%w: unknown table %q", ErrRefused, ins.Table)
+		}
 		params := strings.TrimSuffix(strings.Repeat("?, ", len(ins.Values)), ", ")
 		//nolint:gosec // table and column names come from the compiled-in whitelist, values ride as parameters
 		q := "INSERT INTO " + ins.Table + " (" + cols + ") VALUES (" + params + ")"

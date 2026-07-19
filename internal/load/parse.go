@@ -56,37 +56,24 @@ var expectedColumns = map[string]string{
 // BEFORE any data parsing — the meta row sits after the DDL block and
 // cannot steer the parser (§8.1).
 func Parse(text []byte) (*Dump, error) {
-	s := string(text)
-	header, rest, ok := strings.Cut(s, "\n")
-	if !ok || !strings.HasPrefix(header, headerPrefix) {
-		return nil, fmt.Errorf("%w: missing or malformed header line", ErrRefused)
-	}
-	fields := strings.Fields(strings.TrimPrefix(header, "-- selftracked dump "))
-	version, err := headerVersion(fields)
+	version, body, err := parsePreamble(string(text))
 	if err != nil {
 		return nil, err
 	}
-	if version > schema.Version {
-		return nil, fmt.Errorf("%w: dump schema_version=%d requires a newer binary (this one compiles v%d)",
-			ErrRefused, version, schema.Version)
-	}
-	// v1 is the first version there is; anything lower never existed.
-	if version != schema.Version {
-		return nil, fmt.Errorf("%w: unknown schema_version=%d", ErrRefused, version)
-	}
-
-	// Step 1 (§8.5): the DDL block must byte-equal the compiled-in
-	// canonical DDL for that version — not "look valid", byte-equal.
-	ddl := schema.DDL()
-	if !strings.HasPrefix(rest, ddl) {
-		return nil, fmt.Errorf("%w: DDL block does not byte-equal the canonical DDL for v%d", ErrRefused, version)
-	}
-	body := rest[len(ddl):]
 
 	d := &Dump{Version: version}
-	for i, line := range strings.Split(body, "\n") {
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
 		if line == "" {
-			continue // the trailing newline's empty tail
+			// The serializer ends every INSERT with a newline, so exactly
+			// one empty element — the last — is expected. A blank line
+			// anywhere else is not the serializer's grammar and is refused,
+			// not silently skipped (§8.5 step 2 is "anything else is a hard
+			// refusal"; a special-cased skip would be a soft spot).
+			if i == len(lines)-1 {
+				continue
+			}
+			return nil, fmt.Errorf("%w: blank data line %d", ErrRefused, i+1)
 		}
 		ins, err := parseInsert(line)
 		if err != nil {
@@ -95,6 +82,36 @@ func Parse(text []byte) (*Dump, error) {
 		d.Inserts = append(d.Inserts, ins)
 	}
 	return d, nil
+}
+
+// parsePreamble validates the header line and the byte-equal DDL block,
+// returning the resolved schema version and the data body that follows.
+// The header's version selects the parser BEFORE any data is read (§8.1).
+func parsePreamble(s string) (int, string, error) {
+	header, rest, ok := strings.Cut(s, "\n")
+	if !ok || !strings.HasPrefix(header, headerPrefix) {
+		return 0, "", fmt.Errorf("%w: missing or malformed header line", ErrRefused)
+	}
+	fields := strings.Fields(strings.TrimPrefix(header, "-- selftracked dump "))
+	version, err := headerVersion(fields)
+	if err != nil {
+		return 0, "", err
+	}
+	if version > schema.Version {
+		return 0, "", fmt.Errorf("%w: dump schema_version=%d requires a newer binary (this one compiles v%d)",
+			ErrRefused, version, schema.Version)
+	}
+	// v1 is the first version there is; anything lower never existed.
+	if version != schema.Version {
+		return 0, "", fmt.Errorf("%w: unknown schema_version=%d", ErrRefused, version)
+	}
+	// Step 1 (§8.5): the DDL block must byte-equal the compiled-in
+	// canonical DDL for that version — not "look valid", byte-equal.
+	ddl := schema.DDL()
+	if !strings.HasPrefix(rest, ddl) {
+		return 0, "", fmt.Errorf("%w: DDL block does not byte-equal the canonical DDL for v%d", ErrRefused, version)
+	}
+	return version, rest[len(ddl):], nil
 }
 
 func headerVersion(fields []string) (int, error) {
@@ -230,12 +247,35 @@ func parseInteger(body string, i int) (Literal, int, error) {
 	if j == start {
 		return nil, 0, fmt.Errorf("%w: token at %q is not a whitelisted literal", ErrRefused, clip(body[i:]))
 	}
-	n, err := strconv.ParseInt(body[i:j], 10, 64)
+	tok := body[i:j]
+	// The serializer emits %d — one canonical spelling per value. A loader
+	// that also accepted 007 or -0 would admit a byte-shape the serializer
+	// can never produce, softening the byte-exact grammar (§8.5 step 2).
+	if !canonicalInteger(tok) {
+		return nil, 0, fmt.Errorf("%w: non-canonical integer literal %q", ErrRefused, tok)
+	}
+	n, err := strconv.ParseInt(tok, 10, 64)
 	if err != nil {
 		//nolint:errorlint // family error is the %w; strconv detail is context
-		return nil, 0, fmt.Errorf("%w: integer literal %q: %v", ErrRefused, body[i:j], err)
+		return nil, 0, fmt.Errorf("%w: integer literal %q: %v", ErrRefused, tok, err)
 	}
 	return n, j, nil
+}
+
+// canonicalInteger accepts exactly the serializer's %d output: an optional
+// minus on a non-zero magnitude, no leading zeros, no -0, no +.
+func canonicalInteger(tok string) bool {
+	mag := tok
+	if neg, ok := strings.CutPrefix(tok, "-"); ok {
+		mag = neg
+		if mag == "0" || mag == "" {
+			return false // -0, or a lone "-"
+		}
+	}
+	if len(mag) > 1 && mag[0] == '0' {
+		return false // leading zero
+	}
+	return true
 }
 
 func clip(s string) string {
