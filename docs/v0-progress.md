@@ -12,17 +12,17 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a (nine task-lifecycle verbs on the shared write pipeline with the §8.4 divergence core — the binary now tracks work for real: create through reopen, events trail, dump regeneration on every write). The repository now carries the full
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b. Eighteen verbs live: the full task lifecycle, relations with cycle refusal, artifact links with real-path containment, the path dictionary with safe root moves, validated config, the stale detector, per-entity logs. The repository now carries the full
 schema layer (`internal/schema`: DDL, connection posture, three test
 suites) and the CLI skeleton (`internal/ref` grammar, `internal/cli`
 dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S5b implementation — `rel`, `link`/`unlink` (+archive),
-`paths`, `config`, `stale`, `log`, all on the S5a pipeline. The stage is
-open (`docs/stage-openings/s5b.md`), 31 rows; the ratified link-tables
-amendment unblocked `rel rm` and `unlink`.
+**Next:** S6 — epic/story/worklog/criteria verbs, the largest verb
+stage (80 rows): the epic lifecycle with close's atomic retro (including
+the ratified condition 6), the story state machine with WIP/DoR, worklog
+appends with corrections, runnable criteria. Open per D-EP13.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -45,7 +45,7 @@ artifacts first, the owner reviews after the fact and may revert.
 | S3 — serializer + `dump` | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `d20ecf1`, no CI has run (D-EP8) | 19 of 22 rows `verified-by-command`; INV-494/497/507 stay `planned` (CI-half rows, the S0 precedent). Two close-critic mutants killed; adjudications in the close entry |
 | S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 19 of 20 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job). Gained INV-346/347/489 at the S5a open — load behaviours mis-filed on S5a, already built and tested here. Security-class review: no parser bypass |
 | S5a — task-lifecycle verbs | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `0699fba`, no CI has run (D-EP8) | All 40 rows `verified-by-command`. Opened per D-EP13; 18 placement moves at open; close critic hand-drove the binary and found five resolved-but-unfixtured rows plus a latent §6.1 order inversion — all closed before the flip. Adjudications in the close entry |
-| S5b — relation/artifact/dictionary verbs | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s5b.md`). 31 rows after INV-247 → S8a; the amendment's inverted link-table rows close here |
+| S5b — relation/artifact/dictionary verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `b051a2a`, no CI has run (D-EP8) | All 31 rows `verified-by-command`. Two amendments applied under D-EP14 during the stage; close critic found four blockers (symlink containment escape, root-move-into-existing-dir corruption, --with-files zero coverage, untested epic-link path) — all fixed before the flip |
 | S6 — epic/story/worklog/criteria verbs | FULL | not started | — | — |
 | S7 — `verify` | FULL | not started | — | — |
 | S8a — `init` scaffold + generated docs | FULL | not started | — | — |
@@ -242,6 +242,26 @@ omission. The review also confirmed both seams the opening record
 flagged (the §8.4 core has exactly four branches; the version gate is
 still the S2 stub) and that the interim reopen-of-DUPLICATE refusal
 matches what the pending link-tables amendment promises.
+
+S5b closed on a four-blocker report, every one fixed before a row
+flipped. The sharpest: link's containment was lexical only — a symlink
+inside the registered root reaching outside it linked cleanly (now the
+real path must live under the real root); and a root move into an
+existing directory made git mv NEST the old root inside it while the
+dictionary pointed at the parent — exit 0, every artifact resolution
+dangling, and invisible to the DB-only rules (now a move demands a
+fresh destination, and --with-files carries fixtures for both
+transports). The epic-link path had never been driven by a test;
+INV-155 closes with its named fixture now real. Smaller accepted
+findings: rel tree's undirected relates rendering, link-form flag
+bleed, the files-stayed notice, unlink's delete-half assertion, git
+stderr in stale's failures. Refuted: the space-in-glob limitation (the
+§5.1 value grammar is whitespace-separated by design), "tree" naming,
+and the dash-leading dispatcher refusal layer. Two amendments were
+applied mid-stage under D-EP14: the ratified link-tables inversion
+(rev 3.14) and the R8 carve-out for instance-scoped paths/config
+events (rev 3.15) — the latter found because the spec obliged those
+verbs to write events R8 would then flag.
 
 ## Parked — out of scope, no decision needed yet
 
