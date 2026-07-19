@@ -38,13 +38,16 @@ accounting check counts them so the proportion stays visible.
 | Stage | Rows |
 |---|---|
 | S0 | 8 |
+| S1a | 10 |
+| S1b | 86 |
+| S1c | 10 |
 | S2 | 25 |
 | S3 | 36 |
 | S4 | 15 |
-| S5a | 49 |
-| S5b | 25 |
+| S5a | 50 |
+| S5b | 26 |
 | S6 | 68 |
-| S7 | 32 |
+| S7 | 33 |
 | S8a | 34 |
 | S8b | 34 |
 | S8c | 26 |
@@ -96,7 +99,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-015 | §2 | Task: atomic tracked unit, id #NN, lives in the backlog with a single status home | schema-gate | S1b | schema test: tasks.status single column, one current value | planned |  |
 | INV-016 | §2 | Epic: a goal decomposing into ≥2 stories; must carry a goal, machine-checkable acceptance criteria, stories, a worklog, and a retro/close | schema-gate | S1b | schema test: epic cardinality ≥2 stories + required fields present | planned |  |
 | INV-017 | §2 | Story: one increment of an epic (S1…); its DoD must be a command/invariant, never prose | verify-rule | S6 | test: DoD field rejects free-text-only value / requires executable form | planned |  |
-| INV-018 | §2 | Worklog: append-only ledger of execution episodes; "done" must be provable by a commit range a fresh agent can git show; the worklog is history, stories.status is the one current-state surface | schema-gate | S1b | test: worklog append-only trigger + commit-range resolves via git show | planned |  |
+| INV-018 | §2 | Worklog: append-only ledger of execution episodes; "done" must be provable by a commit range a fresh agent can git show; the worklog is history, stories.status is the one current-state surface | schema-gate | S7 | test: worklog append-only trigger + commit-range resolves via git show | planned |  |
 | INV-019 | §2 | Retro/close: an atomic close-out — executable criteria check + status sweep + dated stamp — performed as one transaction | schema-gate | S6 | test: epic close is a single DB transaction (all-or-nothing) | planned |  |
 | INV-020 | §2; §4 | Artifact: a file/directory referenced as class[@scope]:relpath (full grammar in §4) | format | S2 | see §4 reference-grammar fixture | planned |  |
 | INV-021 | §2 | DoR (Definition of Ready): a story starts only with an empty blocked field | schema-gate | S6 | test: story start refused when blocked field non-empty | planned |  |
@@ -175,7 +178,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-094 | §5.6 task_links:351 | task_links FK to_task REFERENCES tasks(id) | schema-gate | S1b | fixture: task_links-orphan-to_task-rejected | planned |  |
 | INV-095 | §5.6 task_links:347-348 | The 'duplicates' link type is written ONLY by `set-status --dup-of` and removed ONLY by `reopen`; `rel` never offers it | verb-contract | S5a | fixture: rel-add-refuses-duplicates-type | planned |  |
 | INV-096 | §5.6 task_links:357 | 'relates' links are symmetric: stored once, queried in both directions by every verb | verb-contract | S5b | fixture: relates-link-queried-both-directions | planned |  |
-| INV-097 | §5.6 task_links:358 | `rel add` refuses cycles for depends/supersedes link types | verify-rule | S1b | fixture: rel-add-refuses-depends-supersedes-cycle | planned |  |
+| INV-097 | §5.6 task_links:358 | `rel add` refuses cycles for depends/supersedes link types | verify-rule | S5b | fixture: rel-add-refuses-depends-supersedes-cycle | planned |  |
 | INV-098 | §5.6 task_links:358-360 | `rel add` refuses depends/supersedes targets whose status is LABEL or DUPLICATE | verb-contract | S5b | fixture: rel-add-refuses-label-duplicate-target | planned |  |
 | INV-099 | §5.7 stories:364 | stories FK epic REFERENCES epics(slug) | schema-gate | S1b | fixture: stories-orphan-epic-rejected | planned |  |
 | INV-100 | §5.7 stories:365 | stories.id CHECK (id GLOB 'S[0-9]*') | schema-gate | S1b | fixture: stories-id-format-rejects-non-matching | planned |  |
@@ -221,7 +224,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-140 | §5.9 events:469-470 | The full NEW value after an edit lives in the entity row itself and in every committed dump, not in the events row | process | S3 | fixture: full-new-value-recoverable-from-entity-row-and-dump | planned |  |
 | INV-141 | §5.9 events:470 | The full OLD value after an edit lives only in the prior committed dump, not in the events row | process | S3 | fixture: full-old-value-recoverable-only-from-prior-dump | planned |  |
 | INV-142 | §5.9 events:470-473 | Stated limitation: a value overwritten twice within one session never reaches a commit and survives only as its bounded prefix in events (state trails git by one commit, §8.3) | stated-limitation | S3 | fixture: double-overwrite-same-session-only-prefix-survives | planned |  |
-| INV-143 | §5.9 events:473-477 | Because events are append-only while tasks.status_note is a single overwritten column, the events trail (not the column) is the durable record of superseded IN-REVIEW verdicts | process | S1b | fixture: events-trail-retains-superseded-status_note-verdicts | planned |  |
+| INV-143 | §5.9 events:473-477 | Because events are append-only while tasks.status_note is a single overwritten column, the events trail (not the column) is the durable record of superseded IN-REVIEW verdicts | process | S5a | fixture: events-trail-retains-superseded-status_note-verdicts | planned |  |
 | INV-144 | §5 schema-gates:487-488 | trigger worklog_no_update: worklog rows cannot be UPDATEd | schema-gate | S1b | fixture: worklog-update-raises-abort | planned |  |
 | INV-145 | §5 schema-gates:489-490 | trigger worklog_no_delete: worklog rows cannot be DELETEd | schema-gate | S1b | fixture: worklog-delete-raises-abort | planned |  |
 | INV-146 | §5 schema-gates:491 | events rows cannot be UPDATEd (implied trigger, "same pair" as worklog) | schema-gate | S1b | fixture: events-update-raises-abort | planned |  |
