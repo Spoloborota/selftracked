@@ -13,14 +13,17 @@ log artifact proving the verification commands exited 0 (plan §5).
 Read this section first; the tables below carry the detail.
 
 **Done:** G0 (the traceability inventory), S0 (repo bootstrap), S1a (the
-schema as text), S1b (the schema gates: 85 red fixtures in
-`internal/schema/gates_test.go`, one subtest per inventory row, full
-transition-matrix sweeps, raw-connection any-process probes, a
-deterministic hot-journal crash-recovery proof). All local, nothing pushed.
+schema as text), S1b (the schema gates: 85 red fixtures, one subtest per
+inventory row), S1c (driver behaviour: the §16 re-verification items
+proven on the pinned driver, plus the §1.1 tier boundaries proven by
+demonstration). The whole S1 group is closed; `internal/schema` carries
+the DDL, the connection posture, and three test suites. All local,
+nothing pushed.
 
-**Next:** S1c implementation — driver behaviour. The stage is open
-(`docs/stage-openings/s1c.md`): 9 rows after INV-010 moved to S7 (its
-obligation is verify's `foreign_key_check`), probes resolved to commands.
+**Next:** S2 — CLI dispatcher: verb registry, §3.2 parsing obligations
+(a)–(c) plus the leading-dash shape rule, JSON errors, §6.1 exit
+contract, version-gate stub. 25 rows. Open per D-EP13:
+`docs/stage-openings/s2.md` committed before any code.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -38,7 +41,7 @@ section and the amendments log).
 | S0 — repo bootstrap | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e09204a`, **no CI has run** (D-EP8) | 5 of 8 rows `verified-by-command`; INV-492/499/513 stay `planned` — they assert CI gates that cannot be proven before the first push |
 | S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | All 10 rows `verified-by-command`. INV-053 closed once the owner ratified the spec amendment that made its claim true (spec rev 3.10) |
 | S1b — schema gates | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green (114 subtests, `-race`, fresh cache) · local run @ `ad8ef15`, no CI has run (D-EP8) | All 85 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1b.md`); two close critics ran; five mutation probes shown red. Adjudications recorded below |
-| S1c — driver behaviour | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s1c.md`). 9 rows after INV-010 → S7; behavioural probes only |
+| S1c — driver behaviour | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e5b2006`, no CI has run (D-EP8) | All 9 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1c.md`); INV-010 → S7 at open; close critic re-ran all probes individually. Adjudications in the close entry below |
 | S2 — CLI dispatcher | FULL | not started | — | — |
 | S3 — serializer + `dump` | FULL | not started | — | — |
 | S4 — `load` + parser fuzzing | FULL | not started | — | — |
@@ -151,6 +154,22 @@ before-first-write locking probe demanded by a critic proved
 unprovable: establishing an EXCLUSIVE-mode connection already excludes
 foreign writers (shared lock at open, held by the mode), recorded as an
 empirical note in the test rather than asserted away.
+
+S1c closed the same day on one critic's report. Accepted: the second
+Serialize call type-asserted unchecked where its siblings fail through a
+named error — a panic path in a parallel subtest, made uniform. Refuted,
+reasons recorded: renaming INV-173's "bypasses" fixture (the slug is the
+inventory's; the row's own text already states the honest scope — absence
+of a mechanism, not defeat of one), and a dedicated inventory row for the
+gocyclo test-file exclusion (same adjudication as the S1b lint ruling —
+config infrastructure inside §3.2's stated posture, not spec scope). The
+critic confirmed by literal re-check what the opening record had asked
+the close to confirm: S1a's pragma test asserts four of INV-028's five
+settings and the new `_dqs=0` behavioural probe is the fifth —
+`synchronous`/`locking_mode` are S1a's other test's scope, not INV-028's.
+The Serialize byte-identity assertion is reasoned-sound but was not
+stress-run; if it ever flakes, the aborted-DELETE-between-snapshots
+reasoning in the close report is where to look first.
 
 ## Parked — out of scope, no decision needed yet
 
