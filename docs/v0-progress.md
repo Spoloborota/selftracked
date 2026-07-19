@@ -44,6 +44,7 @@ log artifact proving the verification commands exited 0 (plan §5).
 | `split-s1` | execution plan §4 (S1), §10 | accepted 2026-07-19 (D-EP10) | plan rev 10 |
 | `nullable-columns-preamble` | **spec** §5 preamble + §8.1 | accepted 2026-07-19 — first amendment to the specification | spec rev 3.10 |
 | `evidence-across-a-squash` | execution plan §5, §8, §9, §10 | accepted 2026-07-19 (D-EP11, D-EP12) | plan rev 11 |
+| `import-date-bounds` | **spec** §6.2 `import` | accepted 2026-07-19 | spec rev 3.11 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)

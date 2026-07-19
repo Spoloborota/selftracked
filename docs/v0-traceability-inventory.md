@@ -10,7 +10,7 @@ execution plan (`docs/v0-execution-plan.md`) §3, at the granularity
 decided in D-EP2: obligation-cluster rows by default, with verify-rules,
 schema gates and per-verb documented refusals kept row-per-item.
 
-**Total: 547 rows.** Every row carries a closing stage, or `deferred` with
+**Total: 549 rows.** Every row carries a closing stage, or `deferred` with
 its §17 anchor — the total-accounting
 rule of plan §3. `status` is `planned` for every row until a stage closes it
 with an evidence link (plan §5).
@@ -48,7 +48,7 @@ accounting check counts them so the proportion stays visible.
 | S8a | 34 |
 | S8b | 34 |
 | S8c | 26 |
-| S9 | 25 |
+| S9 | 27 |
 | S10 | 1 |
 | S11 | 24 |
 | S12 | 8 |
@@ -57,7 +57,7 @@ accounting check counts them so the proportion stays visible.
 | Kind | Rows |
 |---|---|
 | schema-gate | 117 |
-| verb-contract | 106 |
+| verb-contract | 108 |
 | verify-rule | 85 |
 | stated-limitation | 58 |
 | process | 49 |
@@ -626,3 +626,5 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-545 | §9 L964 | No config file exists: configuration lives in `meta` rows edited only through the `config` verb — `init` must not create a config file, and no code path reads one | format | S8a | fixture: fresh init creates no config file; grep the tree for a config-file reader | planned |  |
 | INV-546 | §3.1 | Write verbs end with `PRAGMA optimize` | verb-contract | S5a | test: a write verb's connection runs PRAGMA optimize before it closes | planned |  |
 | INV-547 | §8.2; §5.1 | An absent `meta.events_archived_through` row is treated as 0 by the serializer — a missing row must never drop events | format | S3 | fixture: serialize a database whose boundary row was deleted; every event is still emitted | planned |  |
+| INV-548 | §6.2 import | An imported date later than the import moment is REFUSED — a future date is provably not an event date | verb-contract | S9 | testscript: import a corpus carrying a tomorrow-dated row; the import fails and names the row | planned |  |
+| INV-549 | §6.2 import | An imported date earlier than the earliest commit touching the source file is REPORTED, not refused — an older record can be transcribed into a new file, but the bound it broke is stated | verb-contract | S9 | testscript: import a row dated before the source file's first commit; the import succeeds and the report names the row and the bound | planned |  |
