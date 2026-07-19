@@ -2,15 +2,18 @@
 
 selftracked is a local-first self-tracking system for small AI-agent crews:
 a SQLite database plus a Go CLI with a fixed verb set, a deterministic SQL
-dump tracked in git, and a path dictionary. **Nothing here is code yet** —
-the project is in its specification-and-planning phase.
+dump tracked in git, and a path dictionary. Implementation is under way;
+`docs/v0-progress.md` says how far it has got.
+
+Revision numbers are deliberately absent from this file: each document states
+its own, and a number copied here is a number that goes stale unnoticed.
 
 ## Read these before doing anything
 
 | Artifact | What it is |
 |---|---|
-| `docs/v0-spec.md` | The specification (revision 3.9). The single authoritative description of v0. |
-| `docs/v0-execution-plan.md` | How v0 gets built and how the spec is governed over its lifecycle (revision 4, ACTIVE). |
+| `docs/v0-spec.md` | The specification: the single authoritative description of v0. |
+| `docs/v0-execution-plan.md` | How v0 gets built, and how the spec is governed over its lifecycle. |
 | `docs/v0-traceability-inventory.md` | Every normative obligation of the spec as a numbered row with its closing stage and verification. |
 | `docs/v0-progress.md` | The living progress ledger — read it first in every session, update it last. |
 | `docs/research/` | The evidence base. Every design decision in the spec cites a document here. |
@@ -99,7 +102,11 @@ the owner's, or your own discovery — falls outside it:
 
 ## Conventions
 
-- Documentation, code, comments and commit messages are written in English.
+- Documentation, code, comments and commit messages are written in English —
+  including quoted decisions. An owner's ruling given in another language is
+  recorded in English by meaning, never pasted verbatim in the original: a
+  repository with one language is one a contributor can read end to end, and
+  a decision's force is in what it decided, not in its phrasing.
 - Durable documents never duplicate state that a verb or `STATE.md` can
   print; numbers quoted from the database carry an `as of dump <sha12>`
   anchor; dates come from the clock or git, never from a session's narrative.

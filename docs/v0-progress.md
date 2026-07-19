@@ -109,10 +109,8 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 1. Task-level narrative dates sit outside the git-first import dating rule
    (task rows carry no commit citation) — accept as a stated v0 limitation,
    or extend the mechanism?
-2. Whether the English-only convention should name quoted owner decisions
-   explicitly: two amendment proposals had a verbatim non-English quote
-   pasted into them and removed on review.
-
 Answered 2026-07-19: the `as of dump <sha12>` anchor keeps its deferred
 validator (D-EP12); D-EP9 ratified; the §5 nullable-column wording corrected
-in the specification itself.
+in the specification itself; and the English-only convention now covers
+quoted decisions explicitly — they are recorded in English by meaning
+(`.claude/CLAUDE.md`).
