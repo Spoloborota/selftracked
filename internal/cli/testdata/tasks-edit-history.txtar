@@ -1,0 +1,50 @@
+# §5.9 edit history across commits (INV-141/142/143) and the bounded
+# prefix actually truncating.
+
+seeddb
+exec git init -q .
+exec git config user.email test@example.invalid
+exec git config user.name tester
+exec git add .selftracked/dump.sql
+exec git commit -q -m seed
+
+# edit-old-value-only-in-prior-dump (INV-141): after an edit and a fresh
+# commit, the full OLD title lives in the prior commit's dump; the events
+# row carries only prefixes.
+expectexit 0 selftracked edit 1 --title 'a very long replacement title that certainly exceeds the forty byte prefix bound'
+exec git show HEAD:.selftracked/dump.sql
+stdout ', .t., '
+grep 'a very long replacement title that ce' .selftracked/dump.sql
+grep 'a very long replacement title that certa…' .selftracked/dump.sql
+exec git add .selftracked/dump.sql
+exec git commit -q -m edit1
+
+# double-edit-one-session-only-prefix-survives (INV-142): two edits with
+# no commit between them - the intermediate full value never reaches ANY
+# commit; only its bounded prefix survives, in the events trail.
+expectexit 0 selftracked edit 1 --title 'an intermediate value that vanishes before it can ever be committed anywhere'
+expectexit 0 selftracked edit 1 --title 'the final title'
+exec git add .selftracked/dump.sql
+exec git commit -q -m edit2
+exec git log -S 'vanishes before it can ever be committed' --oneline -- .selftracked/dump.sql
+! stdout .
+grep 'an intermediate value that vanishes befo…→the final title' .selftracked/dump.sql
+! grep 'vanishes before it can ever be committed anywhere' .selftracked/dump.sql
+
+# in-review-cycle-keeps-superseded-verdict-in-trail (INV-143): two
+# IN-REVIEW cycles; the column holds only verdict B, the trail keeps A.
+expectexit 0 selftracked set-status 1 OPEN
+expectexit 0 selftracked set-status 1 IN-REVIEW
+expectexit 0 selftracked set-status 1 OPEN --note 'PO: verdict A - proceed'
+expectexit 0 selftracked set-status 1 IN-REVIEW
+expectexit 0 selftracked set-status 1 OPEN --note 'PO: verdict B - hold'
+grep 'PO: verdict A - proceed' .selftracked/dump.sql
+grep 'PO: verdict B - hold' .selftracked/dump.sql
+exec grep -c 'PO: verdict A - proceed' .selftracked/dump.sql
+stdout '^1$'
+
+# dump-refreshed-by-last-write-rides-next-commit (INV-348): the last
+# write left the tracked dump modified relative to HEAD - state trails
+# git by exactly the one uncommitted refresh.
+exec git status --porcelain .selftracked/dump.sql
+stdout 'M .selftracked/dump.sql'

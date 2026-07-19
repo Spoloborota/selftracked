@@ -1,0 +1,20 @@
+# §8.2 review-surface shapes, counted with a real dump diff.
+# status-flip-diffs-as-two-lines (INV-330): one task line replaced, one
+# events line appended -> removed=1 added=2.
+# create-bumps-seq-header-plus-entity-line (INV-331): header replaced,
+# task + events appended -> removed=1 added=3.
+
+seeddb
+expectexit 0 selftracked set-status 1 OPEN
+cp .selftracked/dump.sql before-flip.sql
+expectexit 0 selftracked set-status 1 IN-REVIEW
+dumpdiff before-flip.sql .selftracked/dump.sql 1 2
+
+cp .selftracked/dump.sql before-create.sql
+expectexit 0 selftracked create --title fresh
+dumpdiff before-create.sql .selftracked/dump.sql 1 3
+
+# events-detail-carries-note-verbatim (INV-138): the --note text lands in
+# the events tail word for word.
+expectexit 0 selftracked set-status 1 OPEN --note 'PO: the exact verdict text'
+grep 'set-status., .PO: the exact verdict text.' .selftracked/dump.sql

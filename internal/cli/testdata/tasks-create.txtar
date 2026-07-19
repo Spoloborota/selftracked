@@ -18,6 +18,14 @@ stderr 'terminal statuses exist only via import'
 expectexit 1 selftracked create --title x --label --status OPEN
 stderr 'mutually exclusive'
 
+# create --note lands in the status_note column.
+expectexit 0 selftracked create --title noted --status OPEN --note 'why it exists'
+grep 'why it exists' .selftracked/dump.sql
+
+# No verb accepts a caller-supplied date (INV-055): unknown flag, exit 2.
+expectexit 2 selftracked create --title x --date 2020-01-01
+stderr 'usage'
+
 # The write landed in the dump and the events tail (INV-330/331 shape).
 grep 'from the CLI' .selftracked/dump.sql
-grep 'selftracked dump schema_version=1 tasks=3' .selftracked/dump.sql
+grep 'selftracked dump schema_version=1 tasks=4' .selftracked/dump.sql

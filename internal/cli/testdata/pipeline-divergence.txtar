@@ -25,5 +25,9 @@ rm .selftracked/dump.hash
 expectexit 1 selftracked create --title stillblocked
 stderr 'no dump sidecar'
 
-# a read verb is not gated by divergence.
+# a read verb is not gated by divergence AND leaves no side effects:
+# the missing sidecar stays missing, the tracked dump stays byte-equal.
+cp .selftracked/dump.sql before-read.sql
 expectexit 0 selftracked list
+! exists .selftracked/dump.hash
+cmp before-read.sql .selftracked/dump.sql

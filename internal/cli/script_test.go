@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/rogpeppe/go-internal/testscript"
@@ -71,6 +72,44 @@ func TestScripts(t *testing.T) {
 				}
 				if got != want {
 					ts.Fatalf("exit %d, want %d", got, want)
+				}
+			},
+			// dumpdiff old new R A asserts the set-difference between two
+			// dump snapshots: exactly R lines removed and A lines added —
+			// the §8.2 review-surface shapes are counted, not vibed.
+			"dumpdiff": func(ts *testscript.TestScript, neg bool, args []string) {
+				if neg || len(args) != 4 {
+					ts.Fatalf("usage: dumpdiff <old> <new> <removed> <added>")
+				}
+				oldLines := strings.Split(ts.ReadFile(args[0]), "\n")
+				newLines := strings.Split(ts.ReadFile(args[1]), "\n")
+				oldSet := map[string]int{}
+				for _, l := range oldLines {
+					oldSet[l]++
+				}
+				newSet := map[string]int{}
+				for _, l := range newLines {
+					newSet[l]++
+				}
+				var removed, added int
+				for l, n := range oldSet {
+					if d := n - newSet[l]; d > 0 {
+						removed += d
+					}
+				}
+				for l, n := range newSet {
+					if d := n - oldSet[l]; d > 0 {
+						added += d
+					}
+				}
+				wantR, err1 := strconv.Atoi(args[2])
+				wantA, err2 := strconv.Atoi(args[3])
+				if err1 != nil || err2 != nil {
+					ts.Fatalf("dumpdiff: numeric args required")
+				}
+				if removed != wantR || added != wantA {
+					ts.Fatalf("dump diff: removed=%d added=%d; want removed=%d added=%d",
+						removed, added, wantR, wantA)
 				}
 			},
 			// seeddb builds .selftracked/db.sqlite with one of everything —

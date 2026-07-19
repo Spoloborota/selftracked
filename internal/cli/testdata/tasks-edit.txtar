@@ -17,6 +17,8 @@ stderr 'at least one field'
 expectexit 1 selftracked edit 1 --epic e --detach
 stderr 'mutually exclusive'
 
-# Re-home and detach.
+# Re-home and detach; a nonexistent epic is the FK speaking (exit 1).
 expectexit 0 selftracked edit 1 --detach
 expectexit 0 selftracked edit 1 --epic e
+expectexit 1 selftracked edit 1 --epic ghostepic
+stderr 'constraint'

@@ -30,8 +30,15 @@ expectexit 0 selftracked unpark 1
 expectexit 0 selftracked ready
 stdout '#1'
 
+# park keeps NEEDS-TRIAGE too (the other half of the CHECK's domain).
+expectexit 0 selftracked create --title triageme
+expectexit 0 selftracked park 4 --why 'defer triage'
+expectexit 0 selftracked show 4
+stdout 'NEEDS-TRIAGE'
+stdout 'parked:defer triage'
+
 # park on a terminal task: the parked-only-on-open CHECK refuses.
 expectexit 0 selftracked create --title done2 --status OPEN
-expectexit 0 selftracked set-status 4 DONE --note n
-expectexit 1 selftracked park 4 --why x
+expectexit 0 selftracked set-status 5 DONE --note n
+expectexit 1 selftracked park 5 --why x
 stderr '"code":"constraint"'

@@ -32,6 +32,7 @@ const (
 	setStatusArity = 2
 	epicPrefix     = "epic:"
 	evUnpark       = "unpark"
+	evCreate       = "create"
 )
 
 // Verbs returns the S5a task-lifecycle catalog entries.
@@ -120,7 +121,7 @@ func createVerb() cli.Verb {
 				if err != nil {
 					return nil, fmt.Errorf("create: %w", err)
 				}
-				return []Event{{Entity: ref.TaskRef(id), Event: "create", Detail: title}}, nil
+				return []Event{{Entity: ref.TaskRef(id), Event: evCreate, Detail: title}}, nil
 			})
 			if err != nil {
 				return err

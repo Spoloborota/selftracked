@@ -73,8 +73,18 @@ func run(e *cli.Env, stdout bool) error {
 // WriteFiles lands the dump and its sidecar the §8.3 way: render to a
 // temp file, atomic rename, then the sidecar hash — a crash between the
 // steps leaves derived files stale, never torn, and the next writer
-// regenerates them.
+// regenerates them. The write-verb pipeline does NOT use this composite:
+// §6.1 puts STATE.md between the dump and the sidecar, so the pipeline
+// calls WriteDumpFile and WriteSidecar around its renderer instead.
 func WriteFiles(dir string, text []byte) error {
+	if err := WriteDumpFile(dir, text); err != nil {
+		return err
+	}
+	return WriteSidecar(dir, text)
+}
+
+// WriteDumpFile lands dump.sql alone via temp + atomic rename.
+func WriteDumpFile(dir string, text []byte) error {
 	target := filepath.Join(dir, dumpFile)
 	tmp, err := os.CreateTemp(dir, dumpFile+".tmp-*")
 	if err != nil {
@@ -94,7 +104,7 @@ func WriteFiles(dir string, text []byte) error {
 		_ = os.Remove(tmpName)
 		return fmt.Errorf("dump: rename: %w", err)
 	}
-	return WriteSidecar(dir, text)
+	return nil
 }
 
 // WriteSidecar records the SHA-256 of the dump these bytes came from —
