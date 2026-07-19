@@ -12,17 +12,17 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b. Eighteen verbs live: the full task lifecycle, relations with cycle refusal, artifact links with real-path containment, the path dictionary with safe root moves, validated config, the stale detector, per-entity logs. The repository now carries the full
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6. The full v0 verb catalog is live: task lifecycle, relations, artifact links, the path dictionary, config, stale, logs, and now the epic/story machinery — epic lifecycle with the atomic six-condition close, the story state machine with WIP/DoR and source-guarded transitions, worklog V-rows and corrections, runnable criteria. The repository now carries the full
 schema layer (`internal/schema`: DDL, connection posture, three test
 suites) and the CLI skeleton (`internal/ref` grammar, `internal/cli`
 dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S6 implementation — the epic lifecycle with the atomic
-six-condition close, the story machine with WIP/DoR, worklog V-rows and
-corrections, runnable criteria, and edit's epic/story fields. The stage
-is open (`docs/stage-openings/s6.md`), 73 rows.
+**Next:** S7 — `verify`: the verb wraps the DB-only rules engine S4
+already built (R6–R9, R12) and adds the filesystem/git/serialization
+rules (R1–R3, R5, R10, R11, R13–R15) and the `--fast` partition. Open
+per D-EP13.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -46,7 +46,7 @@ artifacts first, the owner reviews after the fact and may revert.
 | S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 19 of 20 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job). Gained INV-346/347/489 at the S5a open — load behaviours mis-filed on S5a, already built and tested here. Security-class review: no parser bypass |
 | S5a — task-lifecycle verbs | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `0699fba`, no CI has run (D-EP8) | All 40 rows `verified-by-command`. Opened per D-EP13; 18 placement moves at open; close critic hand-drove the binary and found five resolved-but-unfixtured rows plus a latent §6.1 order inversion — all closed before the flip. Adjudications in the close entry |
 | S5b — relation/artifact/dictionary verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `b051a2a`, no CI has run (D-EP8) | All 31 rows `verified-by-command`. Two amendments applied under D-EP14 during the stage; close critic found four blockers (symlink containment escape, root-move-into-existing-dir corruption, --with-files zero coverage, untested epic-link path) — all fixed before the flip |
-| S6 — epic/story/worklog/criteria verbs | FULL | in progress | — | Opened 2026-07-20 per D-EP13 (`docs/stage-openings/s6.md`). 73 rows after seven moves (importer → S9, §12 trace → S12, R10 exclusion → S7); the S5a-deferred edit fields land here |
+| S6 — epic/story/worklog/criteria verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `551bb98`, no CI has run (D-EP8) | All 73 rows `verified-by-command`. Largest verb stage; close critic found a real INV-119 blocker (self-transition re-affirm) and invented scope (ready-requires-DoD) — both fixed, one amendment filed. Adjudications below |
 | S7 — `verify` | FULL | not started | — | — |
 | S8a — `init` scaffold + generated docs | FULL | not started | — | — |
 | S8b — hooks + sidecar matrix | FULL | not started | — | — |
@@ -242,6 +242,26 @@ omission. The review also confirmed both seams the opening record
 flagged (the §8.4 core has exactly four branches; the version gate is
 still the S2 stub) and that the interim reopen-of-DUPLICATE refusal
 matches what the pending link-tables amendment promises.
+
+S6, the largest verb stage, closed on the sharpest report of the build.
+The blocker was subtle and real: the story transition verbs trusted only
+the schema matrix trigger, which treats a same-status write as a legal
+no-op — so `story done`/`block`/`dissolve` could be re-called on an
+already-terminal story, each appending a duplicate worklog episode,
+directly against INV-119 ("rework is a NEW story; the old story's history
+is never altered"). Every transition now runs through a source-guarded
+helper. The critic also caught invented scope — `story ready` refusing an
+empty DoD, which the spec never asked for (readiness's precondition is
+DoR, the empty-blocked field); removed, and INV-017's genuinely
+unmachine-checkable DoD-shape rule reclassified review-only by amendment.
+Close conditions (2) and (5) turned out unreachable through the verb
+surface at all — the verbs write status and worklog atomically and
+worklog is append-only, so only import (S9) or a raw writer can produce
+their pathological states — proven now by a white-box test seeding that
+state directly, their inventory verification corrected from a fictional
+CLI fixture to that test. The regression flip, epic dissolve's cascade,
+and a cross-story correction all gained the fixtures the review showed
+they lacked.
 
 S5b closed on a four-blocker report, every one fixed before a row
 flipped. The sharpest: link's containment was lexical only — a symlink
