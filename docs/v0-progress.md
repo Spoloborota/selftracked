@@ -12,17 +12,18 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3 (the canonical serializer and the `dump` verb — the catalog's first real verb). The repository now carries the full
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4 (the §8.5 whitelist loader — the security boundary — with its fuzz target and the shared DB-only R-rules subset `verify` will reuse). The repository now carries the full
 schema layer (`internal/schema`: DDL, connection posture, three test
 suites) and the CLI skeleton (`internal/ref` grammar, `internal/cli`
 dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S4 implementation — the §8.5 whitelist loader (the security
-boundary), its fuzz target, the load guard, and the DB-only R-rules
-subset that load's abort path needs (S7 wraps `verify` around the same
-code later). The stage is open: `docs/stage-openings/s4.md`, 17 rows.
+**Next:** S5a — task-lifecycle verbs (create/show/list/ready/set-status/
+reopen/park/unpark/edit) + events + the write-verb pipeline with the
+version-gate and divergence stubs. 58 rows after the moves into it — the
+largest verb sub-batch. Open per D-EP13: `docs/stage-openings/s5a.md`
+before any code.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -43,7 +44,7 @@ section and the amendments log).
 | S1c — driver behaviour | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e5b2006`, no CI has run (D-EP8) | All 9 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1c.md`); INV-010 → S7 at open; close critic re-ran all probes individually. Adjudications in the close entry below |
 | S2 — CLI dispatcher | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `739f8c9`, no CI has run (D-EP8) | All 20 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s2.md`); five moves at open; close critic ran every resolved command by name and probed the built binary by hand. Adjudications in the close entry |
 | S3 — serializer + `dump` | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `d20ecf1`, no CI has run (D-EP8) | 19 of 22 rows `verified-by-command`; INV-494/497/507 stay `planned` (CI-half rows, the S0 precedent). Two close-critic mutants killed; adjudications in the close entry |
-| S4 — `load` + parser fuzzing | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s4.md`). 17 rows after INV-277 → S5a; S4 births the shared R-rules subset load needs (S7 wraps the verb later) |
+| S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 16 of 17 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job, the S0 precedent). Security-class close review: no parser bypass, four hardenings applied. Adjudications in the close entry |
 | S5a — task-lifecycle verbs | FULL | not started | — | — |
 | S5b — relation/artifact/dictionary verbs | FULL | not started | — | — |
 | S6 — epic/story/worklog/criteria verbs | FULL | not started | — | — |
@@ -207,6 +208,23 @@ pipeline contract). The shell-chaining false-green recurred once more
 during this stage before the gates and the commit were fused into one
 chain; the ledger says so because the third occurrence of a mistake is
 a pattern, not an accident.
+
+S4 built a security boundary, so its close review weighted adversarial
+parser-bypass hardest — and found none: the statement-boundary attack (a
+string value carrying `) VALUES (` and `);`) was hand-verified by the
+coordinating agent, not just the critic, to round-trip byte-identically
+as one literal, since security-class refutations are checked by hand
+here. Four permissiveness gaps were tightened into hard refusals
+(non-trailing blank lines, non-canonical integers) or defense-in-depth
+(Build re-checks the table whitelist; the DBCONFIG_DEFENSIVE
+unreachability note now lives in code). The two seams the opening record
+flagged both held: the R-rules subset stays free of verb/reporting/exit
+logic (S7's `verify` wraps the same code), and `load --force` implements
+only the §8.3 discard floor, never §8.4's sidecar matrix. A minor note
+for whoever wires INV-498's CI fuzz job: the local fuzzer's exec rate
+falls to near zero after a few seconds against the strict grammar —
+harmless for a boundary that refuses almost everything, but worth a
+richer corpus when it runs for real.
 
 ## Parked — out of scope, no decision needed yet
 
