@@ -15,6 +15,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/load"
 	"github.com/Spoloborota/selftracked/internal/schema"
+	"github.com/Spoloborota/selftracked/internal/verb"
 )
 
 // TestMain installs the real entrypoint under BOTH of its §6.1 names —
@@ -27,7 +28,11 @@ func TestMain(m *testing.M) {
 		// Fixture verbs for the dispatcher scenarios, plus the real catalog
 		// verbs as their stages land them — same wiring main.go uses.
 		r := fixtureRegistry()
-		for _, v := range []cli.Verb{dump.Verb(), load.Verb()} {
+		base := []cli.Verb{dump.Verb(), load.Verb()}
+		catalog := make([]cli.Verb, 0, len(base)+len(verb.Verbs()))
+		catalog = append(catalog, base...)
+		catalog = append(catalog, verb.Verbs()...)
+		for _, v := range catalog {
 			if err := r.Register(v); err != nil {
 				panic(err)
 			}
@@ -90,6 +95,11 @@ func TestScripts(t *testing.T) {
 					_, err := db.ExecContext(ctx, stmt)
 					ts.Check(err)
 				}
+				// Write verbs run the §8.4 divergence core, so a seeded
+				// instance carries its dump and sidecar like init's would.
+				text, err := dump.Serialize(ctx, db)
+				ts.Check(err)
+				ts.Check(dump.WriteFiles(dir, text))
 			},
 		},
 	})

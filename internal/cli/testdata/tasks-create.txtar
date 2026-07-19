@@ -1,0 +1,23 @@
+# S5a create: happy path and every documented refusal.
+
+seeddb
+expectexit 0 selftracked create --title 'from the CLI'
+stdout '#2'
+
+# --json prints the ref object.
+expectexit 0 selftracked create --title another --json
+stdout '\{"ref":"#3"\}'
+
+# Refusals: no title; terminal status; label+status; control characters.
+expectexit 1 selftracked create
+stderr 'requires --title'
+expectexit 1 selftracked create --title x --status DONE
+stderr 'terminal statuses exist only via import'
+expectexit 1 selftracked create --title x --status DUPLICATE
+stderr 'terminal statuses exist only via import'
+expectexit 1 selftracked create --title x --label --status OPEN
+stderr 'mutually exclusive'
+
+# The write landed in the dump and the events tail (INV-330/331 shape).
+grep 'from the CLI' .selftracked/dump.sql
+grep 'selftracked dump schema_version=1 tasks=3' .selftracked/dump.sql

@@ -1,0 +1,26 @@
+# S5a show/list/ready: read verbs run the gate then query_only bodies.
+
+seeddb
+expectexit 0 selftracked create --title labelmark --label
+expectexit 0 selftracked show 1
+stdout '#1 t \[NEEDS-TRIAGE\] epic:e'
+expectexit 0 selftracked show epic:e
+stdout 'epic:e \[ACTIVE\] goal'
+expectexit 1 selftracked show 99
+stderr '"code":"not-found"'
+expectexit 1 selftracked show nonsense
+stderr '"code":"usage"'
+
+# list hides LABEL by default, shows it with --labels.
+expectexit 0 selftracked list
+stdout '#1 t'
+! stdout labelmark
+expectexit 0 selftracked list --labels
+stdout labelmark
+
+# ready: OPEN, unparked, deps terminal. #1 is NEEDS-TRIAGE — not ready.
+expectexit 0 selftracked ready
+! stdout '#1'
+expectexit 0 selftracked set-status 1 OPEN
+expectexit 0 selftracked ready
+stdout '#1'

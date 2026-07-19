@@ -1,0 +1,17 @@
+# §14: verbs run under sentinel identity; outputs and dump stay clean.
+# (INV-487 — the DoD's no-identity-leak fixture.)
+
+env HOME=/tmp/sentinel-home-xyzzy
+env USER=sentinel-user-xyzzy
+env LOGNAME=sentinel-user-xyzzy
+
+seeddb
+expectexit 0 selftracked create --title probe
+expectexit 0 selftracked set-status 2 OPEN
+expectexit 0 selftracked show 2
+! stdout xyzzy
+expectexit 0 selftracked list
+! stdout xyzzy
+expectexit 0 selftracked dump --stdout
+! stdout xyzzy
+! grep xyzzy .selftracked/dump.sql

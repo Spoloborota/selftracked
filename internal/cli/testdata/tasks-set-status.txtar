@@ -1,0 +1,43 @@
+# S5a set-status: the matrix through the verb, dup-of, notes, auto-unpark.
+
+seeddb
+expectexit 0 selftracked set-status 1 OPEN
+stdout '#1 NEEDS-TRIAGE -> OPEN'
+
+# DONE needs a note (schema CHECK speaks through the mapper: exit 1).
+expectexit 1 selftracked set-status 1 DONE
+stderr '"code":"constraint"'
+expectexit 0 selftracked set-status 1 DONE --note 'shipped in abc123'
+stdout '#1 OPEN -> DONE'
+
+# Terminal -> OPEN is reopen's job (a verb refusal, not the trigger's).
+expectexit 1 selftracked set-status 1 OPEN
+stderr 'reopen'
+
+# An illegal matrix edge speaks with the transition trigger's voice.
+expectexit 1 selftracked set-status 1 IN-REVIEW
+stderr 'illegal status transition'
+
+# DUPLICATE: requires --dup-of; refuses a DUPLICATE canonical (no chains).
+expectexit 0 selftracked create --title canon --status OPEN
+expectexit 0 selftracked create --title dupe --status OPEN
+expectexit 1 selftracked set-status 3 DUPLICATE
+stderr 'requires --dup-of'
+expectexit 0 selftracked set-status 3 DUPLICATE --dup-of 2 --note dup
+expectexit 0 selftracked create --title dupe2 --status OPEN
+expectexit 1 selftracked set-status 4 DUPLICATE --dup-of 3 --note dup
+stderr 'itself DUPLICATE'
+
+# The duplicates link was written by set-status (the single writer).
+grep '3, 2, .duplicates.' .selftracked/dump.sql
+
+# Auto-unpark on transition, events-logged.
+expectexit 0 selftracked create --title parked1 --status OPEN
+expectexit 0 selftracked park 5 --why 'waiting on PO'
+expectexit 0 selftracked set-status 5 IN-REVIEW
+grep 'auto-cleared by status transition' .selftracked/dump.sql
+
+# Leaving IN-REVIEW without a note: the exit-note trigger refuses.
+expectexit 1 selftracked set-status 5 OPEN
+stderr 'owner verdict'
+expectexit 0 selftracked set-status 5 OPEN --note 'PO: proceed'

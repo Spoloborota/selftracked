@@ -31,9 +31,14 @@ every later write verb.
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
 
-**What is waiting on the owner:** nothing. The S1b open raised three
-items; all three were answered the same day (see the open-questions
-section and the amendments log).
+**What is waiting on the owner:** one amendment —
+`link-tables-are-relations-not-history`. S5a implementation hit a
+three-way spec contradiction: §5's no-delete triggers on the link tables
+vs the three verbs that must delete link rows (`reopen`, `rel rm`,
+`unlink`) vs R7's one-to-one rule. The proposal drops the three
+link-table triggers (entity tables keep theirs); until ratified, `reopen`
+refuses on DUPLICATE tasks naming the pending amendment, and S5b's
+`rel rm`/`unlink` are blocked the same way.
 
 ## Stages
 
@@ -75,6 +80,7 @@ section and the amendments log).
 | `stage-open-record` | execution plan §5, §8, §10 | accepted 2026-07-19 (D-EP13) | plan rev 12 |
 | `worklog-story-guard-rule-pointer` | **spec** §5.7 (one comment line) | accepted 2026-07-19 | spec rev 3.12 |
 | `epic-close-story-cardinality` | **spec** §6.4 | accepted 2026-07-19 | spec rev 3.13 |
+| `link-tables-are-relations-not-history` | **spec** §5 triggers, `ddl.sql`, INV-153/154/155 | **proposed 2026-07-19, awaiting owner review** — blocks reopen-of-duplicates, `rel rm`, `unlink` | — |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -239,7 +245,17 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 
 ## Open questions for the owner
 
-None open. The S1b-open round (three items, 2026-07-19) was answered the
+1. **Amendment `link-tables-are-relations-not-history`** (raised at S5a
+   implementation, 2026-07-19): §5 puts no-delete triggers on
+   `task_links`/`task_artifacts`/`epic_artifacts`, but `reopen` must clear
+   the duplicates link, `rel rm` and `unlink` must delete link rows, and
+   R7 demands links ⇔ dup_of one-to-one — any two hold, not all three.
+   The proposal removes the three link-table triggers: link rows are
+   current relations whose audit trail is the events log (`rel`, `link`,
+   `unlink` events), while every entity table keeps its trigger.
+   INV-153/154/155 re-open and close at the sanctioned deleters' stages.
+
+Earlier: the S1b-open round — The S1b-open round (three items, 2026-07-19) was answered the
 same day: cardinality enforcement chosen over a definitional reading
 (amendment `epic-close-story-cardinality`, condition 6 at `epic close`,
 INV-016 → S6); the R5→R4 pointer amendment ratified and applied; anchor

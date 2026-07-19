@@ -1,0 +1,22 @@
+# S5a edit: fields only, never status; old->new logged bounded.
+
+seeddb
+expectexit 0 selftracked edit 1 --title 'a sharper title'
+stdout '#1 edited'
+grep 'a sharper title' .selftracked/dump.sql
+grep 't→a sharper title' .selftracked/dump.sql
+
+# No status flag exists on edit at all - the parser refuses the unknown
+# flag with the section 3.2(b) contract: exit 2.
+expectexit 2 selftracked edit 1 --status DONE
+stderr '"code":"usage"'
+
+# Refusals: no fields; both --epic and --detach; control characters.
+expectexit 1 selftracked edit 1
+stderr 'at least one field'
+expectexit 1 selftracked edit 1 --epic e --detach
+stderr 'mutually exclusive'
+
+# Re-home and detach.
+expectexit 0 selftracked edit 1 --detach
+expectexit 0 selftracked edit 1 --epic e

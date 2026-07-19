@@ -1,0 +1,37 @@
+# S5a reopen/park/unpark.
+
+seeddb
+expectexit 0 selftracked set-status 1 OPEN
+expectexit 0 selftracked set-status 1 DONE --note done
+
+# reopen requires --why; is the sanctioned terminal->OPEN path.
+expectexit 1 selftracked reopen 1
+stderr 'requires --why'
+expectexit 0 selftracked reopen 1 --why 'regression found'
+stdout '#1 reopened'
+expectexit 1 selftracked reopen 1 --why again
+stderr 'only reopens terminal'
+
+# The interim DUPLICATE refusal, named for its pending amendment.
+expectexit 0 selftracked create --title canon --status OPEN
+expectexit 0 selftracked create --title dupe --status OPEN
+expectexit 0 selftracked set-status 3 DUPLICATE --dup-of 2 --note dup
+expectexit 1 selftracked reopen 3 --why 'not a dupe'
+stderr 'link-tables-are-relations-not-history'
+
+# park keeps the status, leaves ready; unpark restores.
+expectexit 0 selftracked park 1 --why later
+stdout 'parked'
+expectexit 0 selftracked ready
+! stdout '#1'
+expectexit 0 selftracked list --parked
+stdout '#1'
+expectexit 0 selftracked unpark 1
+expectexit 0 selftracked ready
+stdout '#1'
+
+# park on a terminal task: the parked-only-on-open CHECK refuses.
+expectexit 0 selftracked create --title done2 --status OPEN
+expectexit 0 selftracked set-status 4 DONE --note n
+expectexit 1 selftracked park 4 --why x
+stderr '"code":"constraint"'

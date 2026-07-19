@@ -1,0 +1,29 @@
+# S5a: the §8.4 divergence core, all four branches.
+
+seeddb
+
+# match -> the write proceeds.
+expectexit 0 selftracked create --title fine
+
+# crash residue: dump regenerated but sidecar stale -> heal and proceed.
+exec cp .selftracked/dump.hash stale.hash
+expectexit 0 selftracked create --title again
+exec cp stale.hash .selftracked/dump.hash
+expectexit 0 selftracked create --title healed
+
+# external change: tracked dump edited under us -> refuse naming load.
+exec cp .selftracked/dump.sql good.sql
+exec sed 's/fine/tampered-from-outside/' good.sql
+cp stdout .selftracked/dump.sql
+expectexit 1 selftracked create --title blocked
+stderr '"code":"diverged"'
+stderr 'selftracked load'
+
+# missing sidecar: divergent by safe default.
+exec cp good.sql .selftracked/dump.sql
+rm .selftracked/dump.hash
+expectexit 1 selftracked create --title stillblocked
+stderr 'no dump sidecar'
+
+# a read verb is not gated by divergence.
+expectexit 0 selftracked list
