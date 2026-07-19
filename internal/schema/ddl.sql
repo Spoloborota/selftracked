@@ -128,7 +128,7 @@ CREATE TABLE worklog (
   seq INTEGER NOT NULL,
   story TEXT NOT NULL,      -- story id, or 'V-<n>' (post-close rows; verb refuses
                             -- V-rows unless the epic is CLOSED). FK-free by
-                            -- design (composite target + V-rows); guarded by R5.
+                            -- design (composite target + V-rows); guarded by R4.
   date TEXT NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('IN-PROGRESS','DONE','BLOCKED-ON-OWNER','DISSOLVED')),
   commits TEXT NOT NULL DEFAULT '',  -- '<sha>..<sha>' | '<sha>' | 'legacy: <why>'
