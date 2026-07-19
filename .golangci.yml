@@ -27,6 +27,10 @@ linters:
     # Global state is genuinely used for build identity (version.Version is
     # set by -ldflags at release time).
     - gochecknoglobals
+    # Bans `if err := f(); err != nil` — the standard library's own idiom,
+    # and the one that keeps err scoped to the branch that handles it.
+    # Widening a variable's scope to satisfy a linter is the wrong trade.
+    - noinlineerr
     # Superseded by gomodguard_v2, which stays enabled by the default:all
     # posture; running both only produces a deprecation warning per run.
     - gomodguard
