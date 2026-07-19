@@ -39,14 +39,14 @@ accounting check counts them so the proportion stays visible.
 |---|---|
 | S0 | 8 |
 | S1a | 10 |
-| S1b | 86 |
+| S1b | 85 |
 | S1c | 10 |
 | S2 | 25 |
 | S3 | 36 |
 | S4 | 15 |
 | S5a | 50 |
 | S5b | 26 |
-| S6 | 68 |
+| S6 | 69 |
 | S7 | 33 |
 | S8a | 34 |
 | S8b | 34 |
@@ -97,7 +97,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-013 | §1.1; §11 | The no-raw-SQL rule (§11) is prose, not a gate, justified by: schema teeth catching accidents, detection catching adversaries, and every write verb being cheaper than the SQL it replaces | stated-limitation | S8c | n/a — documented rationale, no independent gate expected | planned |  |
 | INV-014 | §1.1; §10; §17; §15 | Explicit v0 non-goals: no web UI; no multi-writer merge (never, by thesis); no doc-lint for prose files (§10/§17); no MCP (deferred to v0.1+, §15); no editing of prose documents | stated-limitation | S9 | audit: no code/gate implements any listed non-goal in v0 | planned |  |
 | INV-015 | §2 | Task: atomic tracked unit, id #NN, lives in the backlog with a single status home | schema-gate | S1b | schema test: tasks.status single column, one current value | planned |  |
-| INV-016 | §2 | Epic: a goal decomposing into ≥2 stories; must carry a goal, machine-checkable acceptance criteria, stories, a worklog, and a retro/close | schema-gate | S1b | schema test: epic cardinality ≥2 stories + required fields present | planned |  |
+| INV-016 | §2; §6.4 | Epic: a goal decomposing into ≥2 stories — enforced as `epic close` refusal condition 6 (an epic with fewer than two stories, any status, does not close); the definition's other carriers (goal, criteria, worklog, close stamp) are the §5 schema rows | verb-contract | S6 | fx-epic-close-cond6-at-least-two-stories | planned |  |
 | INV-017 | §2 | Story: one increment of an epic (S1…); its DoD must be a command/invariant, never prose | verify-rule | S6 | test: DoD field rejects free-text-only value / requires executable form | planned |  |
 | INV-018 | §2 | Worklog: append-only ledger of execution episodes; "done" must be provable by a commit range a fresh agent can git show; the worklog is history, stories.status is the one current-state surface | schema-gate | S7 | test: worklog append-only trigger + commit-range resolves via git show | planned |  |
 | INV-019 | §2 | Retro/close: an atomic close-out — executable criteria check + status sweep + dated stamp — performed as one transaction | schema-gate | S6 | test: epic close is a single DB transaction (all-or-nothing) | planned |  |

@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.12 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.13 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -23,9 +23,11 @@ contradicting the schema §5 itself defines, while §8.1 had it right
 after deriving task dates from git was tried against a real corpus and failed
 (amendment `import-date-bounds`) → rev 3.11 → the S1b stage-open re-read
 found §5.7's worklog.story comment naming R5 as its guard where the rule
-is R4 (amendment `worklog-story-guard-rule-pointer`) → this revision.
-Implementation has started; §5's schema and §3.1's connection posture are
-built.
+is R4 (amendment `worklog-story-guard-rule-pointer`) → rev 3.12 → the
+same re-read found §2's ≥2-stories definition enforced nowhere, and the
+owner chose enforcement at the close boundary (amendment
+`epic-close-story-cardinality`) → this revision. Implementation has
+started; §5's schema and §3.1's connection posture are built.
 
 Markers: **[DECIDED]** — settled by the owner. **[RESOLVED-BY-EVIDENCE]** —
 adopts the verdict of documented research (cited); owner can veto.
@@ -695,8 +697,13 @@ permanently uncloseable); (3) `criteria check`
 passes for every runnable criterion and every non-runnable criterion is
 `met=1`; (4) no task in OPEN / IN-REVIEW / NEEDS-TRIAGE is homed to the epic;
 (5) every DONE story has a DONE worklog row with non-empty commits
-(`legacy:` passes, visibly). On success, one transaction: status→CLOSED,
-close_sweep→today, events row. Post-close validation = `V-n` rows.
+(`legacy:` passes, visibly); (6) the epic has at least two stories, any
+status — §2's "decomposing into ≥2 stories" enforced at the boundary where
+the epic's shape is adjudicated (all statuses count: the definition asks
+that the goal decomposed, not that every path succeeded, and a DISSOLVED
+second story must not hold the close hostage). On success, one
+transaction: status→CLOSED, close_sweep→today, events row. Post-close
+validation = `V-n` rows.
 
 ---
 

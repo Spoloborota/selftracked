@@ -21,16 +21,17 @@ nothing pushed.
 fixture each. The stage is **open**: the D-EP13 opening record
 (`docs/stage-openings/s1b.md`) holds the per-row verdicts and the resolved
 commands. The open moved three rows to the stages that can execute them
-(INV-018→S7, INV-097→S5b, INV-143→S5a), leaving S1b at 86; one row
-(INV-016) is blocked on an owner ruling and blocks nothing else. Write the
+(INV-018→S7, INV-097→S5b, INV-143→S5a), and the owner's cardinality
+ruling moved INV-016 to S6, leaving S1b at 85, nothing blocked. Write the
 fixtures red-first from the record's command list.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
 
-**What is waiting on the owner:** three items from the S1b open, none
-blocking the gates work — see "Open questions for the owner" below.
+**What is waiting on the owner:** nothing. The S1b open raised three
+items; all three were answered the same day (see the open-questions
+section and the amendments log).
 
 ## Stages
 
@@ -39,7 +40,7 @@ blocking the gates work — see "Open questions for the owner" below.
 | G0 — traceability inventory | FULL | done | `python3 scripts/check-inventory.py` · 2026-07-19 · **exit 0, accounting clean** (545 rows, all 16 stages covered, 16 review-only obligations) · evidence link pending (no CI yet — S0 wires it) | Ratified by the owner 2026-07-19 (D-EP4). Three review passes done; findings applied. Fidelity was sampled, not exhaustive — each stage re-reads its own rows at open (plan §5). |
 | S0 — repo bootstrap | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e09204a`, **no CI has run** (D-EP8) | 5 of 8 rows `verified-by-command`; INV-492/499/513 stay `planned` — they assert CI gates that cannot be proven before the first push |
 | S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | All 10 rows `verified-by-command`. INV-053 closed once the owner ratified the spec amendment that made its claim true (spec rev 3.10) |
-| S1b — schema gates | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s1b.md`). 86 rows after three placement moves; red fixture each; INV-016 blocked on owner ruling |
+| S1b — schema gates | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s1b.md`). 85 rows after three placement moves and INV-016's amendment-driven move to S6; red fixture each; nothing blocked |
 | S1c — driver behaviour | FULL | not started | — | 10 rows, behavioural probes only |
 | S2 — CLI dispatcher | FULL | not started | — | — |
 | S3 — serializer + `dump` | FULL | not started | — | — |
@@ -71,6 +72,7 @@ blocking the gates work — see "Open questions for the owner" below.
 | `import-date-bounds` | **spec** §6.2 `import` | accepted 2026-07-19 | spec rev 3.11 |
 | `stage-open-record` | execution plan §5, §8, §10 | accepted 2026-07-19 (D-EP13) | plan rev 12 |
 | `worklog-story-guard-rule-pointer` | **spec** §5.7 (one comment line) | accepted 2026-07-19 | spec rev 3.12 |
+| `epic-close-story-cardinality` | **spec** §6.4 | accepted 2026-07-19 | spec rev 3.13 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -133,20 +135,12 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 
 ## Open questions for the owner
 
-Raised by the S1b open, 2026-07-19. None blocks the gates implementation.
-
-1. **INV-016 — "an epic decomposes into ≥2 stories".** The cardinality is
-   enforced nowhere: no CHECK, `epic close` (§6.4) never counts stories, no
-   R-rule does either. Rule it definitional (the row narrows to its
-   schema-carried parts) or add enforcement (a spec amendment naming the
-   mechanism — e.g. an `epic close` blocker). The row waits at S1b either way.
-2. **Amendment `worklog-story-guard-rule-pointer`** — §5.7 says the FK-free
-   `worklog.story` column is "guarded by R5"; the guarding rule is R4
-   (§7). One comment line; proposal filed, spec untouched until ratified.
-3. **Anchor line numbers drift on every spec amendment.** Inventory anchors
-   carry rev-3.9 line numbers; 3.10/3.11 shifted the file, so the numbers
-   point a few lines off while section names stay right. Re-stamp after
-   every amendment, or strip the numbers and anchor by section only?
+None open. The S1b-open round (three items, 2026-07-19) was answered the
+same day: cardinality enforcement chosen over a definitional reading
+(amendment `epic-close-story-cardinality`, condition 6 at `epic close`,
+INV-016 → S6); the R5→R4 pointer amendment ratified and applied; anchor
+line numbers ruled out — stripped in favour of section-only anchors, the
+same reasoning that removed revision numbers from the rules file.
 
 Earlier rounds: all answered 2026-07-19 — the `as of dump <sha12>` anchor
 keeps its deferred validator (D-EP12); D-EP9 ratified; the §5
