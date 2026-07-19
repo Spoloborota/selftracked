@@ -275,7 +275,10 @@ func TestDriver(t *testing.T) {
 		// Byte identity: serializing the restored image reproduces it.
 		var again []byte
 		if err := conn.Raw(func(dc any) error {
-			s := dc.(serializer) //nolint:forcetypeassert // proven two calls above
+			s, ok := dc.(serializer)
+			if !ok {
+				return errNoSerializeAPI
+			}
 			var err error
 			if again, err = s.Serialize(); err != nil {
 				return fmt.Errorf("re-serialize: %w", err)
