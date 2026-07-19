@@ -1,7 +1,7 @@
 # Change: §5.7's worklog.story comment names the wrong guard rule
 
 Target: `docs/v0-spec.md` §5.7 (one comment line)
-Status: **proposed** · raised 2026-07-19 at the S1b open · awaiting owner review
+Status: **accepted** · raised 2026-07-19 at the S1b open · ratified and applied same day
 
 ## Why
 
@@ -42,6 +42,6 @@ any stage must build or prove.
 
 ## Ratification
 
-Pending. Filed during an autonomous session; per plan §5 owner cadence,
-non-deviating work proceeds while this awaits review — the S1b gates do
-not depend on which rule id the comment names.
+Owner, 2026-07-19, on the proposal as filed: **"ratify"** — accepted as
+proposed, no scope changes requested. (Recorded in English by meaning; the
+direction was given in conversation.)

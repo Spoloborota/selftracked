@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.11 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.12 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -21,8 +21,11 @@ rev 3.9 → implementation of S1a found §5's nullable-column claim
 contradicting the schema §5 itself defines, while §8.1 had it right
 (amendment `nullable-columns-preamble`) → rev 3.10 → import date bounds,
 after deriving task dates from git was tried against a real corpus and failed
-(amendment `import-date-bounds`) → this revision. Implementation has
-started; §5's schema and §3.1's connection posture are built.
+(amendment `import-date-bounds`) → rev 3.11 → the S1b stage-open re-read
+found §5.7's worklog.story comment naming R5 as its guard where the rule
+is R4 (amendment `worklog-story-guard-rule-pointer`) → this revision.
+Implementation has started; §5's schema and §3.1's connection posture are
+built.
 
 Markers: **[DECIDED]** — settled by the owner. **[RESOLVED-BY-EVIDENCE]** —
 adopts the verdict of documented research (cited); owner can veto.
@@ -388,7 +391,7 @@ CREATE TABLE worklog (
   seq INTEGER NOT NULL,
   story TEXT NOT NULL,      -- story id, or 'V-<n>' (post-close rows; verb refuses
                             -- V-rows unless the epic is CLOSED). FK-free by
-                            -- design (composite target + V-rows); guarded by R5.
+                            -- design (composite target + V-rows); guarded by R4.
   date TEXT NOT NULL,
   state TEXT NOT NULL CHECK (state IN ('IN-PROGRESS','DONE','BLOCKED-ON-OWNER','DISSOLVED')),
   commits TEXT NOT NULL DEFAULT '',  -- '<sha>..<sha>' | '<sha>' | 'legacy: <why>'
