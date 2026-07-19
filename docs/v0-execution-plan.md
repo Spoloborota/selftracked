@@ -1,6 +1,6 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 8.** Revision history: rev 1 →
+Status: **ACTIVE, revision 9.** Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →
@@ -8,7 +8,8 @@ rev 3 → owner decisions closing D-EP1–D-EP3 (§10) → rev 4; G0 ran and
 closed → amendment `plan-accounting-scope` (D-EP4, D-EP5) → rev 5 →
 amendment `stage-open-plan-crosscheck` (D-EP6) → rev 6 → amendment
 `review-proportionality-tiers` (D-EP7) → rev 7 → amendment
-`local-commits-and-interim-evidence` (D-EP8) → this revision. Governs the implementation of `docs/v0-spec.md`
+`local-commits-and-interim-evidence` (D-EP8) → rev 8 → amendment
+`s0-minimal-package` (D-EP9) → this revision. Governs the implementation of `docs/v0-spec.md`
 (revision 3.9) and the project's spec lifecycle beyond it. Derived from
 `docs/research/2026-07-18-spec-to-execution-planning.md`; tooling facts
 re-verified against primary sources on 2026-07-18 (see that document's
@@ -176,7 +177,7 @@ produce those states).
 
 | Stage | Scope (closes — inventory refines) | DoD sketch & verification |
 |---|---|---|
-| **S0** | Repo bootstrap: go.mod (toolchain pin §3.2), Makefile catalog, golangci config, CI skeleton (build/vet/test, `go fix -diff` both-checks, govulncheck), README skeleton, LICENSE/NOTICE intake | `make build lint test fix-check` exit 0 on a clean checkout — **interim evidence, sufficient to close S0** (D-EP8); the CI workflow is authored here but the three-platform matrix is a precondition of the FIRST PUSH, not of this closure; the §16 `go fix -diff` exit-code re-verification runs here (a red-input probe confirming exit 1 on the pinned toolchain) |
+| **S0** | Repo bootstrap: go.mod (toolchain pin §3.2), Makefile catalog, golangci config, CI skeleton (build/vet/test, `go fix -diff` both-checks, govulncheck), README skeleton, LICENSE/NOTICE intake, and a minimal package carrying the binary's build identity so the build/vet/test/lint gates operate on real code rather than an empty match set (D-EP9) | `make build lint test fix-check` exit 0 on a clean checkout — **interim evidence, sufficient to close S0** (D-EP8); the CI workflow is authored here but the three-platform matrix is a precondition of the FIRST PUSH, not of this closure; the §16 `go fix -diff` exit-code re-verification runs here (a red-input probe confirming exit 1 on the pinned toolchain) |
 | **S1** | Schema package: embedded DDL v1 (§5 verbatim), open/create, PRAGMA choreography, meta seeding; §16 driver re-verification items (Serialize/Deserialize roundtrip, result codes, RETURNING, recursive_triggers) | Red fixture per **every** trigger AND CHECK constraint (the §5 enforcement map is the checklist, not the illustrative shortlist); driver re-checks pass as tests |
 | **S2** | Dispatcher: verb registry, §3.2 parsing obligations (a)–(c) plus the leading-dash shape rule, JSON errors, §6.1 exit contract, version-gate **stub** | testscript usage-error matrix: exact exit codes, JSON-only output, `-h` behavior |
 | **S3** | Serializer + `dump` (§8.1); §16 cross-OS byte-equality | Golden dump `cmp`; determinism matrix incl. Windows; serializer mutation tests |
@@ -392,3 +393,8 @@ close:
   owner-only. Rationale: CI-on-close fused a module skeleton to a
   publication decision, and approval-to-commit was buying nothing that the
   push prohibition did not already buy, while costing every restore point.
+- **D-EP9 [DECIDED]** (amendment `s0-minimal-package`, 2026-07-19): S0 ships
+  a minimal package so its gates are not vacuous. Raised by the S0 close
+  review, which found the package as unnamed scope; with no Go source at all,
+  `make build lint test` would pass by examining nothing. A gate that passes
+  over nothing produces evidence without content.

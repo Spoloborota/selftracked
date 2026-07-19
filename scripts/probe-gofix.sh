@@ -32,7 +32,26 @@ func Count(n int) int {
 }
 GO
 
+command -v go >/dev/null 2>&1 || {
+  echo "probe-gofix: go is not on PATH — the probe cannot run, and a gate" >&2
+  echo "  that cannot run must not report success" >&2
+  exit 1
+}
+
 out=$(cd "$work" && go fix -diff ./... 2>&1) && status=0 || status=$?
+
+# A non-zero status with no diff in it is a failure of the toolchain, not a
+# pending fix. Without this the probe reported success on a 127 from a
+# missing binary: output was non-empty and the status non-zero, which is
+# exactly the shape it was looking for.
+case "$out" in
+  *"---"*|*"+++"*|*"@@"*) : ;;
+  *)
+    echo "probe-gofix: output is not a diff — go fix did not run as expected:" >&2
+    printf '  %s\n' "$out" >&2
+    exit 1
+    ;;
+esac
 
 if [ -z "$out" ]; then
   echo "probe-gofix: expected a diff for a modernisable file, got none —" >&2

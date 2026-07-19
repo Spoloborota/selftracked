@@ -13,7 +13,7 @@ log artifact proving the verification commands exited 0 (plan §5).
 | Stage | Tier | Status | Last verification (command · date · result · evidence) | Open questions |
 |---|---|---|---|---|
 | G0 — traceability inventory | FULL | done | `python3 scripts/check-inventory.py` · 2026-07-19 · **exit 0, accounting clean** (545 rows, all 16 stages covered, 16 review-only obligations) · evidence link pending (no CI yet — S0 wires it) | Ratified by the owner 2026-07-19 (D-EP4). Three review passes done; findings applied. Fidelity was sampled, not exhaustive — each stage re-reads its own rows at open (plan §5). |
-| S0 — repo bootstrap | FULL | not started | — | — |
+| S0 — repo bootstrap | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e09204a`, **no CI has run** (D-EP8) | 5 of 8 rows `verified-by-command`; INV-492/499/513 stay `planned` — they assert CI gates that cannot be proven before the first push |
 | S1 — schema package | FULL | not started | — | — |
 | S2 — CLI dispatcher | FULL | not started | — | — |
 | S3 — serializer + `dump` | FULL | not started | — | — |
@@ -38,6 +38,7 @@ log artifact proving the verification commands exited 0 (plan §5).
 | `stage-open-plan-crosscheck` | execution plan §5, §8, §10 | accepted 2026-07-19 (D-EP6) | plan rev 6 |
 | `review-proportionality-tiers` | execution plan §5, §8, §10 | accepted 2026-07-19 (D-EP7) | plan rev 7 |
 | `local-commits-and-interim-evidence` | execution plan §4 (S0), §8, §10; `.claude/CLAUDE.md` rule 6 | accepted 2026-07-19 (D-EP8) | plan rev 8 |
+| `s0-minimal-package` | execution plan §4 (S0), §10 | applied 2026-07-19, **owner review pending** (D-EP9) | plan rev 9 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -50,7 +51,7 @@ asking where its items had landed: three of spec §16's re-verification items
 were filed on a stage that could not execute them — right about the
 obligation, wrong about the place — and three review passes had not been
 looking for that. The stage-open re-read now checks placement as well as
-content. Five rows moved (S0 9→12, S1 130→125, S3 30→31, S4 14→15); the
+content. Five rows moved (S1 130→125, S3 30→31, S4 14→15, and two into S0); the
 accounting stayed clean throughout, because it cannot see this class.
 
 Two deviations were found at G0 and closed **without** an amendment, because
@@ -65,6 +66,19 @@ neither needed a rule change:
   provenance) column the plan's §3 format does not define. Rather than ship a
   silent format superset, the column was removed from the published document;
   provenance is retained in the private assembly artifact.
+
+The S0 close review found six defects, four of them in the stage's own
+gates. Two scripts failed open — `probe-gofix.sh` reported success when `go`
+was absent from PATH, having mistaken a shell "command not found" for a
+pending fix, and `check-pins.sh` skipped its import-graph check in the same
+condition while still printing "policy satisfied". Both now refuse to report
+success when they cannot run. `check-pins.sh` also only checked that a libc
+version was *present*; it now resolves the version the driver's own go.mod
+names and compares. Three rows (the driver pin, the driver/libc pair, the
+licensing deliverable) moved to S1, where the driver actually arrives — at
+S0 their checks passed vacuously, the same defect class D-EP6 exists for.
+And the stage had not been closed by the plan's own procedure at all: the
+inventory statuses and this ledger were untouched until the review said so.
 
 ## Parked — out of scope, no decision needed yet
 

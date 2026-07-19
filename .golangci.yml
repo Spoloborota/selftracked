@@ -16,11 +16,11 @@ linters:
     # Every struct literal must set every field. Zero values are load-bearing
     # here — the schema's defaults mirror them deliberately.
     - exhaustruct
-    # Minimum identifier length. Short names in short scopes read better, and
-    # this codebase is full of them (tx, db, id, fh).
-    # Blank-line placement. gofumpt already settles formatting; two opinions
-    # about whitespace is one too many.
+    # Minimum identifier length. Short names in short scopes read better,
+    # and this codebase is full of them (tx, db, id, fh).
     - varnamelen
+    # Blank-line placement, three ways. gofumpt already settles formatting;
+    # more opinions about whitespace buy nothing.
     - wsl
     - wsl_v5
     - nlreturn

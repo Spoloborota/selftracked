@@ -21,6 +21,7 @@ DRIVER_MIN="v1.48.2"
 fail() { echo "check-pins: $*" >&2; exit 1; }
 
 [ -f "$MOD" ] || fail "$MOD not found"
+command -v go >/dev/null 2>&1 || fail "go is not on PATH; this gate cannot check the import graph, and a gate that cannot run must not report success"
 
 # 1. exact toolchain
 toolchain=$(awk '/^toolchain /{print $2}' "$MOD")
@@ -37,16 +38,26 @@ if [ -n "$driver" ]; then
     || fail "modernc.org/sqlite $driver is below the $DRIVER_MIN floor (RETURNING via Exec loses rows)"
   [ -n "$libc" ] \
     || fail "modernc.org/sqlite is pinned but modernc.org/libc is not; the pair is bumped together"
+  # "Bumped together" is not enough: the specification requires the libc the
+  # driver's OWN go.mod names. Ask the module cache what that is rather than
+  # trusting that two version strings appearing together are the right two.
+  want=$(go mod download -json "modernc.org/sqlite@$driver" 2>/dev/null \
+         | awk -F'"' '/"Dir"/{print $4}')
+  if [ -n "$want" ] && [ -f "$want/go.mod" ]; then
+    expected=$(awk '/modernc\.org\/libc /{print $2}' "$want/go.mod" | head -1)
+    [ -z "$expected" ] || [ "$expected" = "$libc" ] \
+      || fail "modernc.org/libc is $libc but modernc.org/sqlite $driver names $expected; the pair must match exactly"
+  else
+    echo "check-pins: WARNING cannot read modernc.org/sqlite@$driver from the module cache — the libc exact-match check did not run" >&2
+  fi
 fi
 
 # 4. no configuration library in the binary's own import graph
-if command -v go >/dev/null 2>&1; then
-  deps=$(go list -deps ./... 2>/dev/null || true)
-  for pkg in spf13/viper knadh/koanf kelseyhightower/envconfig ilyakaznacheev/cleanenv; do
-    if printf '%s\n' "$deps" | grep -q "$pkg"; then
-      fail "configuration library '$pkg' reaches the binary; configuration lives in meta rows plus flags"
-    fi
-  done
-fi
+deps=$(go list -deps ./... 2>/dev/null || true)
+for pkg in spf13/viper knadh/koanf kelseyhightower/envconfig ilyakaznacheev/cleanenv; do
+  if printf '%s\n' "$deps" | grep -q "$pkg"; then
+    fail "configuration library '$pkg' reaches the binary; configuration lives in meta rows plus flags"
+  fi
+done
 
 echo "check-pins: toolchain $toolchain; dependency policy satisfied"
