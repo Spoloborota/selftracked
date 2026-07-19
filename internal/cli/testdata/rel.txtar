@@ -14,10 +14,14 @@ expectexit 0 selftracked rel add 3 depends 4
 expectexit 1 selftracked rel add 4 depends 2
 stderr 'cycle'
 
-# relates is symmetric: stored once, visible from both ends.
+# relates is symmetric: stored once, SAME undirected rendering from
+# both ends (the close review caught an inbound-suffix asymmetry).
 expectexit 0 selftracked rel add 2 relates 4
 expectexit 0 selftracked rel tree 4
-stdout 'relates'
+stdout '#4 relates #2'
+! stdout 'relates .inbound.'
+expectexit 0 selftracked rel tree 2
+stdout '#2 relates #4'
 
 # duplicates is never rel's to write or remove.
 expectexit 1 selftracked rel add 2 duplicates 3

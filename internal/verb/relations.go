@@ -236,13 +236,18 @@ func relTree(e *cli.Env, pos []string) error {
 		return err
 	}
 	return Read(context.Background(), func(ctx context.Context, db *sql.DB) error {
-		// relates is stored once and read from both ends (§5.6).
+		// relates is stored once and read undirected from both ends —
+		// SAME rendering whichever side asks (§5.6); directed types list
+		// their inbound edges labeled as such.
 		rows, err := db.QueryContext(ctx, `
 			SELECT type, '#' || to_task, note FROM task_links WHERE from_task = ?
 			UNION ALL
+			SELECT type, '#' || from_task, note FROM task_links
+			WHERE to_task = ? AND type = 'relates'
+			UNION ALL
 			SELECT type || ' (inbound)', '#' || from_task, note FROM task_links
-			WHERE to_task = ? AND (type = 'relates' OR type <> 'relates')
-			ORDER BY 1, 2`, id, id)
+			WHERE to_task = ? AND type <> 'relates'
+			ORDER BY 1, 2`, id, id, id)
 		if err != nil {
 			return fmt.Errorf("rel tree: %w", err)
 		}

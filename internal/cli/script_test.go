@@ -112,6 +112,13 @@ func TestScripts(t *testing.T) {
 						removed, added, wantR, wantA)
 				}
 			},
+			// symlink a -> b creates a symbolic link (testscript has no builtin).
+			"symlink": func(ts *testscript.TestScript, neg bool, args []string) {
+				if neg || len(args) != 3 || args[1] != "->" {
+					ts.Fatalf("usage: symlink <link> -> <target>")
+				}
+				ts.Check(os.Symlink(args[2], ts.MkAbs(args[0])))
+			},
 			// seeddb builds .selftracked/db.sqlite with one of everything —
 			// there are no creating verbs until S5a, and the dump scenarios
 			// need data to serialize.

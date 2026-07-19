@@ -1,0 +1,36 @@
+# S5b paths move --with-files: the B2/B3 findings pinned. A root move is
+# a rename, never a merge; both transports work; refs resolve after.
+
+seeddb
+exec mkdir -p docs/research
+exec touch docs/research/note.md
+expectexit 0 selftracked paths set research docs/research
+expectexit 0 selftracked set-status 1 OPEN
+expectexit 0 selftracked link 1 research:note.md --role evidence
+
+# Without --with-files: the row moves, the files do not - said out loud.
+expectexit 0 selftracked paths move research docs/elsewhere
+stderr 'files stayed at docs/research'
+expectexit 0 selftracked paths move research docs/research
+
+# Plain-rename transport (no git repo): the ref resolves after the move.
+expectexit 0 selftracked paths move research docs/library --with-files
+exists docs/library/note.md
+exec touch docs/library/note2.md
+expectexit 0 selftracked link 1 research:note2.md --role grounding
+
+# Destination-exists refusal: a move is not a merge.
+exec mkdir -p docs/occupied
+expectexit 1 selftracked paths move research docs/occupied --with-files
+stderr 'fresh destination'
+
+# git transport: inside a repo the move is git mv - renamed AND staged.
+exec git init -q .
+exec git config user.email t@example.invalid
+exec git config user.name t
+exec git add docs/library/note.md
+exec git commit -q -m base
+expectexit 0 selftracked paths move research docs/final --with-files
+exists docs/final/note.md
+exec git status --porcelain docs
+stdout 'R  docs/library/note.md -> docs/final/note.md'

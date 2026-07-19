@@ -3,6 +3,7 @@ package verb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"os/exec"
@@ -76,7 +77,12 @@ func gitChanged(ctx context.Context, since string) (map[string]bool, error) {
 	}
 	out, err := exec.CommandContext(ctx, "git", args...).Output()
 	if err != nil {
-		return nil, refuse("git", "git %s failed; stale needs a git repository", strings.Join(args, " "))
+		detail := ""
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			detail = ": " + strings.TrimSpace(string(exitErr.Stderr))
+		}
+		return nil, refuse("git", "git %s failed%s", strings.Join(args, " "), detail)
 	}
 	changed := map[string]bool{}
 	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {

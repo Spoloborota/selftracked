@@ -48,9 +48,18 @@ func linkVerb() cli.Verb {
 		Run: func(e *cli.Env, pos []string, _ *flag.FlagSet) error {
 			switch pos[0] {
 			case evArchive:
+				if role != "" {
+					return refuse("usage", "--role does not apply to link archive")
+				}
 				return archiveArtifact(e, pos[1], true, force)
 			case evUnarchive:
+				if role != "" || force {
+					return refuse("usage", "--role/--force do not apply to link unarchive")
+				}
 				return archiveArtifact(e, pos[1], false, false)
+			}
+			if force {
+				return refuse("usage", "--force applies only to link archive")
 			}
 			return linkArtifact(e, pos[0], pos[1], role)
 		},
@@ -180,12 +189,37 @@ func containedPath(art ref.Ref, root string, ephemeral int64) (string, error) {
 			art.Rel, art.Class)
 	}
 	if ephemeral == 0 {
-		full := filepath.Join(root, clean)
-		if _, err := os.Stat(full); err != nil {
-			return "", refuse("not-found", "file not found: %s", full)
+		if err := realFileUnderRoot(art, root, clean); err != nil {
+			return "", err
 		}
 	}
 	return clean, nil
+}
+
+// realFileUnderRoot demands the file exists AND truly lives under the
+// registered root: the lexical check alone lets a symlink inside the
+// root point anywhere (found by the S5b close review), and retention and
+// R3 reason about the root.
+func realFileUnderRoot(art ref.Ref, root, clean string) error {
+	full := filepath.Join(root, clean)
+	if _, err := os.Stat(full); err != nil {
+		return refuse("not-found", "file not found: %s", full)
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve root: %w", err)
+	}
+	realFull, err := filepath.EvalSymlinks(full)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+	rel, err := filepath.Rel(realRoot, realFull)
+	if err != nil || rel == ".." || strings.HasPrefix(filepath.ToSlash(rel), "../") {
+		return refuse("containment",
+			"%q resolves outside the %s root (symlink escape); the real file must live under the registered root",
+			art.Rel, art.Class)
+	}
+	return nil
 }
 
 // lookupArtifactID finds an existing artifacts row by reference.

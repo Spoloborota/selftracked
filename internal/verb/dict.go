@@ -208,6 +208,10 @@ func pathsMove(e *cli.Env, pos []string, withFiles bool) error {
 	if err != nil {
 		return err
 	}
+	if !withFiles {
+		_, _ = fmt.Fprintf(e.Stderr,
+			"note: files stayed at %s; re-run with --with-files or move them yourself\n", oldRoot)
+	}
 	_, _ = fmt.Fprintf(e.Stdout, "%s: %s -> %s\n", pos[0], oldRoot, newRoot)
 	return nil
 }
@@ -217,6 +221,13 @@ func pathsMove(e *cli.Env, pos []string, withFiles bool) error {
 func moveFiles(ctx context.Context, oldRoot, newRoot string) error {
 	if _, err := os.Stat(oldRoot); err != nil {
 		return refuse("not-found", "root directory %q does not exist to move", oldRoot)
+	}
+	// A root move is a rename, never a merge: git mv into an existing
+	// directory NESTS the old root inside it while the dictionary points
+	// at the parent — every artifact resolution dangles with exit 0
+	// (found and reproduced by the S5b close review).
+	if _, err := os.Stat(newRoot); err == nil {
+		return refuse("exists", "%q already exists; a root move needs a fresh destination", newRoot)
 	}
 	if err := os.MkdirAll(filepath.Dir(newRoot), dirMode); err != nil {
 		return fmt.Errorf("paths move: %w", err)
@@ -264,6 +275,9 @@ func configVerb() cli.Verb {
 var configKeys = map[string]func(string) error{
 	"idle_days": positiveInt,
 	"prime_cap": positiveInt,
+	// production_globs is a WHITESPACE-SEPARATED glob list (the §5.1 seed
+	// format); a glob containing a space is unrepresentable — a stated
+	// limitation of the value grammar, not an escaping bug.
 	"production_globs": func(v string) error {
 		for g := range strings.FieldsSeq(v) {
 			if _, err := path.Match(g, "probe"); err != nil {

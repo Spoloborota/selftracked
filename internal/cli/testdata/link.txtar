@@ -37,7 +37,30 @@ expectexit 0 selftracked link archive research:other.md --force
 stdout 'archived'
 expectexit 0 selftracked link unarchive research:other.md
 
+# A symlink inside the root pointing outside is a containment escape
+# (found by the close review): refused on the resolved path.
+exec mkdir -p /tmp/selftracked-outside
+exec touch /tmp/selftracked-outside/secret.md
+symlink docs/research/escape.md -> /tmp/selftracked-outside/secret.md
+expectexit 1 selftracked link 1 research:escape.md --role evidence
+stderr 'symlink escape'
+
+# Flags do not bleed across link's three forms.
+expectexit 1 selftracked link 1 research:note.md --role evidence --force
+stderr 'only to link archive'
+expectexit 1 selftracked link archive research:note.md --role evidence
+stderr 'does not apply'
+
+# Epic targets ride epic_artifacts (INV-155): link, then unlink deletes
+# the row and records the event.
+expectexit 0 selftracked link epic:e research:note.md --role evidence
+grep '.e., 1, .evidence.' .selftracked/dump.sql
+expectexit 0 selftracked unlink epic:e research:note.md
+! grep '.e., 1, .evidence.' .selftracked/dump.sql
+grep 'epic:e., .unlink' .selftracked/dump.sql
+
 # unlink deletes the row with its events record.
 expectexit 0 selftracked unlink 1 research:note.md
 stdout 'unlinked'
 grep 'unlink., .research:note.md' .selftracked/dump.sql
+! grep 'task_artifacts .task, artifact, role, note. VALUES .1, 1,' .selftracked/dump.sql
