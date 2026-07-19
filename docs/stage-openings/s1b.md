@@ -68,8 +68,9 @@ anything a close reviewer must not have to rediscover.
 | INV-009 | ok | ok | raw-connection-rejects-check-strict-notnull-wip: a second, pragma-free connection (FKs off) still has CHECK/STRICT/NOT NULL/WIP-index violations rejected |
 | INV-015 | ok | ok | tasks-single-status-home: introspection — one status column in tasks, no other table stores task status |
 | INV-016 | defect — ≥2-stories clause unenforced anywhere in the spec | blocked | escalated (see above); no fixture until the owner rules |
+| INV-018 | ok — the statement renders §2's worklog definition faithfully | moved → S7 | carried with the row |
 | INV-030 | ok | ok with note — journal posture and crash recovery are behaviour, not a gate, but S1b's machinery (Open + a kill harness) executes it and no other open stage can without a plan §4 scope amendment; close review re-judges | no-wal-shm-and-hot-journal-recovery: extends S1a's TestJournalModeIsNotWAL; adds kill-mid-write reopen probe (subprocess harness, temp dir) |
-| INV-032 | ok | ok — largely proven by S1a's TestFreshDatabaseCarriesItsIdentityAndVersion | `go test ./internal/schema -run 'TestFreshDatabaseCarriesItsIdentityAndVersion|TestSeededMetaRowsArePresent'` plus meta-mirror equality assertion |
+| INV-032 | ok | ok — largely proven by S1a's TestFreshDatabaseCarriesItsIdentityAndVersion | `go test ./internal/schema -run 'TestFreshDatabaseCarriesItsIdentityAndVersion|TestSeededMetaRowsArePresent|TestGatesIdentityMirrorsMeta'` — the third test is the meta-mirror equality assertion |
 | INV-052 | ok | ok | strict-rejects-wrong-type-per-table: per-table loop; S1a's TestStrictTablesRejectAWrongTypedValue covers one table, this covers all |
 | INV-057 | ok | ok | meta-duplicate-key-rejected |
 | INV-062 | ok | ok | path_dictionary-duplicate-class-scope-rejected |

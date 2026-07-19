@@ -370,17 +370,17 @@ func TestGates(t *testing.T) {
 		},
 		{
 			name: "worklog-duplicate-epic-seq-rejected",
-			// A duplicate seq is also non-contiguous, so the trigger refuses
-			// it before the PRIMARY KEY can; the PK itself is asserted by
-			// introspection in TestWorklogPrimaryKeyColumns below. Either
-			// gate refusing proves the duplicate cannot land.
+			// A duplicate seq is also non-contiguous, and the BEFORE INSERT
+			// trigger runs before the PRIMARY KEY is checked, so the trigger
+			// message is the deterministic refusal here; the PK itself is
+			// asserted by introspection in TestWorklogPrimaryKeyColumns.
 			setup: func(t *testing.T, db *sql.DB) {
 				t.Helper()
 				addEpic(t, db, "e", "ACTIVE")
 				exec1(t, db, `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'IN-PROGRESS')`)
 			},
 			stmt:    `INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'S1', 'd', 'DONE')`,
-			wantSub: "",
+			wantSub: "contiguous",
 		},
 		{
 			name: "worklog-story-orphan-not-schema-rejected-caught-by-R4",
@@ -933,8 +933,16 @@ func TestGatesStrictPerTable(t *testing.T) {
 			"events":          `INSERT INTO events (at, entity, event, detail) VALUES ('d', '#1', 'create', x'00')`,
 		}
 		for table, stmt := range wrong {
-			if _, err := db.ExecContext(t.Context(), stmt); err == nil {
+			_, err := db.ExecContext(t.Context(), stmt)
+			if err == nil {
 				t.Errorf("%s: wrong-typed write accepted; STRICT should refuse", table)
+				continue
+			}
+			// SQLite validates STRICT typing before trigger WHEN clauses
+			// run, so the type error is the deterministic refusal — pin its
+			// message so a different gate cannot pass for this one.
+			if !strings.Contains(err.Error(), "cannot store") {
+				t.Errorf("%s: refused with %q; want the STRICT type error", table, err)
 			}
 		}
 	})
@@ -1198,7 +1206,7 @@ func TestGatesBindAnyProcess(t *testing.T) {
 		// CHECK
 		refuse(t, raw, "CHECK", `INSERT INTO tasks (title, created_at, updated_at) VALUES ('', 'd', 'd')`)
 		// STRICT
-		refuse(t, raw, "", `INSERT INTO tasks (title, created_at, updated_at) VALUES (x'00', 'd', 'd')`)
+		refuse(t, raw, "cannot store", `INSERT INTO tasks (title, created_at, updated_at) VALUES (x'00', 'd', 'd')`)
 		// NOT NULL
 		refuse(t, raw, "NOT NULL", `INSERT INTO meta (key, value) VALUES ('k', NULL)`)
 		// the WIP partial unique index
@@ -1240,6 +1248,17 @@ func TestGatesBindAnyProcess(t *testing.T) {
 		raw := rawConn(t, dir)
 		refuse(t, raw, "UNIQUE", `INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S2', 't', 'IN-PROGRESS')`)
 	})
+	t.Run("raw-connection-triggers-still-fire", func(t *testing.T) {
+		t.Parallel()
+		// The enforcement map's trigger row binds "accidental raw writes
+		// (UPDATE/DELETE)" too: triggers are schema objects, not connection
+		// settings, so a pragma-free connection cannot shed them.
+		db, dir := freshAt(t)
+		addTask(t, db, "OPEN", nil)
+		raw := rawConn(t, dir)
+		refuse(t, raw, "never deleted", `DELETE FROM tasks`)
+		refuse(t, raw, "illegal status transition", `UPDATE tasks SET status='LABEL' WHERE id=1`)
+	})
 }
 
 // --- single writer: the exclusive lock (INV-174) ---
@@ -1259,27 +1278,34 @@ func TestGatesSecondWriterBlocked(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer func() { _ = w1.Close() }()
-		// Pin one pool connection and write through it: the exclusive OS
-		// lock is taken at the first write and held until the CONNECTION
-		// closes — not until the statement ends.
+		// Pin one pool connection: the exclusive OS lock is taken at the
+		// connection's FIRST WRITE and held until the CONNECTION closes —
+		// not at open, not until the statement ends.
 		c1, err := w1.Conn(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = c1.Close() }()
+
+		// §3.1's exclusive lock arrives at the first write; empirically the
+		// exclusion of foreign WRITERS starts even earlier — establishing
+		// an EXCLUSIVE-mode connection reads the file header under a shared
+		// lock the mode never releases, so "blocked from open" is the
+		// observed behaviour and a before-first-write probe cannot pass.
+		// The spec's claim (write ⇒ exclusive ⇒ everyone excluded until
+		// close) is what the assertions below prove.
 		_, err = c1.ExecContext(t.Context(),
 			`INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		w2, err := schema.OpenWrite(path)
+		w3, err := schema.OpenWrite(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = w2.Close() }()
+		defer func() { _ = w3.Close() }()
 		start := time.Now()
-		_, err = w2.ExecContext(t.Context(), `INSERT INTO events (at, entity, event) VALUES ('d', '#2', 'create')`)
+		_, err = w3.ExecContext(t.Context(), `INSERT INTO events (at, entity, event) VALUES ('d', '#2', 'create')`)
 		if err == nil {
 			t.Fatalf("second writer landed a write while the first holds the exclusive lock")
 		}
@@ -1291,17 +1317,44 @@ func TestGatesSecondWriterBlocked(t *testing.T) {
 		if elapsed := time.Since(start); elapsed < 4*time.Second {
 			t.Fatalf("second writer gave up after %v; want a retry window near busy_timeout (5s)", elapsed)
 		}
+		// A reader is excluded for the writer's lifetime too — §3.1's
+		// concurrent-read-verb BUSY case.
+		r, err := schema.OpenRead(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = r.Close() }()
+		var n int
+		if err := r.QueryRowContext(t.Context(), `SELECT count(*) FROM events`).Scan(&n); err == nil {
+			t.Fatalf("a reader read through the exclusive lock")
+		}
+
+		// And closing the holder releases the lock: the blocked writer's
+		// next attempt goes through.
+		if err := c1.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := w1.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w3.ExecContext(t.Context(),
+			`INSERT INTO events (at, entity, event) VALUES ('d', '#3', 'create')`); err != nil {
+			t.Fatalf("the lock outlived the connection that held it: %v", err)
+		}
 	})
 }
 
 // --- journal posture and crash recovery (INV-030) ---
 
-// TestGatesJournalRecovery kills a child process mid-write-loop and asserts
-// the survivor: the database reopens, passes integrity_check, and holds
-// exactly the rows whose transactions committed — SQLite's hot-journal
-// rollback, driven for real rather than trusted. The no-WAL half extends
-// S1a's TestJournalModeIsNotWAL by asserting no -wal/-shm litter appears
-// through actual write traffic.
+// TestGatesJournalRecovery proves hot-journal rollback deterministically:
+// the child commits 25 rows, then opens a transaction it will never commit
+// and bloats it past the page-cache spill point, so the rollback journal is
+// guaranteed on disk when the parent kills it. The parent asserts the hot
+// journal's presence after the kill, and after reopening: integrity_check
+// ok, exactly 25 rows (the uncommitted transaction fully rolled back), and
+// the journal consumed. The no-WAL half extends S1a's
+// TestJournalModeIsNotWAL by asserting no -wal/-shm litter appears through
+// actual write traffic.
 func TestGatesJournalRecovery(t *testing.T) {
 	t.Parallel()
 	t.Run("no-wal-shm-and-hot-journal-recovery", func(t *testing.T) {
@@ -1335,13 +1388,14 @@ func TestGatesJournalRecovery(t *testing.T) {
 		}
 		// The child holds the exclusive lock from its first write until it
 		// dies, so the database cannot be probed from here; the child drops
-		// a marker file once 25 commits are in, and the kill lands while
-		// the loop is still running.
-		deadline := time.Now().Add(10 * time.Second)
+		// the marker only after its uncommitted transaction has spilled to
+		// the rollback journal, and then spins holding the transaction open
+		// — the kill is guaranteed to land mid-transaction.
+		deadline := time.Now().Add(15 * time.Second)
 		for {
 			if time.Now().After(deadline) {
 				_ = cmd.Process.Kill()
-				t.Fatal("child never started committing")
+				t.Fatal("child never reached its uncommitted transaction")
 			}
 			if _, err := os.Stat(marker); err == nil {
 				break
@@ -1352,6 +1406,12 @@ func TestGatesJournalRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 		_ = cmd.Wait()
+
+		// The smoking gun: a hot journal on disk. Without it, "recovery"
+		// would be indistinguishable from a crash that touched nothing.
+		if _, err := os.Stat(path + "-journal"); err != nil {
+			t.Fatalf("no hot journal after the kill — the crash interrupted nothing: %v", err)
+		}
 
 		// Recovery: the reopened database must be internally consistent —
 		// whatever the kill interrupted was rolled back, not half-kept.
@@ -1371,15 +1431,22 @@ func TestGatesJournalRecovery(t *testing.T) {
 		if err := re.QueryRowContext(t.Context(), `SELECT count(*) FROM events`).Scan(&count); err != nil {
 			t.Fatal(err)
 		}
-		if count < 25 {
-			t.Fatalf("committed rows lost in recovery: %d < 25", count)
+		// Exactly the committed prefix: fewer means committed data was
+		// lost, more means part of the interrupted transaction survived —
+		// either way rollback did not do its job.
+		if count != 25 {
+			t.Fatalf("rows after recovery = %d; want exactly the 25 committed ones", count)
 		}
-		// The journal posture: rollback journal, never WAL — no litter.
+		// Recovery consumed the journal, and the posture never produced
+		// WAL litter.
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), "-journal") {
+				t.Fatalf("hot journal still present after recovery: %s", e.Name())
+			}
 			if strings.HasSuffix(e.Name(), "-wal") || strings.HasSuffix(e.Name(), "-shm") {
 				t.Fatalf("WAL litter present after write traffic: %s", e.Name())
 			}
@@ -1387,28 +1454,44 @@ func TestGatesJournalRecovery(t *testing.T) {
 	})
 }
 
-// crashChildMain is the killed process: it commits events rows one by one
-// until the parent kills it, and announces its progress through a marker
-// file — the exclusive lock it holds makes the database itself unreadable
-// from outside. It never exits on its own within the test window, so the
-// kill always lands mid-loop.
+// crashChildMain is the killed process: 25 auto-commit rows, then one
+// transaction it never commits, bloated with megabyte rows until SQLite
+// spills it to the rollback journal on disk. Only then does it write the
+// marker — the exclusive lock it holds makes the database itself
+// unreadable from outside — and spins holding the transaction open, so
+// the parent's kill always interrupts an in-flight transaction with a hot
+// journal behind it.
 func crashChildMain() {
+	ctx := context.Background()
 	db, err := schema.OpenWrite(os.Getenv("GATES_CRASH_DB"))
 	if err != nil {
 		os.Exit(1)
 	}
-	for i := 1; ; i++ {
-		_, err := db.ExecContext(context.Background(),
+	for range 25 {
+		_, err := db.ExecContext(ctx,
 			`INSERT INTO events (at, entity, event) VALUES ('d', '#1', 'create')`)
 		if err != nil {
 			os.Exit(1)
 		}
-		if i == 25 {
-			// The marker path is set by the parent test and points into its
-			// t.TempDir(); nothing here is user input.
-			if err := os.WriteFile(os.Getenv("GATES_CRASH_MARKER"), nil, 0o600); err != nil { //nolint:gosec
-				os.Exit(1)
-			}
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		os.Exit(1)
+	}
+	big := strings.Repeat("x", 1<<20)
+	for range 30 {
+		_, err := tx.ExecContext(ctx,
+			`INSERT INTO events (at, entity, event, detail) VALUES ('d', '#1', 'create', ?)`, big)
+		if err != nil {
+			os.Exit(1)
 		}
 	}
+	// 30 MB of uncommitted rows is far past the page-cache spill point, so
+	// the hot journal is on disk before the marker exists.
+	// The marker path is set by the parent test and points into its
+	// t.TempDir(); nothing here is user input.
+	if err := os.WriteFile(os.Getenv("GATES_CRASH_MARKER"), nil, 0o600); err != nil { //nolint:gosec
+		os.Exit(1)
+	}
+	select {} // hold the transaction open until the kill
 }

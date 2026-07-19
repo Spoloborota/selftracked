@@ -42,7 +42,7 @@ linters:
       # length ceiling scatters the row<->subtest mapping, and hoisting SQL
       # status strings into constants makes each fixture read as
       # indirection instead of as the statement under test. Production code
-      # keeps all four checks.
+      # keeps all five checks.
       - path: '_test\.go'
         linters:
           - funlen
