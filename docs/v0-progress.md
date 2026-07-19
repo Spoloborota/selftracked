@@ -8,6 +8,30 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 A stage reaches `done` only with an evidence link — a CI run or a committed
 log artifact proving the verification commands exited 0 (plan §5).
 
+## Where things stand
+
+Read this section first; the tables below carry the detail.
+
+**Done:** G0 (the traceability inventory), S0 (repo bootstrap), S1a (the
+schema as text). The schema exists as `internal/schema` — embedded DDL,
+connection settings, `meta` seeding — with 12 commits of history, all local,
+nothing pushed.
+
+**Next:** S1b — every gate the schema declares, with a red fixture each. It
+is the largest sub-batch at 89 rows. Open it the way the plan says to: read
+those rows against §5 of the specification (content) *and* against S1b's own
+scope text (placement), turn each row's fixture name into a real command, and
+only then write code. Both previous stages had rows that could not be
+executed where they sat, and both times the opening read is what should have
+caught it.
+
+**How to verify anything:** `make gates` runs the whole chain. It must exit 0
+before a stage closes, and a fresh reviewer re-runs it rather than trusting
+the report.
+
+**What is waiting on the owner:** nothing. Every question raised so far has
+been answered; the amendments log below records what was decided.
+
 ## Stages
 
 | Stage | Tier | Status | Last verification (command · date · result · evidence) | Open questions |
