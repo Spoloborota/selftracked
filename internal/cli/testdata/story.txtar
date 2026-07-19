@@ -1,0 +1,54 @@
+# S6 story machine: WIP, DoR, the no-DoD refusal, unblock's verbatim
+# resolution, done's atomic pair, dissolve - and the dump diff shapes.
+
+seeddb
+expectexit 0 selftracked epic create flow --goal g
+expectexit 0 selftracked epic activate flow
+expectexit 0 selftracked story add flow --title one
+expectexit 0 selftracked story add flow --title two
+
+# No DoD, not Ready (the command-or-invariant rule's tooth).
+expectexit 1 selftracked story ready flow S1
+stderr 'no DoD'
+expectexit 0 selftracked edit epic:flow/S1 --dod '$ go test ./...'
+expectexit 0 selftracked edit epic:flow/S2 --dod '$ go test ./...'
+expectexit 0 selftracked story ready flow S1
+expectexit 0 selftracked story ready flow S2
+
+# WIP=1 per epic: the second start refuses naming the occupant.
+expectexit 0 selftracked story start flow S1
+expectexit 1 selftracked story start flow S2
+stderr 'WIP limit: story S1'
+
+# block requires a reason; unblock requires a resolution recorded
+# verbatim in the events row (the PO: convention rides the text).
+expectexit 0 selftracked story block flow S1 --reason 'PO decision pending'
+expectexit 1 selftracked story unblock flow S1
+stderr 'requires --resolution'
+expectexit 0 selftracked story unblock flow S1 --resolution 'PO: use the webhook channel (chat, 2026-07-20)'
+grep 'PO: use the webhook channel' .selftracked/dump.sql
+
+# story done: both flags required, the flip and its worklog row land as
+# a 3-line diff (story + worklog + events, INV-332).
+expectexit 0 selftracked story start flow S1
+expectexit 1 selftracked story done flow S1 --commits abc
+stderr 'requires --commits and --gate'
+cp .selftracked/dump.sql before-done.sql
+expectexit 0 selftracked story done flow S1 --commits abc123..def456 --gate 'make gates'
+dumpdiff before-done.sql .selftracked/dump.sql 1 3
+
+# unblock's two-line shape (INV-333): story line + events line.
+expectexit 0 selftracked story start flow S2
+expectexit 0 selftracked story block flow S2 --reason external-outage
+cp .selftracked/dump.sql before-unblock.sql
+expectexit 0 selftracked story unblock flow S2 --resolution 'outage cleared at 09:14'
+dumpdiff before-unblock.sql .selftracked/dump.sql 1 2
+
+# DONE is terminal: rework is a NEW story, never a reopened old one.
+expectexit 1 selftracked story ready flow S1
+stderr 'illegal story transition'
+
+# dissolve appends its own worklog row.
+expectexit 0 selftracked story start flow S2
+expectexit 0 selftracked story dissolve flow S2 --why 'superseded by S3'
+grep 'DISSOLVED., .., .., .., NULL, .superseded by S3' .selftracked/dump.sql

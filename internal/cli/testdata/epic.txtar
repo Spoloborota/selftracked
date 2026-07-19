@@ -1,0 +1,57 @@
+# S6 epic lifecycle: create through the atomic six-condition close.
+
+seeddb
+expectexit 0 selftracked epic create demo-run --goal 'prove the machinery'
+stdout 'BACKLOG'
+expectexit 1 selftracked epic create BadSlug --goal g
+stderr 'kebab-case'
+expectexit 1 selftracked epic create no-goal
+stderr 'requires --goal'
+
+# BACKLOG cannot close - it never ran; dissolve is its exit.
+expectexit 1 selftracked epic close demo-run
+stderr 'never ran'
+
+expectexit 0 selftracked epic activate demo-run
+expectexit 0 selftracked epic pause demo-run --why 'waiting on budget'
+expectexit 0 selftracked epic activate demo-run
+expectexit 1 selftracked epic pause demo-run
+stderr 'requires --why'
+
+# The complete blocker list: a close attempt on an unready epic names
+# EVERY blocker at once (cardinality, open stories, criteria, tasks).
+expectexit 0 selftracked story add demo-run --title 'first increment'
+expectexit 0 selftracked criteria add demo-run --text '$ true'
+expectexit 0 selftracked create --title homed --status OPEN --epic demo-run
+expectexit 1 selftracked epic close demo-run
+stderr '\(6\)'
+stderr '\(1\)'
+stderr '\(4\)'
+
+# edit's S6 half: the epic goal, with the bounded old-new event.
+expectexit 0 selftracked edit epic:demo-run --goal 'prove it end to end'
+grep 'goal: prove the machinery' .selftracked/dump.sql
+expectexit 1 selftracked edit epic:demo-run --title nope
+stderr 'takes --goal'
+
+# Ready the epic: two DONE stories, met criteria, task detached.
+expectexit 0 selftracked story add demo-run --title 'second increment'
+expectexit 0 selftracked edit epic:demo-run/S1 --dod '$ true'
+expectexit 0 selftracked edit epic:demo-run/S2 --dod '$ true'
+expectexit 0 selftracked story ready demo-run S1
+expectexit 0 selftracked story start demo-run S1
+expectexit 0 selftracked story done demo-run S1 --commits abc123 --gate 'go test'
+expectexit 0 selftracked story ready demo-run S2
+expectexit 0 selftracked story start demo-run S2
+expectexit 0 selftracked story done demo-run S2 --commits def456 --gate 'go test'
+expectexit 0 selftracked edit 2 --detach
+expectexit 0 selftracked epic close demo-run
+stdout 'CLOSED'
+
+# Closed is terminal: no reopen path exists for epics.
+expectexit 1 selftracked epic activate demo-run
+stderr 'illegal epic transition'
+
+# active_verb never leaks into the dump (the close wrote and deleted it
+# inside one transaction).
+! grep 'VALUES ..active_verb' .selftracked/dump.sql

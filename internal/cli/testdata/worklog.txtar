@@ -1,0 +1,45 @@
+# S6 worklog add: exactly two sanctioned forms - V-rows on CLOSED epics
+# and corrections of original rows.
+
+seeddb
+expectexit 0 selftracked epic create wl --goal g
+expectexit 0 selftracked epic activate wl
+expectexit 0 selftracked story add wl --title a
+expectexit 0 selftracked story add wl --title b
+expectexit 0 selftracked edit epic:wl/S1 --dod '$ true'
+expectexit 0 selftracked edit epic:wl/S2 --dod '$ true'
+
+# An episode row is the story verbs' job, nothing else's.
+expectexit 1 selftracked worklog add wl --story S1 --state IN-PROGRESS
+stderr 'belong to the story verbs'
+
+# V-rows demand a CLOSED epic.
+expectexit 1 selftracked worklog add wl --story V-1 --state DONE
+stderr 'post-close'
+
+# Corrections: target must exist, be original, same story, same state.
+expectexit 0 selftracked story ready wl S1
+expectexit 0 selftracked story start wl S1
+expectexit 0 selftracked story done wl S1 --commits abc --gate g
+expectexit 1 selftracked worklog add wl --story S1 --state DONE --corrects 99
+stderr 'no worklog row 99'
+expectexit 1 selftracked worklog add wl --story S1 --state IN-PROGRESS --corrects 2
+stderr 'mirrors the corrected row'
+expectexit 0 selftracked worklog add wl --story S1 --state DONE --corrects 2 --commits abc --gate g --note 'true date: 2026-07-01 (git author date of abc)'
+grep 'true date: 2026-07-01' .selftracked/dump.sql
+
+# Correcting a correction: refused, chains cannot form.
+expectexit 1 selftracked worklog add wl --story S1 --state DONE --corrects 3
+stderr 'itself a correction'
+
+# There is no --date flag at all (exit 2, the parser's refusal).
+expectexit 2 selftracked worklog add wl --story S1 --state DONE --date 2020-01-01
+stderr 'usage'
+
+# After the epic closes, V-rows flow.
+expectexit 0 selftracked story ready wl S2
+expectexit 0 selftracked story start wl S2
+expectexit 0 selftracked story done wl S2 --commits def --gate g
+expectexit 0 selftracked epic close wl
+expectexit 0 selftracked worklog add wl --story V-1 --state DONE --note 'post-close validation run'
+grep 'V-1' .selftracked/dump.sql

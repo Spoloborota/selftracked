@@ -33,10 +33,18 @@ const (
 	epicPrefix     = "epic:"
 	evUnpark       = "unpark"
 	evCreate       = "create"
+	evEdit         = "edit"
+
+	// Subverb names repeated across the catalog, spelled once.
+	subAdd      = "add"
+	subReady    = "ready"
+	flagNote    = "note"
+	flagNoteArg = "--note"
 )
 
-// Verbs returns the task-lifecycle (S5a) and relation/dictionary (S5b)
-// catalog entries.
+// Verbs returns the full verb catalog as the stages have built it:
+// task lifecycle (S5a), relations/dictionary (S5b), epic/story/worklog/
+// criteria (S6).
 func Verbs() []cli.Verb {
 	groups := [][]cli.Verb{
 		{
@@ -45,6 +53,7 @@ func Verbs() []cli.Verb {
 		},
 		RelationVerbs(), ArtifactVerbs(), DictVerbs(),
 		{StaleVerb()},
+		EpicVerbs(), StoryVerbs(), CriteriaVerbs(),
 	}
 	var n int
 	for _, g := range groups {
@@ -112,7 +121,7 @@ func createVerb() cli.Verb {
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&title, "title", "", "the task title (required)")
 			fs.StringVar(&status, "status", "", "initial status")
-			fs.StringVar(&note, "note", "", "status note")
+			fs.StringVar(&note, flagNote, "", "status note")
 			fs.StringVar(&epic, "epic", "", "home epic slug")
 			fs.BoolVar(&label, "label", false, "create a LABEL marker row")
 		},
@@ -153,7 +162,7 @@ func createVerb() cli.Verb {
 // Terminal statuses at creation exist only via import (§6.2): the flag's
 // domain is the three non-terminal states, and LABEL has its own flag.
 func createTarget(title, note, epic, status string, label bool) (string, error) {
-	for _, f := range [][2]string{{"--title", title}, {"--note", note}, {"--epic", epic}} {
+	for _, f := range [][2]string{{"--title", title}, {flagNoteArg, note}, {"--epic", epic}} {
 		if err := validateText(f[0], f[1]); err != nil {
 			return "", err
 		}
@@ -393,7 +402,7 @@ func listVerb() cli.Verb {
 
 func readyVerb() cli.Verb {
 	var epic string
-	return cli.Verb{Name: "ready", Subs: []cli.Sub{{
+	return cli.Verb{Name: subReady, Subs: []cli.Sub{{
 		Arity: 0,
 		Usage: "ready [--epic SLUG] [--json]",
 		Flags: func(fs *flag.FlagSet) { fs.StringVar(&epic, "epic", "", "filter by epic") },
@@ -690,44 +699,150 @@ func bounded(s string) string {
 }
 
 func editVerb() cli.Verb {
-	var title, note, epic string
-	var detach bool
+	var f editFields
 	return cli.Verb{Name: "edit", Subs: []cli.Sub{{
 		Arity: 1,
-		Usage: "edit <ref> [--title T] [--note N] [--epic SLUG|--detach] [--json]",
+		Usage: "edit <ref> [--title T] [--note N] [--goal G] [--dod D] [--consumes C] [--produces P]" +
+			" [--epic SLUG|--detach] [--json]",
 		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&title, "title", "", "new title")
-			fs.StringVar(&note, "note", "", "new status note")
-			fs.StringVar(&epic, "epic", "", "re-home to this epic")
-			fs.BoolVar(&detach, "detach", false, "detach from its epic")
+			fs.StringVar(&f.title, "title", "", "new title (tasks)")
+			fs.StringVar(&f.note, flagNote, "", "new status note (tasks)")
+			fs.StringVar(&f.epic, "epic", "", "re-home to this epic (tasks)")
+			fs.BoolVar(&f.detach, "detach", false, "detach from its epic (tasks)")
+			fs.StringVar(&f.goal, "goal", "", "new goal (epics)")
+			fs.StringVar(&f.dod, "dod", "", "new DoD — a command or invariant, never prose (stories)")
+			fs.StringVar(&f.consumes, "consumes", "", "what the story consumes (stories)")
+			fs.StringVar(&f.produces, "produces", "", "what the story produces (stories)")
 		},
 		Run: func(e *cli.Env, pos []string, _ *flag.FlagSet) error {
 			r, err := ref.Parse(pos[0])
 			if err != nil {
 				return refuse("usage", "%v", err)
 			}
-			if err := validateEdit(r, title, note, epic, detach); err != nil {
-				return err
-			}
-			err = Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
-				return editTask(tx, r.Task, title, note, epic, detach)
-			})
-			if err != nil {
-				return err
-			}
-			_, _ = fmt.Fprintf(e.Stdout, "%s edited\n", ref.TaskRef(r.Task))
-			return nil
+			return runEdit(e, r, f)
 		},
 	}}}
 }
 
-// validateEdit gates edit's flag combinations. Epic/story field edits
-// (--goal/--dod/--consumes/--produces) arrive with their verbs at S6.
-func validateEdit(r ref.Ref, title, note, epic string, detach bool) error {
-	if r.Kind != ref.Task {
-		return refuse("usage", "edit handles task refs at this stage; epic/story fields arrive with their verbs")
+// editFields carries every edit flag; each ref kind consumes its own
+// subset and refuses the others' (§6.2 — fields and re-homing, never
+// statuses).
+type editFields struct {
+	title, note, epic             string
+	detach                        bool
+	goal, dod, consumes, produces string
+}
+
+func runEdit(e *cli.Env, r ref.Ref, f editFields) error {
+	if err := f.validate(); err != nil {
+		return err
 	}
-	for _, f := range [][2]string{{"--title", title}, {"--note", note}, {"--epic", epic}} {
+	switch r.Kind {
+	case ref.Task:
+		return editTaskBranch(e, r, f)
+	case ref.Epic:
+		if f.goal == "" {
+			return refuse("usage", "editing an epic takes --goal")
+		}
+		return editEpicGoal(e, r.Epic, f.goal)
+	case ref.Story:
+		if f.dod == "" && f.consumes == "" && f.produces == "" {
+			return refuse("usage", "editing a story takes --dod/--consumes/--produces")
+		}
+		return editStoryFields(e, r, f.dod, f.consumes, f.produces)
+	case ref.Artifact:
+		return refuse("usage", "artifacts have no editable fields; move the file and re-link, or archive it")
+	}
+	return refuse("usage", "uneditable reference")
+}
+
+func (f editFields) validate() error {
+	for _, pair := range [][2]string{
+		{"--goal", f.goal}, {"--dod", f.dod}, {"--consumes", f.consumes}, {"--produces", f.produces},
+	} {
+		if err := validateText(pair[0], pair[1]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func editTaskBranch(e *cli.Env, r ref.Ref, f editFields) error {
+	if f.goal != "" || f.dod != "" || f.consumes != "" || f.produces != "" {
+		return refuse("usage", "--goal/--dod/--consumes/--produces do not apply to a task")
+	}
+	if err := validateEdit(r, f.title, f.note, f.epic, f.detach); err != nil {
+		return err
+	}
+	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
+		return editTask(tx, r.Task, f.title, f.note, f.epic, f.detach)
+	})
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(e.Stdout, "%s edited\n", ref.TaskRef(r.Task))
+	return nil
+}
+
+func editEpicGoal(e *cli.Env, slug, goal string) error {
+	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
+		ctx := context.Background()
+		var old string
+		if err := tx.QueryRowContext(ctx, `SELECT goal FROM epics WHERE slug = ?`, slug).Scan(&old); err != nil {
+			return nil, refuse("not-found", "no epic %q", slug)
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE epics SET goal = ? WHERE slug = ?`, goal, slug); err != nil {
+			return nil, err //nolint:wrapcheck // constraint codes ride to the mapper
+		}
+		return []Event{{
+			Entity: epicPrefix + slug, Event: evEdit,
+			Detail: fmt.Sprintf("goal: %s→%s", bounded(old), bounded(goal)),
+		}}, nil
+	})
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(e.Stdout, "epic:%s edited\n", slug)
+	return nil
+}
+
+func editStoryFields(e *cli.Env, r ref.Ref, dod, consumes, produces string) error {
+	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
+		ctx := context.Background()
+		var changes []string
+		for _, fld := range []struct{ col, val string }{
+			{"dod", dod}, {"consumes", consumes}, {"produces", produces},
+		} {
+			if fld.val == "" {
+				continue
+			}
+			//nolint:gosec // the column name comes from the fixed list above
+			q := "UPDATE stories SET " + fld.col + " = ? WHERE epic = ? AND id = ?"
+			res, err := tx.ExecContext(ctx, q, fld.val, r.Epic, r.Story)
+			if err != nil {
+				return nil, err //nolint:wrapcheck // constraint codes ride to the mapper
+			}
+			if n, _ := res.RowsAffected(); n == 0 {
+				return nil, refuse("not-found", "no story %s in epic %q", r.Story, r.Epic)
+			}
+			changes = append(changes, fld.col+": →"+bounded(fld.val))
+		}
+		return []Event{{
+			Entity: epicPrefix + r.Epic + "/" + r.Story, Event: evEdit,
+			Detail: strings.Join(changes, "; "),
+		}}, nil
+	})
+	if err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintf(e.Stdout, "epic:%s/%s edited\n", r.Epic, r.Story)
+	return nil
+}
+
+// validateEdit gates the task half's flag combinations.
+func validateEdit(r ref.Ref, title, note, epic string, detach bool) error {
+	_ = r
+	for _, f := range [][2]string{{"--title", title}, {flagNoteArg, note}, {"--epic", epic}} {
 		if err := validateText(f[0], f[1]); err != nil {
 			return err
 		}
@@ -757,7 +872,7 @@ func editTask(tx *sql.Tx, id int64, title, note, epic string, detach bool) ([]Ev
 	if _, err := tx.ExecContext(ctx, q, args...); err != nil {
 		return nil, err //nolint:wrapcheck // constraint codes ride to the mapper
 	}
-	return []Event{{Entity: ref.TaskRef(id), Event: "edit", Detail: strings.Join(changes, "; ")}}, nil
+	return []Event{{Entity: ref.TaskRef(id), Event: evEdit, Detail: strings.Join(changes, "; ")}}, nil
 }
 
 // editSet builds the changed-field SET fragments and their bounded

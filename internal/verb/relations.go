@@ -31,7 +31,7 @@ func relVerb() cli.Verb {
 	var note string
 	return cli.Verb{Name: "rel", Subs: []cli.Sub{
 		{
-			Name: "add", Arity: relTripleArity,
+			Name: subAdd, Arity: relTripleArity,
 			Usage: "rel add <id> <depends|relates|supersedes> <id> [--note N] [--json]",
 			Flags: func(fs *flag.FlagSet) { fs.StringVar(&note, "note", "", "why the relation exists") },
 			Run: func(e *cli.Env, pos []string, _ *flag.FlagSet) error {

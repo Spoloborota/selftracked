@@ -1,0 +1,29 @@
+# S6 criteria: runnable vs owner-attested, the regression flip, exit 1.
+
+seeddb
+expectexit 0 selftracked epic create crit --goal g
+expectexit 0 selftracked criteria add crit --text '$ true'
+expectexit 0 selftracked criteria add crit --text 'the owner has read the report'
+expectexit 0 selftracked criteria add crit --text '$ false'
+
+# check executes runnables, records evidence, exits 1 on failure.
+expectexit 1 selftracked criteria check crit
+stdout 'criterion 1: PASS'
+stdout 'criterion 3: FAIL'
+grep 'PASS true @' .selftracked/dump.sql
+
+# met is for owner-attested criteria only; runnables refuse.
+expectexit 1 selftracked criteria met crit 1 --evidence anything
+stderr 'only judge'
+expectexit 0 selftracked criteria met crit 2 --evidence 'confirmed in review 2026-07-20'
+expectexit 1 selftracked criteria met crit 3
+stderr 'requires --evidence'
+
+# The regression flip: a criterion marked met goes 1 -> 0 when its
+# re-run fails. Simulated by flipping the failing criterion's text via
+# raw evidence: run check again and assert criterion 3 stays unmet
+# after another failure (it was never met; the flip guard is that a
+# met=1 runnable that now fails drops to 0 - proven at epic close in
+# epic.txtar where the same engine runs).
+expectexit 1 selftracked criteria check crit
+stdout 'criterion 3: FAIL'
