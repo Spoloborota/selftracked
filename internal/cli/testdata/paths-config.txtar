@@ -1,0 +1,44 @@
+# S5b paths/config: the dictionary, overlap warning, one-row move, the
+# closed config list with validation.
+
+seeddb
+expectexit 0 selftracked paths set research docs/research
+expectexit 0 selftracked paths ls
+stdout 'research -> docs/research'
+
+# Same-class overlap warns (stderr) but proceeds; cross-class nesting is
+# silent.
+expectexit 0 selftracked paths set research@backend docs/research/backend
+stderr 'overlaps'
+expectexit 0 selftracked paths set workdir docs/research/tmp
+! stderr 'overlaps'
+
+# Moving a root is a one-row update: the same ref resolves before and
+# after with no artifact-row churn.
+exec mkdir -p docs/research
+exec touch docs/research/note.md
+expectexit 0 selftracked link 1 research:note.md --role evidence
+cp .selftracked/dump.sql before-move.sql
+expectexit 0 selftracked paths move research docs/library
+dumpdiff before-move.sql .selftracked/dump.sql 1 2
+
+# config: closed list, validated values, events-logged.
+expectexit 0 selftracked config ls
+stdout 'idle_days = 14'
+expectexit 0 selftracked config set idle_days 30
+expectexit 0 selftracked config ls
+stdout 'idle_days = 30'
+expectexit 1 selftracked config set idle_days zero
+stderr 'positive integer'
+# A dash-leading value can never BE a positional (section 3.2, exit 2);
+# the validator's floor is probed with zero instead.
+expectexit 2 selftracked config set idle_days -3
+expectexit 1 selftracked config set idle_days 0
+stderr 'positive integer'
+expectexit 1 selftracked config set schema_version 9
+stderr 'not a configuration key'
+expectexit 1 selftracked config set nonsense x
+stderr 'not a configuration key'
+expectexit 0 selftracked config set production_globs 'internal/** cmd/**'
+expectexit 1 selftracked config set production_globs '[broken'
+stderr 'unparseable glob'

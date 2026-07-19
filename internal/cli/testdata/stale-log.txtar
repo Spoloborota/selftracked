@@ -1,0 +1,40 @@
+# S5b stale/log: the git intersection with deterministic order, and the
+# per-entity events listing.
+
+seeddb
+exec git init -q .
+exec git config user.email t@example.invalid
+exec git config user.name t
+exec mkdir -p docs/research
+exec touch docs/research/b.md docs/research/a.md docs/research/ignored.md
+expectexit 0 selftracked paths set research docs/research
+expectexit 0 selftracked set-status 1 OPEN
+expectexit 0 selftracked link 1 research:b.md --role evidence
+expectexit 0 selftracked link 1 research:a.md --role evidence
+exec git add .
+exec git commit -q -m base
+
+# Change both linked files plus an unlinked one; stale reports only the
+# linked pair, path-ascending.
+exec cp .selftracked/dump.sql docs/research/a.md
+exec cp .selftracked/dump.sql docs/research/b.md
+exec cp .selftracked/dump.sql docs/research/ignored.md
+expectexit 0 selftracked stale
+cmp stdout stale-want.txt
+expectexit 1 selftracked stale --quiet
+! stdout .
+
+# Terminal work drops out of the intersection.
+expectexit 0 selftracked set-status 1 DONE --note done
+expectexit 0 selftracked stale
+! stdout 'a.md'
+
+# log lists one entity's trail, --limit takes the tail.
+expectexit 0 selftracked log 1
+stdout 'set-status'
+expectexit 0 selftracked log 1 --limit 1
+! stdout 'create'
+
+-- stale-want.txt --
+docs/research/a.md
+docs/research/b.md

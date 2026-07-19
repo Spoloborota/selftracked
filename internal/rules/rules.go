@@ -105,7 +105,10 @@ func r7(ctx context.Context, db *sql.DB) ([]Violation, error) {
 
 // r8: every events.entity resolves — §4 grammar plus existence.
 func r8(ctx context.Context, db *sql.DB) ([]Violation, error) {
-	rows, err := db.QueryContext(ctx, `SELECT seq, entity FROM events ORDER BY seq`)
+	// paths/config events are instance-scoped: their entity carries the
+	// affected token verbatim, not a §4 reference (spec §5.9, R8 carve-out).
+	rows, err := db.QueryContext(ctx,
+		`SELECT seq, entity FROM events WHERE event NOT IN ('paths', 'config') ORDER BY seq`)
 	if err != nil {
 		return nil, fmt.Errorf("R8: %w", err)
 	}

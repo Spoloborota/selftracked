@@ -35,12 +35,26 @@ const (
 	evCreate       = "create"
 )
 
-// Verbs returns the S5a task-lifecycle catalog entries.
+// Verbs returns the task-lifecycle (S5a) and relation/dictionary (S5b)
+// catalog entries.
 func Verbs() []cli.Verb {
-	return []cli.Verb{
-		createVerb(), showVerb(), listVerb(), readyVerb(),
-		setStatusVerb(), reopenVerb(), parkVerb(), unparkVerb(), editVerb(),
+	groups := [][]cli.Verb{
+		{
+			createVerb(), showVerb(), listVerb(), readyVerb(),
+			setStatusVerb(), reopenVerb(), parkVerb(), unparkVerb(), editVerb(),
+		},
+		RelationVerbs(), ArtifactVerbs(), DictVerbs(),
+		{StaleVerb()},
 	}
+	var n int
+	for _, g := range groups {
+		n += len(g)
+	}
+	out := make([]cli.Verb, 0, n)
+	for _, g := range groups {
+		out = append(out, g...)
+	}
+	return out
 }
 
 func refuse(code, format string, args ...any) error {

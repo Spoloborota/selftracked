@@ -1,0 +1,41 @@
+# S5b rel: add/rm/tree/cycles, the closed type set, cycle and target
+# refusals, and the events-audited delete (INV-153's rel-rm half).
+
+seeddb
+expectexit 0 selftracked create --title a --status OPEN
+expectexit 0 selftracked create --title b --status OPEN
+expectexit 0 selftracked create --title c --status OPEN
+
+expectexit 0 selftracked rel add 2 depends 3
+stdout '#2 depends #3'
+expectexit 0 selftracked rel add 3 depends 4
+
+# A cycle refusal: 4 -> 2 would close the loop.
+expectexit 1 selftracked rel add 4 depends 2
+stderr 'cycle'
+
+# relates is symmetric: stored once, visible from both ends.
+expectexit 0 selftracked rel add 2 relates 4
+expectexit 0 selftracked rel tree 4
+stdout 'relates'
+
+# duplicates is never rel's to write or remove.
+expectexit 1 selftracked rel add 2 duplicates 3
+stderr 'set-status --dup-of'
+expectexit 1 selftracked rel rm 2 duplicates 3
+stderr 'reopen'
+
+# LABEL and DUPLICATE targets refuse for depends/supersedes.
+expectexit 0 selftracked create --title marker --label
+expectexit 1 selftracked rel add 2 depends 5
+stderr 'workable'
+
+# rel rm deletes the link (the amendment's deletable-by-design row) and
+# the events trail records both add and rm.
+expectexit 0 selftracked rel rm 2 depends 3
+stdout 'removed'
+grep 'rel., .add depends #3' .selftracked/dump.sql
+grep 'rel., .rm depends #3' .selftracked/dump.sql
+! grep '2, 3, .depends.' .selftracked/dump.sql
+expectexit 0 selftracked rel cycles
+stdout 'no cycles'

@@ -1,0 +1,43 @@
+# S5b link/unlink/archive: roles, existence, containment, live-home
+# force, and the events-audited unlink (INV-154's half).
+
+seeddb
+exec mkdir -p docs/research
+exec touch docs/research/note.md
+expectexit 0 selftracked paths set research docs/research
+
+expectexit 0 selftracked link 1 research:note.md --role origin-research
+stdout 'linked'
+
+# Missing file refuses (exit 1) unless the class is ephemeral.
+expectexit 1 selftracked link 1 research:ghost.md --role evidence
+stderr '"code":"not-found"'
+expectexit 0 selftracked paths set scratch work --ephemeral
+expectexit 0 selftracked link 1 scratch:anything/at/all --role workdir
+
+# Containment: .. and absolute paths refuse.
+expectexit 1 selftracked link 1 research:../escape.md --role evidence
+stderr 'containment'
+
+# Role must come from the closed vocabulary (schema CHECK, exit 1).
+exec touch docs/research/other.md
+expectexit 1 selftracked link 1 research:other.md --role muse
+stderr 'constraint'
+
+# A non-ref target is a note, not a link (INV-133).
+expectexit 1 selftracked link 1 'worklog row 3' --role evidence
+stderr 'usage'
+
+# Archive a live home: refuse without --force, proceed with it. One
+# role per (task, artifact) pair - the home rides a second artifact.
+expectexit 0 selftracked link 1 research:other.md --role home
+expectexit 1 selftracked link archive research:other.md
+stderr 'live home'
+expectexit 0 selftracked link archive research:other.md --force
+stdout 'archived'
+expectexit 0 selftracked link unarchive research:other.md
+
+# unlink deletes the row with its events record.
+expectexit 0 selftracked unlink 1 research:note.md
+stdout 'unlinked'
+grep 'unlink., .research:note.md' .selftracked/dump.sql

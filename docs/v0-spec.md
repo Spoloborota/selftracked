@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.14 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.15 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -30,7 +30,11 @@ owner chose enforcement at the close boundary (amendment
 three-way contradiction between the link tables' no-delete triggers, the
 verbs that must delete link rows, and R7 — the link tables lose their
 triggers, entities keep theirs (amendment
-`link-tables-are-relations-not-history`) → this revision. Implementation has
+`link-tables-are-relations-not-history`) → rev 3.14 → S5b found the
+spec obliging `paths`/`config` to write events R8 must then flag — no §4
+form exists for their subjects; instance-scoped events are carved out of
+R8 by event type (amendment `instance-scoped-events-and-r8`) → this
+revision. Implementation has
 started; §5's schema and §3.1's connection posture are built.
 
 Markers: **[DECIDED]** — settled by the owner. **[RESOLVED-BY-EVIDENCE]** —
@@ -463,7 +467,10 @@ CREATE TABLE epic_artifacts (
 -- v0 (story_artifacts is additive later, §17). Pointers to non-file targets
 -- (a worklog row, a prose section) are notes, not links — documented limitation.
 
--- 5.9 events: append-only audit; entity uses §4 grammar (verb-validated; R8).
+-- 5.9 events: append-only audit; entity uses §4 grammar (verb-validated;
+-- R8) — except the instance-scoped `paths` and `config` events, whose
+-- entity carries the affected token verbatim (a dictionary row or a
+-- configuration key has no §4 form); R8 skips those two by event type.
 CREATE TABLE events (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
   at TEXT NOT NULL, entity TEXT NOT NULL,
@@ -743,7 +750,7 @@ Stage 1:
 | R5 | Non-`legacy:` commits resolve via `git cat-file` |
 | R6 | DONE story ⇔ DONE worklog row with commits, both directions (correction rows excluded from the count) |
 | R7 | duplicates links ⇔ dup_of, one-to-one; no dup_of target is itself DUPLICATE (no chains/cycles) |
-| R8 | Every `events.entity` resolves (grammar + existence) |
+| R8 | Every `events.entity` resolves (grammar + existence) — except `paths`/`config` events, instance-scoped by design: their entity is the affected token verbatim, skipped by event type |
 | R9 | `sqlite_sequence` ≥ MAX(id) per AUTOINCREMENT table (an absent `sqlite_sequence` row counts as 0; the clause applies only when the table has rows); `meta.events_archived_through` present, a non-negative integer, and **= 0 in schema v1** — no verb can write it, so any other value is the raw-SQL tamper signature (a forged boundary would silently truncate the dump's audit trail with R1 green on both sides) — red. Reserved D7-era clause, inactive while the boundary is 0: `sqlite_sequence(events)` ≥ the boundary |
 | R10 | Advisory: ACTIVE epics with no READY/IN-PROGRESS story and no **non-correction** worklog append in `idle_days` → idle report (PAUSED/BACKLOG are silent — intentional states; correction rows are excluded so an unrelated historical correction cannot reset the idle clock of a genuinely neglected epic — §5.7) |
 | R11 | Advisory: per-machine gate inactive warning. For each of pre-commit and post-commit, the **effective hook location** (`core.hooksPath` when set, else `.git/hooks`) must either be `.selftracked/hooks` or contain a hook file referencing its `.selftracked/hooks/` counterpart (best-effort textual detection, §9; a reference counts as chained only when it appears OUTSIDE a comment — neither a line starting with `#` nor a reference sitting after an inline `#` on a live line qualifies, since a commented mention otherwise reads as a live chain, and false silence is this rule's fail-open direction); the warning names each unchained hook — covering unset, set-but-unchained, and pre-commit-chained-but-post-commit-not states |
