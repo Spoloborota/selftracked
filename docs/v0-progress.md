@@ -12,20 +12,19 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4 (the §8.5 whitelist loader — the security boundary — with its fuzz target and the shared DB-only R-rules subset `verify` will reuse). The repository now carries the full
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a (nine task-lifecycle verbs on the shared write pipeline with the §8.4 divergence core — the binary now tracks work for real: create through reopen, events trail, dump regeneration on every write). The repository now carries the full
 schema layer (`internal/schema`: DDL, connection posture, three test
 suites) and the CLI skeleton (`internal/ref` grammar, `internal/cli`
 dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S5a implementation — nine task-lifecycle verbs (create, show,
-list, ready, set-status, reopen, park, unpark, edit), the events
-pipeline, and the shared write-verb harness with the §8.4 divergence
-core. The stage is open (`docs/stage-openings/s5a.md`), 40 rows after an
-18-row placement correction. This is the first stage that writes to the
-database through the verb pipeline; the harness it builds is reused by
-every later write verb.
+**Next:** S5b — relation/artifact/dictionary verbs (`rel`, `link`/
+`unlink`, `paths`, `config`, `stale`). Open per D-EP13. NOTE: `rel rm`
+and `unlink` are blocked on the pending
+`link-tables-are-relations-not-history` amendment; if it is still
+unratified at the S5b open, those two land as interim refusals like
+reopen-of-DUPLICATE did.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -52,7 +51,7 @@ refuses on DUPLICATE tasks naming the pending amendment, and S5b's
 | S2 — CLI dispatcher | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `739f8c9`, no CI has run (D-EP8) | All 20 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s2.md`); five moves at open; close critic ran every resolved command by name and probed the built binary by hand. Adjudications in the close entry |
 | S3 — serializer + `dump` | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `d20ecf1`, no CI has run (D-EP8) | 19 of 22 rows `verified-by-command`; INV-494/497/507 stay `planned` (CI-half rows, the S0 precedent). Two close-critic mutants killed; adjudications in the close entry |
 | S4 — `load` + parser fuzzing | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `4ee8f22`, no CI has run (D-EP8) | 19 of 20 rows `verified-by-command`; INV-498 stays `planned` (CI fuzz job). Gained INV-346/347/489 at the S5a open — load behaviours mis-filed on S5a, already built and tested here. Security-class review: no parser bypass |
-| S5a — task-lifecycle verbs | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s5a.md`). 40 rows after the build's largest placement move (18 rows out: epic/story/worklog → S6, rel → S5b, verify → S7, docs/init → S8a, gate → S8b, skill → S8c, load behaviours → S4) |
+| S5a — task-lifecycle verbs | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `0699fba`, no CI has run (D-EP8) | All 40 rows `verified-by-command`. Opened per D-EP13; 18 placement moves at open; close critic hand-drove the binary and found five resolved-but-unfixtured rows plus a latent §6.1 order inversion — all closed before the flip. Adjudications in the close entry |
 | S5b — relation/artifact/dictionary verbs | FULL | not started | — | — |
 | S6 — epic/story/worklog/criteria verbs | FULL | not started | — | — |
 | S7 — `verify` | FULL | not started | — | — |
@@ -233,6 +232,22 @@ for whoever wires INV-498's CI fuzz job: the local fuzzer's exec rate
 falls to near zero after a few seconds against the strict grammar —
 harmless for a boundary that refuses almost everything, but worth a
 richer corpus when it runs for real.
+
+S5a's close critic hand-drove the built binary in a sandbox and returned
+the sharpest report of the build: five rows had been marked resolved
+while their fixtures did not exist (the §8.2 diff shapes, the
+one-commit-trailing rule, the edit-history pair, the superseded-verdict
+trail, PRAGMA optimize), and the write pipeline carried a latent §6.1
+inversion — the sidecar landed before the STATE.md slot, invisible only
+because the renderer is still a stub. Everything was fixed before any
+row flipped: dump diffs are now counted line-exact by a harness command,
+the history scenarios cross real git commits, the pipeline order is
+pinned by a white-box step trace whose last step is the optimize call,
+and read-verb no-side-effects is asserted positively rather than by
+omission. The review also confirmed both seams the opening record
+flagged (the §8.4 core has exactly four branches; the version gate is
+still the S2 stub) and that the interim reopen-of-DUPLICATE refusal
+matches what the pending link-tables amendment promises.
 
 ## Parked — out of scope, no decision needed yet
 
