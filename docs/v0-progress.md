@@ -18,9 +18,9 @@ schema as text), S1b (the schema gates: 85 red fixtures in
 transition-matrix sweeps, raw-connection any-process probes, a
 deterministic hot-journal crash-recovery proof). All local, nothing pushed.
 
-**Next:** S1c — driver behaviour, 10 rows, behavioural probes only. Open
-it per D-EP13: re-read its rows on both axes, resolve the probe names to
-commands, commit `docs/stage-openings/s1c.md` before any code.
+**Next:** S1c implementation — driver behaviour. The stage is open
+(`docs/stage-openings/s1c.md`): 9 rows after INV-010 moved to S7 (its
+obligation is verify's `foreign_key_check`), probes resolved to commands.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -38,7 +38,7 @@ section and the amendments log).
 | S0 — repo bootstrap | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e09204a`, **no CI has run** (D-EP8) | 5 of 8 rows `verified-by-command`; INV-492/499/513 stay `planned` — they assert CI gates that cannot be proven before the first push |
 | S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | All 10 rows `verified-by-command`. INV-053 closed once the owner ratified the spec amendment that made its claim true (spec rev 3.10) |
 | S1b — schema gates | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green (114 subtests, `-race`, fresh cache) · local run @ `ad8ef15`, no CI has run (D-EP8) | All 85 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1b.md`); two close critics ran; five mutation probes shown red. Adjudications recorded below |
-| S1c — driver behaviour | FULL | not started | — | 10 rows, behavioural probes only |
+| S1c — driver behaviour | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s1c.md`). 9 rows after INV-010 → S7; behavioural probes only |
 | S2 — CLI dispatcher | FULL | not started | — | — |
 | S3 — serializer + `dump` | FULL | not started | — | — |
 | S4 — `load` + parser fuzzing | FULL | not started | — | — |

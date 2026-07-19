@@ -44,14 +44,14 @@ accounting check counts them so the proportion stays visible.
 | S0 | 8 |
 | S1a | 10 |
 | S1b | 85 |
-| S1c | 10 |
+| S1c | 9 |
 | S2 | 25 |
 | S3 | 36 |
 | S4 | 15 |
 | S5a | 50 |
 | S5b | 26 |
 | S6 | 69 |
-| S7 | 33 |
+| S7 | 34 |
 | S8a | 34 |
 | S8b | 34 |
 | S8c | 26 |
@@ -95,7 +95,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-007 | §1 | The path dictionary: artifact classes (optionally scoped) map to filesystem roots; references take the form class[@scope]:relpath; moving a directory is a one-row update | catalog-convention | S5b | test: move artifact root, assert single-row update resolves all refs | planned |  |
 | INV-008 | §1; §11 | Harness-friendly core with Claude-Code-first integration is a decided design commitment [DECIDED] | deliverable | S8c | n/a — design commitment, verified via §11 integration surface | planned |  |
 | INV-009 | §1.1 | Schema-enforced integrity binds any process that opens the DB: CHECK constraints, the WIP unique index, STRICT types, NOT NULL | schema-gate | S1b | test: raw-SQL write violating CHECK/STRICT/NOT NULL/WIP index is rejected by SQLite itself | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
-| INV-010 | §1.1; §3.1; §7 | Foreign-key enforcement is per-connection and off by default in SQLite; the DSN turns it on for every driver connection, and verify additionally runs foreign_key_check to catch what a foreign process wrote with FKs off | verify-rule | S1c | CI: verify includes foreign_key_check pass | planned |  |
+| INV-010 | §1.1; §3.1; §7 | Foreign-key enforcement is per-connection and off by default in SQLite; the DSN turns it on for every driver connection, and verify additionally runs foreign_key_check to catch what a foreign process wrote with FKs off | verify-rule | S7 | CI: verify includes foreign_key_check pass | planned |  |
 | INV-011 | §1.1 | Trigger-enforced integrity binds the driver's connections and casual/accidental raw writes (append-only protection, transition matrices, verb-gating flags), but a deliberate raw-SQL writer can bypass triggers via INSERT paths (legitimately used by import) or by unsetting session pragmas | schema-gate | S1c | test: trigger bypass via INSERT-path / pragma-unset is reproducible (documents the limit, not a gate) | planned |  |
 | INV-012 | §1.1; §7; §8 | Against a deliberate raw-SQL writer, prevention is impossible in an embedded DB; the contract is detection instead, via the events-trail cross-check (R12), the deterministic dump as a git-reviewed surface, and git history — forged state is made visible, not impossible | stated-limitation | S7 | owned by §7 (R12 events-trail cross-check) / §8 (dump review) teams | planned |  |
 | INV-013 | §1.1; §11 | The no-raw-SQL rule (§11) is prose, not a gate, justified by: schema teeth catching accidents, detection catching adversaries, and every write verb being cheaper than the SQL it replaces | stated-limitation | S8c | n/a — documented rationale, no independent gate expected | planned |  |
