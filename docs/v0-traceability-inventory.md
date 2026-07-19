@@ -43,13 +43,13 @@ accounting check counts them so the proportion stays visible.
 |---|---|
 | S0 | 8 |
 | S1a | 10 |
-| S1b | 85 |
+| S1b | 82 |
 | S1c | 9 |
 | S2 | 20 |
 | S3 | 22 |
 | S4 | 20 |
 | S5a | 40 |
-| S5b | 29 |
+| S5b | 32 |
 | S6 | 80 |
 | S7 | 37 |
 | S8a | 38 |
@@ -238,9 +238,9 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-150 | §5 schema-gates | stories rows cannot be DELETEd (BEFORE DELETE refusal trigger) | schema-gate | S1b | fixture: stories-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
 | INV-151 | §5 schema-gates | epic_criteria rows cannot be DELETEd (BEFORE DELETE refusal trigger) | schema-gate | S1b | fixture: epic_criteria-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
 | INV-152 | §5 schema-gates | artifacts rows cannot be DELETEd (BEFORE DELETE refusal trigger) | schema-gate | S1b | fixture: artifacts-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
-| INV-153 | §5 schema-gates | task_links rows cannot be DELETEd (BEFORE DELETE refusal trigger) | schema-gate | S1b | fixture: task_links-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
-| INV-154 | §5 schema-gates | task_artifacts rows cannot be DELETEd (BEFORE DELETE refusal trigger) | schema-gate | S1b | fixture: task_artifacts-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
-| INV-155 | §5 schema-gates | epic_artifacts rows cannot be DELETEd (BEFORE DELETE refusal trigger) | schema-gate | S1b | fixture: epic_artifacts-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
+| INV-153 | §5 schema-gates; §6.2 | task_links rows ARE deletable on the driver path — link rows are current relations, audit in the events trail; sanctioned deleters: `rel rm` and `reopen` (duplicates) | schema-gate | S5b | fixture: rel-rm-deletes-link-with-events-row + reopen-clears-duplicates-link | planned |  |
+| INV-154 | §5 schema-gates; §6.2 | task_artifacts rows ARE deletable on the driver path — same relations-not-history rule; sanctioned deleter: `unlink` | schema-gate | S5b | fixture: unlink-deletes-task-artifact-with-events-row | planned |  |
+| INV-155 | §5 schema-gates; §6.2 | epic_artifacts rows ARE deletable on the driver path — same rule; sanctioned deleter: `unlink` | schema-gate | S5b | fixture: unlink-deletes-epic-artifact-with-events-row | planned |  |
 | INV-156 | §5 schema-gates | path_dictionary rows cannot be DELETEd (BEFORE DELETE refusal trigger) | schema-gate | S1b | fixture: path_dictionary-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
 | INV-157 | §5 schema-gates | trigger worklog_seq_contiguous: worklog.seq must be exactly MAX(seq)+1 per epic on INSERT | schema-gate | S1b | fixture: worklog-insert-non-contiguous-seq-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
 | INV-158 | §5 schema-gates | trigger tasks_transition: tasks.status changes must follow the defined matrix (OPEN→{IN-REVIEW,NEEDS-TRIAGE,DONE,WONT-DO,DUPLICATE}; IN-REVIEW→{OPEN,NEEDS-TRIAGE,DONE,WONT-DO,DUPLICATE}; NEEDS-TRIAGE→{OPEN,IN-REVIEW,DONE,WONT-DO,DUPLICATE}; {DONE,WONT-DO,DUPLICATE}→OPEN only); all other transitions raise ABORT | schema-gate | S1b | fixture: tasks-illegal-status-transition-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |

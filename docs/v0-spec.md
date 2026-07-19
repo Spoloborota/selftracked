@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.13 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.14 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -26,7 +26,11 @@ found §5.7's worklog.story comment naming R5 as its guard where the rule
 is R4 (amendment `worklog-story-guard-rule-pointer`) → rev 3.12 → the
 same re-read found §2's ≥2-stories definition enforced nowhere, and the
 owner chose enforcement at the close boundary (amendment
-`epic-close-story-cardinality`) → this revision. Implementation has
+`epic-close-story-cardinality`) → rev 3.13 → S5a implementation hit the
+three-way contradiction between the link tables' no-delete triggers, the
+verbs that must delete link rows, and R7 — the link tables lose their
+triggers, entities keep theirs (amendment
+`link-tables-are-relations-not-history`) → this revision. Implementation has
 started; §5's schema and §3.1's connection posture are built.
 
 Markers: **[DECIDED]** — settled by the owner. **[RESOLVED-BY-EVIDENCE]** —
@@ -494,10 +498,15 @@ CREATE INDEX events_entity ON events(entity);
 ### Schema gates (triggers)
 
 ```sql
--- Append-only + no-delete. worklog & events: no UPDATE, no DELETE. All other
--- entity tables (tasks, epics, stories, epic_criteria, artifacts, task_links,
--- task_artifacts, epic_artifacts, path_dictionary): no DELETE ("history is
--- moved, never deleted" is schema-enforced; import only INSERTs, so no conflict).
+-- Append-only + no-delete. worklog & events: no UPDATE, no DELETE. Entity
+-- tables (tasks, epics, stories, epic_criteria, artifacts,
+-- path_dictionary): no DELETE ("history is moved, never deleted" is
+-- schema-enforced; import only INSERTs, so no conflict). The LINK tables
+-- (task_links, task_artifacts, epic_artifacts) carry no delete trigger:
+-- link rows are current relations whose audit history is the events trail
+-- (rel/link/unlink events), and their sanctioned deleters — `rel rm`,
+-- `unlink`, `reopen` for the duplicates link — could not exist otherwise
+-- (nor could R7's one-to-one rule survive a reopen).
 CREATE TRIGGER worklog_no_update BEFORE UPDATE ON worklog
   BEGIN SELECT RAISE(ABORT,'worklog is append-only'); END;
 CREATE TRIGGER worklog_no_delete BEFORE DELETE ON worklog

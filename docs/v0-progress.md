@@ -30,14 +30,9 @@ reopen-of-DUPLICATE did.
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
 
-**What is waiting on the owner:** one amendment —
-`link-tables-are-relations-not-history`. S5a implementation hit a
-three-way spec contradiction: §5's no-delete triggers on the link tables
-vs the three verbs that must delete link rows (`reopen`, `rel rm`,
-`unlink`) vs R7's one-to-one rule. The proposal drops the three
-link-table triggers (entity tables keep theirs); until ratified, `reopen`
-refuses on DUPLICATE tasks naming the pending amendment, and S5b's
-`rel rm`/`unlink` are blocked the same way.
+**What is waiting on the owner:** nothing blocking. Amendments now apply
+under the D-EP14 pre-authorization: proposals are still filed as
+artifacts first, the owner reviews after the fact and may revert.
 
 ## Stages
 
@@ -79,7 +74,7 @@ refuses on DUPLICATE tasks naming the pending amendment, and S5b's
 | `stage-open-record` | execution plan §5, §8, §10 | accepted 2026-07-19 (D-EP13) | plan rev 12 |
 | `worklog-story-guard-rule-pointer` | **spec** §5.7 (one comment line) | accepted 2026-07-19 | spec rev 3.12 |
 | `epic-close-story-cardinality` | **spec** §6.4 | accepted 2026-07-19 | spec rev 3.13 |
-| `link-tables-are-relations-not-history` | **spec** §5 triggers, `ddl.sql`, INV-153/154/155 | **proposed 2026-07-19, awaiting owner review** — blocks reopen-of-duplicates, `rel rm`, `unlink` | — |
+| `link-tables-are-relations-not-history` | **spec** §5 triggers, `ddl.sql`, INV-153/154/155 | accepted 2026-07-19 | spec rev 3.14 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)

@@ -233,12 +233,11 @@ CREATE TRIGGER worklog_no_update BEFORE UPDATE ON worklog
   BEGIN SELECT RAISE(ABORT,'worklog is append-only'); END;
 CREATE TRIGGER worklog_no_delete BEFORE DELETE ON worklog
   BEGIN SELECT RAISE(ABORT,'worklog is append-only'); END;
--- The specification writes the rest of this block as one line of shorthand:
--- "(events: same pair; every other table: a BEFORE DELETE refusal trigger)".
--- Shorthand cannot be compiled, and this file is the byte-compared
--- artifact, so the enumeration is written out. Each trigger is a distinct
--- schema object that can be omitted independently, which is why the
--- inventory carries one row per table rather than one for the sentence.
+-- The specification's shorthand is written out here because this file is
+-- the byte-compared artifact. Entity tables get a BEFORE DELETE refusal;
+-- the LINK tables (task_links, task_artifacts, epic_artifacts) do not —
+-- their rows are current relations, their audit is the events trail, and
+-- their sanctioned deleters (rel rm, unlink, reopen) need the path open.
 CREATE TRIGGER events_no_update BEFORE UPDATE ON events
   BEGIN SELECT RAISE(ABORT,'events is append-only'); END;
 CREATE TRIGGER events_no_delete BEFORE DELETE ON events
@@ -253,12 +252,6 @@ CREATE TRIGGER epic_criteria_no_delete BEFORE DELETE ON epic_criteria
   BEGIN SELECT RAISE(ABORT,'epic_criteria: history is moved, never deleted'); END;
 CREATE TRIGGER artifacts_no_delete BEFORE DELETE ON artifacts
   BEGIN SELECT RAISE(ABORT,'artifacts: history is moved, never deleted'); END;
-CREATE TRIGGER task_links_no_delete BEFORE DELETE ON task_links
-  BEGIN SELECT RAISE(ABORT,'task_links: history is moved, never deleted'); END;
-CREATE TRIGGER task_artifacts_no_delete BEFORE DELETE ON task_artifacts
-  BEGIN SELECT RAISE(ABORT,'task_artifacts: history is moved, never deleted'); END;
-CREATE TRIGGER epic_artifacts_no_delete BEFORE DELETE ON epic_artifacts
-  BEGIN SELECT RAISE(ABORT,'epic_artifacts: history is moved, never deleted'); END;
 CREATE TRIGGER path_dictionary_no_delete BEFORE DELETE ON path_dictionary
   BEGIN SELECT RAISE(ABORT,'path_dictionary: history is moved, never deleted'); END;
 

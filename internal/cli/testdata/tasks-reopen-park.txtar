@@ -12,12 +12,14 @@ stdout '#1 reopened'
 expectexit 1 selftracked reopen 1 --why again
 stderr 'only reopens terminal'
 
-# The interim DUPLICATE refusal, named for its pending amendment.
+# Reopening a DUPLICATE clears dup_of AND deletes the duplicates link -
+# reopen is its sole remover (amendment: relations, not history).
 expectexit 0 selftracked create --title canon --status OPEN
 expectexit 0 selftracked create --title dupe --status OPEN
 expectexit 0 selftracked set-status 3 DUPLICATE --dup-of 2 --note dup
-expectexit 1 selftracked reopen 3 --why 'not a dupe'
-stderr 'link-tables-are-relations-not-history'
+grep '3, 2, .duplicates.' .selftracked/dump.sql
+expectexit 0 selftracked reopen 3 --why 'not a dupe'
+! grep '3, 2, .duplicates.' .selftracked/dump.sql
 
 # park keeps the status, leaves ready; unpark restores.
 expectexit 0 selftracked park 1 --why later

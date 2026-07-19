@@ -580,12 +580,13 @@ func reopenTask(tx *sql.Tx, id int64, why string) ([]Event, error) {
 	case statusDone, statusWontDo:
 		// Reopenable.
 	case statusDuplicate:
-		// Clearing dup_of demands deleting the duplicates link, and the
-		// link table's no-delete trigger contradicts that — amendment
-		// link-tables-are-relations-not-history is awaiting the owner.
-		return nil, refuse("pending-amendment",
-			"reopening a DUPLICATE requires deleting its duplicates link; "+
-				"blocked on amendment link-tables-are-relations-not-history")
+		// reopen is the sole remover of the duplicates link (§5.6); the
+		// link tables carry no delete trigger by amendment — relations,
+		// not history, with the events trail as the audit.
+		if _, err := tx.ExecContext(ctx,
+			`DELETE FROM task_links WHERE from_task = ? AND type = 'duplicates'`, id); err != nil {
+			return nil, err //nolint:wrapcheck // constraint codes ride to the mapper
+		}
 	default:
 		return nil, refuse("not-terminal", "%s is %s; reopen only reopens terminal tasks",
 			ref.TaskRef(id), cur.Status)

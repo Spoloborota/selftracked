@@ -595,40 +595,6 @@ func TestGates(t *testing.T) {
 			wantSub: "never deleted",
 		},
 		{
-			name: "task_links-delete-raises-abort",
-			setup: func(t *testing.T, db *sql.DB) {
-				t.Helper()
-				a, b := addTask(t, db, "OPEN", nil), addTask(t, db, "OPEN", nil)
-				exec1(t, db, `INSERT INTO task_links (from_task, to_task, type) VALUES (?, ?, 'relates')`, a, b)
-			},
-			stmt:    `DELETE FROM task_links`,
-			wantSub: "never deleted",
-		},
-		{
-			name: "task_artifacts-delete-raises-abort",
-			setup: func(t *testing.T, db *sql.DB) {
-				t.Helper()
-				seedPathDict(t, db)
-				addTask(t, db, "OPEN", nil)
-				addArtifact(t, db, "x.md")
-				exec1(t, db, `INSERT INTO task_artifacts (task, artifact, role) VALUES (1, 1, 'home')`)
-			},
-			stmt:    `DELETE FROM task_artifacts`,
-			wantSub: "never deleted",
-		},
-		{
-			name: "epic_artifacts-delete-raises-abort",
-			setup: func(t *testing.T, db *sql.DB) {
-				t.Helper()
-				seedPathDict(t, db)
-				addEpic(t, db, "e", "BACKLOG")
-				addArtifact(t, db, "x.md")
-				exec1(t, db, `INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('e', 1, 'home')`)
-			},
-			stmt:    `DELETE FROM epic_artifacts`,
-			wantSub: "never deleted",
-		},
-		{
 			name:    "path_dictionary-delete-raises-abort",
 			setup:   func(t *testing.T, db *sql.DB) { t.Helper(); seedPathDict(t, db) },
 			stmt:    `DELETE FROM path_dictionary`,

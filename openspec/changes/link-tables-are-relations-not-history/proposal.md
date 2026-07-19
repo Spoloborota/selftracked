@@ -2,7 +2,7 @@
 
 Target: `docs/v0-spec.md` §5 (schema-gates comment + trigger set),
 `internal/schema/ddl.sql`, three S1b inventory rows
-Status: **proposed** · raised 2026-07-19 at S5a implementation · awaiting owner review
+Status: **accepted** · raised 2026-07-19 at S5a implementation · ratified and applied same day
 
 ## Why — a three-way contradiction no code can satisfy
 
@@ -64,4 +64,7 @@ proposal-first rule.
 
 ## Ratification
 
-Pending.
+Owner, 2026-07-19: ratified as proposed, in the same message that granted
+the standing pre-authorization recorded as amendment
+`pre-authorized-amendment-cadence` (D-EP14). (Recorded in English by
+meaning; given in conversation.)
