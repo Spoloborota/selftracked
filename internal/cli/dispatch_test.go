@@ -194,10 +194,14 @@ func TestDispatchRunsAndOrder(t *testing.T) {
 func TestHelpIsStdoutUsageExit0(t *testing.T) {
 	t.Parallel()
 
+	// The bare word "help" is deliberately NOT special-cased: §3.2 (c)
+	// names -h/--help only, and a reserved word would silently shadow any
+	// future verb of that name (found by the S2 close review).
+	wantUsage(t, "help")
+
 	cases := [][]string{
 		{"-h"},
 		{"--help"},
-		{"help"},
 		{"probe", "-h"},
 		{"probe", "a", "b", "-h"},
 		{"duo", "-h"},

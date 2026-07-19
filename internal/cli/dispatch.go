@@ -92,7 +92,7 @@ func resolveVerb(r *Registry, e *Env, args []string) (*Verb, []string, bool, err
 	if len(args) == 0 {
 		return nil, nil, false, Usage("a verb is required; one of: %s", strings.Join(r.Names(), " "))
 	}
-	if isHelpToken(args[0]) || args[0] == "help" {
+	if isHelpToken(args[0]) {
 		printTopUsage(e, r)
 		return nil, nil, true, nil
 	}
