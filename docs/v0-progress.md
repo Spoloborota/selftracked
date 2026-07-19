@@ -75,6 +75,7 @@ artifacts first, the owner reviews after the fact and may revert.
 | `worklog-story-guard-rule-pointer` | **spec** §5.7 (one comment line) | accepted 2026-07-19 | spec rev 3.12 |
 | `epic-close-story-cardinality` | **spec** §6.4 | accepted 2026-07-19 | spec rev 3.13 |
 | `link-tables-are-relations-not-history` | **spec** §5 triggers, `ddl.sql`, INV-153/154/155 | accepted 2026-07-19 | spec rev 3.14 |
+| `pre-authorized-amendment-cadence` | execution plan §5, §10 | accepted 2026-07-19 (D-EP14) | plan rev 13 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)

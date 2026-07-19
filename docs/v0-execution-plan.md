@@ -1,6 +1,6 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 12.** Revision history: rev 1 →
+Status: **ACTIVE, revision 13.** Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →
@@ -11,7 +11,8 @@ amendment `stage-open-plan-crosscheck` (D-EP6) → rev 6 → amendment
 `local-commits-and-interim-evidence` (D-EP8) → rev 8 → amendment
 `s0-minimal-package` (D-EP9) → rev 9 → amendment `split-s1` (D-EP10) →
 rev 10 → amendment `evidence-across-a-squash` (D-EP11, D-EP12) → rev 11 →
-amendment `stage-open-record` (D-EP13) → this
+amendment `stage-open-record` (D-EP13) → rev 12 →
+amendment `pre-authorized-amendment-cadence` (D-EP14) → this
 revision. Governs the implementation of `docs/v0-spec.md`
 and the project's spec lifecycle beyond it. Derived from
 `docs/research/2026-07-18-spec-to-execution-planning.md`; tooling facts
@@ -302,10 +303,15 @@ A stage (or sub-batch) is "done" only when, in order:
 3. Inventory rows flip to `verified-by-command` with the evidence link;
    the ledger records the run.
 
-Owner cadence: amendment proposals batch at sub-batch close (a
-spec-contradicting blocker files immediately); while a proposal awaits
-review, non-deviating work proceeds and deviating work parks — the plan's
-PO-absent branch, mirroring spec §11.3.
+Owner cadence (D-EP14): amendment proposals are still written and
+committed FIRST — the archived artifact with its reasoning is the record
+— but the coordinating agent applies them without waiting for
+ratification; the owner reviews after the fact and may revert any
+application, which re-parks the affected work. A spec-contradicting
+blocker still files immediately. Privacy- and security-class findings
+still escalate BEFORE action — that mandatory ratification is unchanged.
+This standing pre-authorization covers the v0 bootstrap window only
+(§9's steady state keeps owner review in the loop).
 
 ## 6. Progress ledger (artifact 4)
 
@@ -457,6 +463,12 @@ close:
   convention with its validator deferred (§17). Before publication there is
   no durable commit for an anchor to name, so a gate built now would guard a
   period in which its subject cannot hold still.
+- **D-EP14 [DECIDED, ratified]** (amendment
+  `pre-authorized-amendment-cadence`, 2026-07-19): amendments apply under
+  the owner's standing pre-authorization — proposal-first stands, waiting
+  does not; owner review moves after the fact with revert power;
+  privacy/security escalation stays pre-action. Granted in the same
+  message that ratified the link-tables amendment.
 - **D-EP13 [DECIDED, ratified]** (amendment `stage-open-record`,
   2026-07-19): the stage-open re-read produces a committed opening record —
   `docs/stage-openings/<stage>.md`, one verdict line per row, written before
