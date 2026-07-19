@@ -14,8 +14,8 @@ log artifact proving the verification commands exited 0 (plan §5).
 |---|---|---|---|---|
 | G0 — traceability inventory | FULL | done | `python3 scripts/check-inventory.py` · 2026-07-19 · **exit 0, accounting clean** (545 rows, all 16 stages covered, 16 review-only obligations) · evidence link pending (no CI yet — S0 wires it) | Ratified by the owner 2026-07-19 (D-EP4). Three review passes done; findings applied. Fidelity was sampled, not exhaustive — each stage re-reads its own rows at open (plan §5). |
 | S0 — repo bootstrap | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e09204a`, **no CI has run** (D-EP8) | 5 of 8 rows `verified-by-command`; INV-492/499/513 stay `planned` — they assert CI gates that cannot be proven before the first push |
-| S1a — schema as text | FULL | in progress | — | 29 rows, incl. the driver dependency and its pins |
-| S1b — schema gates | FULL | not started | — | 89 rows, red fixture each |
+| S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | 9 of 10 rows `verified-by-command`. INV-053 stays open: the §5 preamble contradicts the schema, and the fix is a spec amendment awaiting the owner — closing it by weakening the fixture would invert which artifact is authoritative |
+| S1b — schema gates | FULL | in progress | — | 89 rows, red fixture each |
 | S1c — driver behaviour | FULL | not started | — | 10 rows, behavioural probes only |
 | S2 — CLI dispatcher | FULL | not started | — | — |
 | S3 — serializer + `dump` | FULL | not started | — | — |
@@ -42,6 +42,7 @@ log artifact proving the verification commands exited 0 (plan §5).
 | `local-commits-and-interim-evidence` | execution plan §4 (S0), §8, §10; `.claude/CLAUDE.md` rule 6 | accepted 2026-07-19 (D-EP8) | plan rev 8 |
 | `s0-minimal-package` | execution plan §4 (S0), §10 | applied 2026-07-19, **owner review pending** (D-EP9) | plan rev 9 |
 | `split-s1` | execution plan §4 (S1), §10 | accepted 2026-07-19 (D-EP10) | plan rev 10 |
+| `nullable-columns-preamble` | **spec** §5 preamble | **proposed, awaiting owner** — spec not edited | — |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -82,6 +83,16 @@ licensing deliverable) moved to S1, where the driver actually arrives — at
 S0 their checks passed vacuously, the same defect class D-EP6 exists for.
 And the stage had not been closed by the plan's own procedure at all: the
 inventory statuses and this ledger were untouched until the review said so.
+
+S1a's close review found the connection settings contradicting §3.1 rather
+than lagging it — the DSN set the one journal mode the specification rules
+out — and proved the DDL tests could not fail, by deleting a trigger and
+watching the suite stay green. Both are fixed and the mutation now fails.
+The review also showed twenty of the stage's twenty-nine rows needed verbs,
+events or a serializer that this stage does not build; they moved to the
+stages that first have the machinery, leaving S1a with ten rows it can
+actually execute. The stage-open placement check had not been run properly
+on all twenty-nine, which is how they survived to the close.
 
 ## Parked — out of scope, no decision needed yet
 
