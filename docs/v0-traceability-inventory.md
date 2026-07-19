@@ -46,18 +46,18 @@ accounting check counts them so the proportion stays visible.
 | S1b | 85 |
 | S1c | 9 |
 | S2 | 20 |
-| S3 | 36 |
-| S4 | 15 |
-| S5a | 52 |
+| S3 | 22 |
+| S4 | 18 |
+| S5a | 57 |
 | S5b | 27 |
-| S6 | 71 |
-| S7 | 34 |
-| S8a | 34 |
+| S6 | 73 |
+| S7 | 36 |
+| S8a | 35 |
 | S8b | 34 |
 | S8c | 26 |
 | S9 | 27 |
 | S10 | 1 |
-| S11 | 24 |
+| S11 | 25 |
 | S12 | 8 |
 | deferred | 28 |
 
@@ -226,8 +226,8 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-138 | §5.9 events | events.detail carries the verb's human-readable payload VERBATIM (status transitions: the --note text; story events: block reason / unblock resolution) | format | S5a | fixture: events-detail-verbatim-payload-per-event-type | planned |  |
 | INV-139 | §5.9 events | For `edit` events, changed field names are recorded with old→new values, EACH bounded to a short stated prefix (marked with '…') | format | S5a | fixture: edit-event-long-value-truncated-with-ellipsis-marker | planned |  |
 | INV-140 | §5.9 events | The full NEW value after an edit lives in the entity row itself and in every committed dump, not in the events row | process | S3 | fixture: full-new-value-recoverable-from-entity-row-and-dump | planned |  |
-| INV-141 | §5.9 events | The full OLD value after an edit lives only in the prior committed dump, not in the events row | process | S3 | fixture: full-old-value-recoverable-only-from-prior-dump | planned |  |
-| INV-142 | §5.9 events | Stated limitation: a value overwritten twice within one session never reaches a commit and survives only as its bounded prefix in events (state trails git by one commit, §8.3) | stated-limitation | S3 | fixture: double-overwrite-same-session-only-prefix-survives | planned |  |
+| INV-141 | §5.9 events | The full OLD value after an edit lives only in the prior committed dump, not in the events row | process | S5a | fixture: full-old-value-recoverable-only-from-prior-dump | planned |  |
+| INV-142 | §5.9 events | Stated limitation: a value overwritten twice within one session never reaches a commit and survives only as its bounded prefix in events (state trails git by one commit, §8.3) | stated-limitation | S5a | fixture: double-overwrite-same-session-only-prefix-survives | planned |  |
 | INV-143 | §5.9 events | Because events are append-only while tasks.status_note is a single overwritten column, the events trail (not the column) is the durable record of superseded IN-REVIEW verdicts | process | S5a | fixture: events-trail-retains-superseded-status_note-verdicts | planned |  |
 | INV-144 | §5 schema-gates | trigger worklog_no_update: worklog rows cannot be UPDATEd | schema-gate | S1b | fixture: worklog-update-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
 | INV-145 | §5 schema-gates | trigger worklog_no_delete: worklog rows cannot be DELETEd | schema-gate | S1b | fixture: worklog-delete-raises-abort | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
@@ -356,7 +356,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-268 | §6.2 | Dual date-regime disclosure: the `date` column means "when the increment finished" for imported rows but "when recorded" for live rows — one column, two regimes, read uniformly downstream | stated-limitation | S9 | fx-import-dual-date-regime-disclosure | planned |  |
 | INV-269 | §6.2 | The importer must append worklog rows in ascending per-epic order (the contiguity trigger fires on INSERT) | schema-gate | S6 | fx-import-ascending-worklog-order | planned |  |
 | INV-270 | §6.2 | The importer must materialize a story for every referenced story id | verb-contract | S6 | fx-import-materializes-referenced-stories | planned |  |
-| INV-271 | §6.2 | `dump`/`load` catalog entries are stub cross-references to §8 for their full contract; the only signatures given here are `dump [--stdout]` and `load [--force]` | catalog-convention | S3 | fx-dumpload-signature-stub-crossref-sec8 | planned |  |
+| INV-271 | §6.2 | `dump`/`load` catalog entries are stub cross-references to §8 for their full contract; the only signatures given here are `dump [--stdout]` and `load [--force]` | catalog-convention | S4 | fx-dumpload-signature-stub-crossref-sec8 | planned |  |
 | INV-272 | §6.2 | `verify` catalog entry is a stub cross-reference to §7 for its full contract; signature is `verify [--quiet] [--fast]` | catalog-convention | S7 | fx-verify-signature-stub-crossref-sec7 | planned |  |
 | INV-273 | §6.2 | `prime` catalog entry is a stub cross-reference to §11.1 for its full contract; signature is `prime` (no args) | catalog-convention | S8c | fx-prime-signature-stub-crossref-sec11-1 | planned |  |
 | INV-274 | §6.2 | `state` regenerates STATE.md via deterministic rendering: fixed sections, fixed ordering, last 10 events | deliverable | S8c | fx-state-deterministic-render-fixed-sections | planned |  |
@@ -403,22 +403,22 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-315 | §8.1 | Dump file uses UTF-8 encoding, LF line endings, and a trailing newline | format | S3 | byte-level fixture: check dump file encoding, line endings, and trailing newline | planned |  |
 | INV-316 | §8.1 | Dump carries no banners beyond a single header comment line | format | S3 | fixture: dump output has exactly one leading comment line, no other banner text | planned |  |
 | INV-317 | §8.1 | Header comment line carries `schema_version` plus the tasks/artifacts id high-water mark for human readers, and never the events/worklog seq | format | S3 | fixture: bump events/worklog seq only (no new task/artifact); header line byte-identical across the diff | planned |  |
-| INV-318 | §8.1 | Header's `schema_version` is normative for the loader: it selects DDL(k)/whitelist(k) before parsing, since the `meta` row sits after the full DDL block and cannot steer the parser | schema-gate | S3 | fixture: load dump with header schema_version=N; confirm loader selects DDL(N)/whitelist(N) before reading the meta row | planned |  |
-| INV-319 | §8.1 | A mismatch between the header `schema_version` and the `meta.schema_version` row is a hard refusal | verify-rule | S3 | red-fixture: header says vN, meta.schema_version row says vM≠N; load refuses | planned |  |
+| INV-318 | §8.1 | Header's `schema_version` is normative for the loader: it selects DDL(k)/whitelist(k) before parsing, since the `meta` row sits after the full DDL block and cannot steer the parser | schema-gate | S4 | fixture: load dump with header schema_version=N; confirm loader selects DDL(N)/whitelist(N) before reading the meta row | planned |  |
+| INV-319 | §8.1 | A mismatch between the header `schema_version` and the `meta.schema_version` row is a hard refusal | verify-rule | S4 | red-fixture: header says vN, meta.schema_version row says vM≠N; load refuses | planned |  |
 | INV-320 | §8.1 | `sqlite_sequence` is never serialized; loading rows with explicit ids sets the AUTOINCREMENT high-water marks automatically (empirically verified) | stated-limitation | S3 | fixture: dump has no sqlite_sequence INSERTs; after load, insert a new row and confirm AUTOINCREMENT resumes above max loaded id | planned |  |
-| INV-321 | §8.1 | R9 sanity-checks the live DB's sequence state instead of relying on serialized `sqlite_sequence` data | verify-rule | S3 | cross-ref §7 R9 fixture: verify checks sqlite_sequence high-water against max row id in the live DB | planned |  |
+| INV-321 | §8.1 | R9 sanity-checks the live DB's sequence state instead of relying on serialized `sqlite_sequence` data | verify-rule | S7 | cross-ref §7 R9 fixture: verify checks sqlite_sequence high-water against max row id in the live DB | planned |  |
 | INV-322 | §8.1 | Full DDL is emitted verbatim from the single compiled-in source | format | S3 | fixture: dump DDL block byte-diffed against the compiled-in canonical DDL(k) | planned |  |
 | INV-323 | §8.1 | Table order is fixed, with `events` last | format | S3 | fixture: dump table order is stable across runs and independent of insertion order, with events emitted last | planned |  |
 | INV-324 | §8.1 | Rows are emitted ORDER BY full PK, with `events` bounded below by the archive boundary (§8.2) | format | S3 | fixture: shuffle insert order in the DB; dump still emits rows in full-PK order, events respecting events_archived_through | planned |  |
 | INV-325 | §8.1 | Every INSERT uses explicit column lists | format | S3 | fixture: every INSERT statement in the dump names its columns explicitly | planned |  |
 | INV-326 | §8.1 | Single-quote doubling is the only escape mechanism | format | S3 | fixture: a value containing an apostrophe round-trips via '' escaping; no backslash-escape form appears | planned |  |
-| INV-327 | §8.1 | Control characters are refused at write time | verify-rule | S3 | red-fixture: a write verb attempts to persist a control character; the write is refused before reaching DB/dump | planned |  |
+| INV-327 | §8.1 | Control characters are refused at write time | verify-rule | S5a | red-fixture: a write verb attempts to persist a control character; the write is refused before reaching DB/dump | planned |  |
 | INV-328 | §8.1 | NULL is permitted only in `tasks.dup_of`, `tasks.epic`, and `worklog.corrects` | format | S3 | fixture: scan all INSERT VALUES in a representative dump; NULL token appears only in these three columns | planned |  |
 | INV-329 | §8.1 | No PRAGMAs are ever emitted in the dump | format | S3 | fixture: dump text contains zero PRAGMA statements | planned |  |
-| INV-330 | §8.2 | A status flip diffs as exactly two lines: the state row plus the events row in the tail | format | S3 | fixture: flip a task status, diff the dump; exactly 2 changed/added lines | planned |  |
-| INV-331 | §8.2 | Verbs that create entities also bump the seq header comment, adding one more line to the diff | format | S3 | fixture: create a task, diff the dump; header seq comment line changes plus new entity line(s) | planned |  |
-| INV-332 | §8.2 | `story done` diffs as three lines: story, worklog, events | format | S3 | fixture: run `story done`, diff the dump; exactly 3 lines change | planned |  |
-| INV-333 | §8.2 | `story unblock` diffs as the two-line shape, with its resolution prose riding in the events line | format | S3 | fixture: run `story unblock`, diff the dump; 2 lines change, resolution prose embedded in the events line | planned |  |
+| INV-330 | §8.2 | A status flip diffs as exactly two lines: the state row plus the events row in the tail | format | S5a | fixture: flip a task status, diff the dump; exactly 2 changed/added lines | planned |  |
+| INV-331 | §8.2 | Verbs that create entities also bump the seq header comment, adding one more line to the diff | format | S5a | fixture: create a task, diff the dump; header seq comment line changes plus new entity line(s) | planned |  |
+| INV-332 | §8.2 | `story done` diffs as three lines: story, worklog, events | format | S6 | fixture: run `story done`, diff the dump; exactly 3 lines change | planned |  |
+| INV-333 | §8.2 | `story unblock` diffs as the two-line shape, with its resolution prose riding in the events line | format | S6 | fixture: run `story unblock`, diff the dump; 2 lines change, resolution prose embedded in the events line | planned |  |
 | INV-334 | §8.2 | Worklog `note` prose is as large as its author writes it; essay-sized notes produce essay-sized diffs, which is the worklog carrying real content, not noise | stated-limitation | S3 | fixture: a long note produces a proportionally long single events/worklog line, no truncation or wrapping | planned |  |
 | INV-335 | §8.2 | Events stay in-dump (forks doc D7, resolved-by-evidence): a separate append file does not merge cleanly and union-merge corrupts seq | stated-limitation | S3 | doc-review: decision log/forks doc D7 entry cites the append-file merge-failure and seq-corruption evidence | planned |  |
 | INV-336 | §8.2 | D15: the dump-format boundary for events archiving is reserved now — `meta.events_archived_through`, seeded as 0 | deferral-boundary | S1a | fixture: fresh `init` dump has meta.events_archived_through=0; a dump with the row physically removed is still treated as 0 | verified-by-command | local: go test ./internal/schema -run SeededMeta @ 6cf73a1 |
@@ -426,7 +426,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-338 | §8.2; §17 | Not reserved yet, lands only with D7: boundary-aware verify semantics, since R12's terminal-trail check reads history that archiving removes from the live dump | deferral-boundary | deferred | no v0 fixture exists; flag as an open gap to cover when D7/events-archive activates | planned |  |
 | INV-339 | §8.2; §17 | Not reserved yet, lands only with D7: the archive segments' own versioned grammar, reader, and naming, since they carry no DDL block and §8.5's loader cannot read them | deferral-boundary | deferred | no v0 fixture exists; confirm §8.5 loader has no code path for archive-segment files | planned |  |
 | INV-340 | §8.2; §17 | Not reserved yet, lands only with D7: live-DB reclamation — the no-delete trigger stands, and reclamation will ride the §8.6 rebuild path (a fresh DB built without the archived rows) | deferral-boundary | deferred | no v0 fixture exists; confirm the no-delete trigger on `events` is present and unconditional | planned |  |
-| INV-341 | §8.2 | In v0, `events_archived_through` must equal 0, enforced by R9: no verb can write the key, so any other value is the raw-SQL tamper signature | verify-rule | S3 | red-fixture: raw-SQL set events_archived_through=5 outside any verb; R9 fails while R1 alone stays green | planned |  |
+| INV-341 | §8.2 | In v0, `events_archived_through` must equal 0, enforced by R9: no verb can write the key, so any other value is the raw-SQL tamper signature | verify-rule | S7 | red-fixture: raw-SQL set events_archived_through=5 outside any verb; R9 fails while R1 alone stays green | planned |  |
 | INV-342 | §8.2; §17 | Reserved D7-era load guard (inactive while boundary is 0): `load` seeds the events AUTOINCREMENT high-water mark to `max(boundary, MAX(live seq))`, covering a dump with a gap above the boundary and one whose events were all archived (empirically verified) | deferral-boundary | deferred | fixture: load a dump whose live events rows are entirely absent (simulating full archive) and confirm the AUTOINCREMENT seed does not reuse archived seq numbers | planned |  |
 | INV-343 | §8.2; §17 | Events are documented as ~72% of dump bytes at multi-year scale; activation triggers for `events archive` are events > 50k, dump > 10 MB, or a write verb > 200 ms | deferral-boundary | deferred | doc-review only: research-doc scale figures and trigger thresholds recorded, no v0 code fixture (monitoring-only claim) | planned |  |
 | INV-344 | §8.3 | Crash-safety sequence: DB commit, then dump+STATE render to temp + atomic rename, then sidecar hash update | process | S5a | fixture: kill the process between each of the 3 steps; observed post-crash state matches the documented ordering | planned |  |
@@ -503,7 +503,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-415 | §9 | `init` generates `AGENTS.md`, a short harness-agnostic pointer (verbs, the §11.2 rule, `prime`); its full content is specified in the implementation plan | deliverable | S8a | test: fresh init, assert AGENTS.md exists and references verbs/rule/prime | planned |  |
 | INV-416 | §9; §11 | `init` generates `.claude/` files per §11 | deliverable | S8a | test: fresh init, assert .claude/ directory populated per §11's contract | planned |  |
 | INV-417 | §9 | `init` generates `.gitignore` entries | deliverable | S8a | test: fresh init, assert .gitignore lists db.sqlite, dump.hash, skip-pending | planned |  |
-| INV-418 | §9; §8.2 | `init` seeds the `meta` system rows: `schema_version` and `events_archived_through` = `0` | deliverable | S3 | test: fresh init, query meta table, assert schema_version set and events_archived_through = 0 | planned |  |
+| INV-418 | §9; §8.2 | `init` seeds the `meta` system rows: `schema_version` and `events_archived_through` = `0` | deliverable | S8a | test: fresh init, query meta table, assert schema_version set and events_archived_through = 0 | planned |  |
 | INV-419 | §9 | `init` prints the per-machine activation command `git config core.hooksPath .selftracked/hooks` with a trust note (repo-tracked hooks execute on your machine; enable only on repos you trust) | process | S8b | test: fresh init on a repo with no existing hooksPath/incumbent hooks, capture stdout, assert the activation command and trust note both appear | planned |  |
 | INV-420 | §9 | No-takeover-print rule: if `core.hooksPath` is already set, or the incumbent hook location is non-empty, `init` suppresses the takeover-command print | verify-rule | S8b | test: init against a repo with a pre-existing pre-commit hook file, assert the takeover command is absent from init's output | planned |  |
 | INV-421 | §9 | When takeover is suppressed, `init` instead prints a chaining recipe covering both hooks: one line for the incumbent pre-commit, one line for the incumbent post-commit | process | S8b | test: init against a repo with an incumbent hook, assert printed output contains one recipe line per hook (pre-commit and post-commit) | planned |  |
@@ -586,7 +586,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-498 | §16 | CI gate: whitelist-parser fuzzing — justified because the whitelist parser is the security boundary (§8.5) | schema-gate | S4 | test: confirm a fuzz target exists for the whitelist parser and runs in CI (or a scheduled fuzz job) with corpus/crash reporting | planned |  |
 | INV-499 | §16 | CI gate: golangci-lint v2 clean, `go fix -diff` clean, govulncheck clean (§3.2) | schema-gate | S0 | test: CI runs golangci-lint v2, go fix -diff, and govulncheck, asserting clean/zero-diff/zero-vuln results | planned |  |
 | INV-500 | §16 | CI deliverable: a testscript e2e suite — each scenario a txtar script running the real binary in a fresh temp dir, git fixtures generated in-script (real objects for hook/divergence/R5 tests), golden `cmp` on dumps and JSON, exit codes asserted | deliverable | S3 | test: confirm testscript suite exists with txtar scenarios meeting these properties (real binary, in-script git fixtures, golden cmp, exit-code assertions) | planned |  |
-| INV-501 | §16 | CI gate: from schema version 2 on, the golden old-dump migration corpus (§8.6) | schema-gate | S3 | test: once schema v2 ships, confirm CI includes a golden corpus of historical-version dumps run through load→migrate→verify→byte-determinism | planned |  |
+| INV-501 | §16 | CI gate: from schema version 2 on, the golden old-dump migration corpus (§8.6) | schema-gate | S11 | test: once schema v2 ships, confirm CI includes a golden corpus of historical-version dumps run through load→migrate→verify→byte-determinism | planned |  |
 | INV-502 | §16 | Implementation-phase re-verification item: driver Serialize/Deserialize roundtrip (documented in docs/research/2026-07-18-sqlite-advanced-features.md) | verify-rule | S1c | test: empirically roundtrip Serialize/Deserialize on the pinned driver and confirm byte-identity/behavioral match to the research doc's finding before relying on it | verified-by-command | local: `make gates` @ e5b2006 (interim, D-EP8) |
 | INV-503 | §16 | Implementation-phase re-verification item: VACUUM-INTO/rename flow | verify-rule | S4 | test: empirically exercise VACUUM INTO + atomic rename on the target platforms and confirm behavior matches the research doc before relying on it | planned |  |
 | INV-504 | §16 | Implementation-phase re-verification item: extended vs primary SQLite result codes | verify-rule | S1c | test: empirically confirm the driver exposes distinguishable extended result codes needed for the exit-code mapper (§6.1) before relying on it | verified-by-command | local: `make gates` @ e5b2006 (interim, D-EP8) |

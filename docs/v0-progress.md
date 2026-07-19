@@ -19,9 +19,12 @@ dispatcher with a closed registry and structural `--json`, the §6.1 exit
 mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
 built under both decided names). All local, nothing pushed.
 
-**Next:** S3 — serializer + `dump` (§8.1), plus the §16 cross-OS
-byte-equality obligation. 36 rows. Open per D-EP13:
-`docs/stage-openings/s3.md` committed before any code.
+**Next:** S3 implementation — the canonical serializer and the `dump`
+verb, the catalog's first real verb. The stage is open
+(`docs/stage-openings/s3.md`): 22 rows after fourteen moves to the stages
+whose machinery can execute them (loader rows → S4, write-verb behaviour →
+S5a, story diffs → S6, R-rules → S7, `init` → S8a, the v2 golden corpus →
+S11). Three CI-bound rows will stay `planned` at close, the S0 precedent.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -41,7 +44,7 @@ section and the amendments log).
 | S1b — schema gates | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green (114 subtests, `-race`, fresh cache) · local run @ `ad8ef15`, no CI has run (D-EP8) | All 85 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1b.md`); two close critics ran; five mutation probes shown red. Adjudications recorded below |
 | S1c — driver behaviour | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e5b2006`, no CI has run (D-EP8) | All 9 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1c.md`); INV-010 → S7 at open; close critic re-ran all probes individually. Adjudications in the close entry below |
 | S2 — CLI dispatcher | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `739f8c9`, no CI has run (D-EP8) | All 20 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s2.md`); five moves at open; close critic ran every resolved command by name and probed the built binary by hand. Adjudications in the close entry |
-| S3 — serializer + `dump` | FULL | not started | — | — |
+| S3 — serializer + `dump` | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s3.md`). 22 rows after fourteen moves; INV-494/497/507 carry first-push CI halves |
 | S4 — `load` + parser fuzzing | FULL | not started | — | — |
 | S5a — task-lifecycle verbs | FULL | not started | — | — |
 | S5b — relation/artifact/dictionary verbs | FULL | not started | — | — |
