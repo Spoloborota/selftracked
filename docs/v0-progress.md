@@ -42,7 +42,7 @@ section and the amendments log).
 | S1a — schema as text | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `6cf73a1`, no CI has run | All 10 rows `verified-by-command`. INV-053 closed once the owner ratified the spec amendment that made its claim true (spec rev 3.10) |
 | S1b — schema gates | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green (114 subtests, `-race`, fresh cache) · local run @ `ad8ef15`, no CI has run (D-EP8) | All 85 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1b.md`); two close critics ran; five mutation probes shown red. Adjudications recorded below |
 | S1c — driver behaviour | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `e5b2006`, no CI has run (D-EP8) | All 9 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s1c.md`); INV-010 → S7 at open; close critic re-ran all probes individually. Adjudications in the close entry below |
-| S2 — CLI dispatcher | FULL | not started | — | — |
+| S2 — CLI dispatcher | FULL | in progress | — | Opened 2026-07-19 per D-EP13 (`docs/stage-openings/s2.md`). 20 rows after five moves (INV-048/049→S6, INV-050→S5b, INV-180/181→S5a) |
 | S3 — serializer + `dump` | FULL | not started | — | — |
 | S4 — `load` + parser fuzzing | FULL | not started | — | — |
 | S5a — task-lifecycle verbs | FULL | not started | — | — |

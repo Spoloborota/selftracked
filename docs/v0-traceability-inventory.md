@@ -45,12 +45,12 @@ accounting check counts them so the proportion stays visible.
 | S1a | 10 |
 | S1b | 85 |
 | S1c | 9 |
-| S2 | 25 |
+| S2 | 20 |
 | S3 | 36 |
 | S4 | 15 |
-| S5a | 50 |
-| S5b | 26 |
-| S6 | 69 |
+| S5a | 52 |
+| S5b | 27 |
+| S6 | 71 |
 | S7 | 34 |
 | S8a | 34 |
 | S8b | 34 |
@@ -133,9 +133,9 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-045 | §4 | Reference grammar: #NN (CLI also accepts bare NN) → task; epic:SLUG → epic; epic:SLUG/SID → story; CLASS:RELPATH → artifact (default scope); CLASS@SCOPE:RELPATH → artifact (named scope) | format | S2 | testscript: reference-grammar parser fixture | planned |  |
 | INV-046 | §4 | JSON output always renders tasks as "#14"; the CLI accepts the bare integer because an unquoted # starts a shell comment; spec examples use the bare form in commands and #NN in prose | format | S2 | test: JSON output task-ref rendering + bare-integer CLI acceptance | planned |  |
 | INV-047 | §4 | Task ids are AUTOINCREMENT so SQLite never reuses a deleted max id — never-reuse of task ids is a correctness requirement | schema-gate | S2 | test: delete max-id task, insert new, assert id not reused | planned |  |
-| INV-048 | §4 | Epic slugs are kebab-case and permanent (never renamed) | catalog-convention | S2 | test: slug format validation + no-rename enforcement | planned |  |
-| INV-049 | §4 | Story ids are S<number> per epic; V-<number> is reserved for post-close validation worklog rows | catalog-convention | S2 | test: story-id format + reserved V-<number> namespace | planned |  |
-| INV-050 | §4 | Scopes exist for multi-root repositories (e.g. a monorepo whose subprojects each keep a research/); single-root classes use the default scope '' | catalog-convention | S2 | test: scope resolution default '' vs named scope | planned |  |
+| INV-048 | §4 | Epic slugs are kebab-case and permanent (never renamed) | catalog-convention | S6 | test: slug format validation + no-rename enforcement | planned |  |
+| INV-049 | §4 | Story ids are S<number> per epic; V-<number> is reserved for post-close validation worklog rows | catalog-convention | S6 | test: story-id format + reserved V-<number> namespace | planned |  |
+| INV-050 | §4 | Scopes exist for multi-root repositories (e.g. a monorepo whose subprojects each keep a research/); single-root classes use the default scope '' | catalog-convention | S5b | test: scope resolution default '' vs named scope | planned |  |
 | INV-051 | §13 | The machine token is WONT-DO, written without an apostrophe — the canonical spelling for this status token | format | S1a | grep: no WON'T-DO / apostrophe variant in schema/code | verified-by-command | local: grep ddl.sql — 'WONT-DO' written without an apostrophe |
 | INV-052 | §5 preamble | All tables in schema v1 are declared STRICT | schema-gate | S1b | fixture: insert-wrong-typed-value-rejected-per-table | verified-by-command | local: `make gates` @ ad8ef15 (interim, D-EP8) |
 | INV-053 | §5 preamble | No column ever STORES NULL except tasks.dup_of, tasks.epic and worklog.corrects; rowid-alias columns accept NULL on insert but never carry one (§5 preamble, spec rev 3.10) | format | S1a | go test ./internal/schema -run NoColumnStoresNull (reads stored rows, not column metadata — no exception list) | verified-by-command | local: go test ./internal/schema -run NoColumnStoresNull @ head |
@@ -265,8 +265,8 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-177 | §6.1 | Every verb supports a `--json` output flag. | catalog-convention | S2 | fixture: cli-json-flag-every-verb | planned |  |
 | INV-178 | §6.1 | JSON error output shape is `{"error":{"code","message"}}`. | format | S2 | fixture: cli-json-error-shape | planned |  |
 | INV-179 | §6.1 | Exit codes are 0=success, 1=refusal (incl. all SQLITE_CONSTRAINT-family failures and integrity refusals e.g. linking a nonexistent file), 2=environment/infrastructure error (busy, corrupt, usage); constraint-vs-infra split relies on driver result codes else falls back to error type/text via one mapper. | catalog-convention | S2 | fixture: cli-exit-code-contract | planned |  |
-| INV-180 | §6.1 | Write verbs run: version gate (§8.6) -> dump-divergence sidecar check (§8.4) -> EXCLUSIVE connection -> transaction(mutate+events) -> commit -> regenerate dump.sql+STATE.md -> update .selftracked/dump.hash -> PRAGMA optimize. | process | S2 | fixture: cli-write-verb-pipeline-order | planned |  |
-| INV-181 | §6.1 | Read verbs run the same §8.6 version gate first (may escalate to a migration rewriting DB+dump), then the verb body runs under `query_only` with no side effects. | process | S2 | fixture: cli-read-verb-version-gate | planned |  |
+| INV-180 | §6.1 | Write verbs run: version gate (§8.6) -> dump-divergence sidecar check (§8.4) -> EXCLUSIVE connection -> transaction(mutate+events) -> commit -> regenerate dump.sql+STATE.md -> update .selftracked/dump.hash -> PRAGMA optimize. | process | S5a | fixture: cli-write-verb-pipeline-order | planned |  |
+| INV-181 | §6.1 | Read verbs run the same §8.6 version gate first (may escalate to a migration rewriting DB+dump), then the verb body runs under `query_only` with no side effects. | process | S5a | fixture: cli-read-verb-version-gate | planned |  |
 | INV-182 | §6.2 | Two-level verbs dispatch by popping the subverb token before positionals. | catalog-convention | S2 | fixture: cli-subverb-token-pop-order | planned |  |
 | INV-183 | §6.2 | Every (verb, subverb) pair has a statically known positional count, checked in both directions by the §3.2 dispatcher. | catalog-convention | S2 | fixture: cli-subverb-arity-check | planned |  |
 | INV-184 | §6.2 | Elision rule: sibling subverbs take the same leading positionals as their first-listed sibling except where a subverb is explicitly called out (e.g. epic list takes none; story add takes SLUG only; criteria/paths/config/rel take positionals as printed; link's sub-forms each print their own full signature). | catalog-convention | S2 | fixture: cli-sibling-subverb-elision-rule | planned |  |
