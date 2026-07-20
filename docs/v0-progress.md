@@ -12,21 +12,24 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6, S7. The full v0
-verb catalog is live, and now the integrity engine behind it: `verify`
-runs Stage 0 (integrity/foreign-key checks) and the Stage-1 rule battery —
-R1 (dump byte-equality + a reload/re-dump round-trip through the real
-loader), R2/R3 (path roots, artifact resolution), R4 (worklog structure),
-R5 (`git cat-file`), the DB-only R6–R9/R12, and the advisory R10/R11/R13/R15
-— splitting findings red vs advisory, with a `--fast` pre-commit partition.
-The repository carries the full schema layer (`internal/schema`), the CLI
-skeleton and verb catalog (`internal/{ref,cli,verb,dump,load,rules}`), and
-now `internal/verify`. All local, nothing pushed.
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6, S7, S8a. The full
+v0 verb catalog and its integrity engine are live, and now the thing that
+stands a tracker up: `init` turns an empty repo into a working tracker in
+one command — the database (meta + the five seeded path roots, created so a
+fresh `verify` is green), the deterministic dump, STATE.md, and every
+generated document (PROMPT.md, AGENTS.md, the class READMEs, the ADR
+template, the `.claude/` rule + skill + SessionStart settings, `.gitignore`).
+The STATE.md renderer (`internal/state`) is a pure DB→bytes projection the
+S8c `state` verb and R14 will reuse. `init` is non-destructive: it refuses
+on a clone (pointing at `load`), `--force` refreshes without wiping data,
+and it never clobbers an adopter's own files. The repository now carries
+`internal/{schema,ref,cli,verb,dump,load,rules,verify,state,scaffold}`. All
+local, nothing pushed.
 
-**Next:** S8a — `init` full: the scaffold, seeded path roots, class
-READMEs, the ADR template, PROMPT.md, STATE.md, AGENTS.md, the `.claude/`
-files, `.gitignore`, and meta seeding — with a fresh `init` ⇒ `verify`
-green as the joint acceptance. Open per D-EP13.
+**Next:** S8b — hooks + the §8.4 divergence matrix full: the generated
+pre/post-commit scripts, the chaining-recipe detection for all three
+incumbent states, `gate skip-mark`, and the sidecar divergence matrix —
+tested against real git repos. Open per D-EP13.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
@@ -56,7 +59,7 @@ but it lets two legal verbs build a tracker no fresh clone can `load`.
 | S5b — relation/artifact/dictionary verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `b051a2a`, no CI has run (D-EP8) | All 31 rows `verified-by-command`. Two amendments applied under D-EP14 during the stage; close critic found four blockers (symlink containment escape, root-move-into-existing-dir corruption, --with-files zero coverage, untested epic-link path) — all fixed before the flip |
 | S6 — epic/story/worklog/criteria verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `551bb98`, no CI has run (D-EP8) | All 73 rows `verified-by-command`. Largest verb stage; close critic found a real INV-119 blocker (self-transition re-affirm) and invented scope (ready-requires-DoD) — both fixed, one amendment filed. Adjudications below |
 | S7 — `verify` | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `fed963f`, no CI has run (D-EP8) | All 36 rows `verified-by-command` (38 at open − 2: R14/STATE.md's INV-275/293 moved to S8c via amendment `r14-rides-its-renderer-at-s8c`, their renderer being S8c's). Opened per D-EP13 (`docs/stage-openings/s7.md`). Four close critics; one real code defect (R1 check 2 double-counting a DB-only violation), an over-strict-vs-spec R9, an unamended R10 deviation, and branch-level fixture gaps — all fixed before the flip. Critics also found a poison-pill in the closed `set-status` verb (out of scope; parked below). Adjudications in the close entry |
-| S8a — `init` scaffold + generated docs | FULL | not started | — | — |
+| S8a — `init` scaffold + generated docs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `e15759f`, no CI has run (D-EP8) | All 39 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s8a.md`). Three close critics found two real data-loss bugs — init clobbering a clone's tracked dump, and `--force` wiping the DB — plus a §6.1 write-order inversion, an over-broad adoption claim, and durable-doc rule-2 content dropped by paraphrase; all fixed before the flip. Adjudications in the close entry |
 | S8b — hooks + sidecar matrix | FULL | not started | — | — |
 | S8c — `state`, `prime`, SessionStart | FULL | not started | — | — |
 | S9 — `import` | FULL | not started | — | — |
@@ -254,6 +257,40 @@ flagged (the §8.4 core has exactly four branches; the version gate is
 still the S2 stub) and that the interim reopen-of-DUPLICATE refusal
 matches what the pending link-tables amendment promises.
 
+S8a stood a tracker up from an empty repo and drew three critics —
+content fidelity, code correctness, fixture adequacy. The two sharpest
+findings were data-loss bugs the critics could reproduce by reading. First:
+`init`'s existence guard checked only `db.sqlite`, which is gitignored — so
+a fresh clone (tracked `dump.sql`, no local DB) running `init`, a plausible
+mistake the generated docs never warned against, silently overwrote the
+tracked dump with a near-empty one and clobbered PROMPT.md. `init` now
+detects a clone and refuses, pointing at `load`, and `--force` does not
+override that guard. Second: `--force` did `os.Remove(dbPath)` and rebuilt
+from scratch, discarding every recorded task, epic, and story; it is now a
+refresh — the derived files are regenerated from the existing database
+(opened read-only), and nothing is dropped. A third code finding: `init`
+wrote the dump and its sidecar before STATE.md — the exact §6.1/§8.3 order
+inversion the S5a review had already found and fixed in the write pipeline,
+recreated here because `init` reused the old composite `WriteFiles`; it now
+interleaves the STATE.md render the way the pipeline does. The content
+critic caught durable-doc rule 2 shipped as a paraphrase that dropped three
+substantive clauses (the epoch-not-arithmetic honesty note, the
+unverifiable-forever rationale, the sidecar elaboration) and a
+self-contradiction in the `work/` README calling `report` ephemeral when it
+is durable — both restored, and the §11.2 deny-list entry it named
+(`Bash(sqlite3:*)`) added to the generated settings. The fixture critic
+found the coverage broad but shallow: several rows leaned on the golden's
+tautology (init writes what init writes), the path-seed count compared the
+seed slice to itself, and INV-484/475/545 had no test at all — all now
+carry real assertions, and the renderer's determinism is proven against a
+multi-epic, thirteen-event fixture that actually exercises ordering and the
+ten-event window. Refuted: the generated docs naming `prime`/`state`/the
+pre-commit hook (verbs and hooks that land at S8b/S8c — the shipped docs
+describe the full-v0 contract by design, and the opening record anticipates
+`init` growing across the layers). The dump.sql 0600 file mode a critic
+noted is pre-existing in `internal/dump`, not S8a's, and left for its
+owning stage.
+
 S7 gave `verify` its rules and drew four critics — spec fidelity, code
 correctness, semantics, and fixture adequacy. The open had already made
 one forced placement correction: R14 / R1's third check (STATE.md
@@ -338,6 +375,7 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 | Item | Found during | Note |
 |---|---|---|
 | Plan §2.1 describes an OpenSpec change as "proposal + delta" with a `tasks.md` pointer; the three change directories hold only `proposal.md` | first-commit review | The tool is adopted but not installed, so the convention has nothing to run against yet. Revisit when it is. |
+| `internal/dump`'s `WriteDumpFile` creates `dump.sql` at mode 0600 (from `os.CreateTemp`+rename), not the 0644 the other tracked files use | S8a close review (code critic) | More restrictive, not a leak, and pre-dates S8a; git tracks content not mode, so it is cosmetic. If it matters, `internal/dump` is the owner. |
 
 ## Open questions for the owner
 
