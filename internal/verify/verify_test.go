@@ -308,6 +308,16 @@ func TestDBRulesRoutedToRed(t *testing.T) {
 			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
 			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
 		}},
+		{"R7-duplicates-link-no-dup_of", "R7", func(h *harness) {
+			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('a','OPEN','d','d')`)
+			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('b','OPEN','d','d')`)
+			// A duplicates link with no matching dup_of: the mapping is not one-to-one.
+			h.exec(`INSERT INTO task_links (from_task, to_task, type) VALUES (1, 2, 'duplicates')`)
+		}},
+		{"R8-unresolved-event-entity", "R8", func(h *harness) {
+			// An events entity that parses but names a task that does not exist.
+			h.exec(`INSERT INTO events (at, entity, event) VALUES ('d', '#999', 'set-status')`)
+		}},
 		{"R9-boundary-tamper", "R9", func(h *harness) {
 			h.exec(`UPDATE meta SET value = '5' WHERE key = 'events_archived_through'`)
 		}},
