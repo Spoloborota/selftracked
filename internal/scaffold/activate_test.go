@@ -65,6 +65,32 @@ func TestActivationHooksPathSetSuppressesTakeover(t *testing.T) {
 	}
 }
 
+// TestActivationFromSubdirSeesIncumbent guards the subdirectory resolution:
+// a live incumbent hook lives at <top>/.git/hooks, but init may run from a
+// subdirectory. Resolving the hooks dir via git (not a hardcoded
+// <cwd>/.git/hooks) must still see the incumbent and print the chaining
+// recipe, not the takeover that would disable it.
+func TestActivationFromSubdirSeesIncumbent(t *testing.T) {
+	t.Parallel()
+	top := t.TempDir()
+	gitInit(t, top)
+	if err := os.WriteFile(filepath.Join(top, ".git", "hooks", "pre-commit"),
+		[]byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(top, "sub")
+	if err := os.MkdirAll(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	out := hookActivation(context.Background(), sub)
+	if strings.Contains(out, "git config core.hooksPath .selftracked/hooks") {
+		t.Errorf("from a subdir, a top-level incumbent hook must still suppress takeover:\n%s", out)
+	}
+	if !strings.Contains(out, "|| exit $?") {
+		t.Errorf("expected the chaining recipe from a subdir with an incumbent hook:\n%s", out)
+	}
+}
+
 // TestActivationIncumbentHookSuppressesTakeover is INV-420's second trigger:
 // a live incumbent pre-commit (no hooksPath) also forces the chaining recipe.
 // A .sample template must NOT count as incumbent.

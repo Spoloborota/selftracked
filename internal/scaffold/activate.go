@@ -21,12 +21,11 @@ const trustNote = "(repo-tracked hooks execute on your machine — enable only o
 // erroring init.
 func hookActivation(ctx context.Context, root string) string {
 	hooksPath := gitHooksPath(ctx, root)
-	incumbent := filepath.Join(root, ".git", "hooks")
-	if hooksPath != "" {
-		incumbent = hooksPath
-		if !filepath.IsAbs(incumbent) {
-			incumbent = filepath.Join(root, incumbent)
-		}
+	incumbent := hooksPath
+	if incumbent == "" {
+		incumbent = gitDefaultHooksDir(ctx, root)
+	} else if !filepath.IsAbs(incumbent) {
+		incumbent = filepath.Join(root, incumbent)
 	}
 	// A set hooksPath, or a live incumbent pre/post-commit, means takeover
 	// would clobber an existing gate — chain instead (INV-420).
@@ -34,6 +33,24 @@ func hookActivation(ctx context.Context, root string) string {
 		return chainingRecipe(incumbent)
 	}
 	return takeoverAdvice()
+}
+
+// gitDefaultHooksDir resolves the .git/hooks directory the way git does —
+// by asking git for the git-dir rather than assuming `<root>/.git/hooks`, so
+// an init run from a subdirectory (or against a worktree, or a `.git` file)
+// still finds the real incumbent hooks (mirrors verify R11's resolution). A
+// git failure falls back to the conventional path.
+func gitDefaultHooksDir(ctx context.Context, root string) string {
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--git-dir") //nolint:gosec // fixed argv
+	out, err := cmd.Output()
+	if err != nil {
+		return filepath.Join(root, ".git", "hooks")
+	}
+	gitDir := strings.TrimSpace(string(out))
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(root, gitDir)
+	}
+	return filepath.Join(gitDir, "hooks")
 }
 
 // takeoverAdvice is the clean-repo path (INV-419).

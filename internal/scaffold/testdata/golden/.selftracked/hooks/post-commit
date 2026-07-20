@@ -8,7 +8,12 @@ warn() { printf '\033[33mselftracked: %s\033[0m\n' "$1" >&2; }
 
 # --- Untraced production commit (INV-434) -----------------------------
 # A commit touching a production path (meta.production_globs) whose message
-# names neither a task (#NN) nor an epic slug is untraced work.
+# names neither a task (#NN) nor an epic slug is untraced work. This is a
+# warn-only POSIX best-effort (§9, INV-436): it can miss on merge commits
+# (diff-tree lists no files without -m), on paths containing spaces (word
+# splitting), and it matches #NN / slug as substrings, so it errs toward
+# silence rather than a false alarm. The authoritative gate is the
+# pre-commit; this only surfaces what slipped past it.
 msg=$(git log -1 --pretty=%B 2>/dev/null)
 files=$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null)
 globs=$(selftracked config ls 2>/dev/null | sed -n 's/^production_globs = //p')
@@ -38,12 +43,19 @@ fi
 # The committed dump.sql blob must hash to the sidecar. A mismatch right
 # after a commit means the commit carried a stale dump — the only in-repo
 # trace of `git commit -n`, which skips the whole hook chain and writes no
-# R15 marker.
-sha256() { sha256sum 2>/dev/null || shasum -a 256; }
-committed=$(git show HEAD:.selftracked/dump.sql 2>/dev/null | sha256 | cut -d' ' -f1)
-expected=$(cat .selftracked/dump.hash 2>/dev/null)
-if [ -n "$committed" ] && [ -n "$expected" ] && [ "$committed" != "$expected" ]; then
-  warn "committed dump.sql does not match the sidecar — a bypassed pre-commit (git commit -n) left a stale dump"
+# R15 marker. Only meaningful when the committed tree actually carries the
+# dump: absent it, `git show` yields nothing and hashing empty input would
+# look like a mismatch, so gate on the blob existing first.
+if git cat-file -e HEAD:.selftracked/dump.sql 2>/dev/null; then
+  if command -v sha256sum >/dev/null 2>&1; then
+    committed=$(git show HEAD:.selftracked/dump.sql | sha256sum | cut -d' ' -f1)
+  else
+    committed=$(git show HEAD:.selftracked/dump.sql | shasum -a 256 | cut -d' ' -f1)
+  fi
+  expected=$(cat .selftracked/dump.hash 2>/dev/null)
+  if [ -n "$expected" ] && [ "$committed" != "$expected" ]; then
+    warn "committed dump.sql does not match the sidecar — a bypassed pre-commit (git commit -n) left a stale dump"
+  fi
 fi
 
 exit 0

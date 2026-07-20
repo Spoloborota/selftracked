@@ -25,6 +25,7 @@ case "$1" in
   gate)
     if [ "$2" = skip-mark ]; then
       [ "${STUB_SKIP_FAIL:-0}" = 1 ] && exit 1
+      mkdir -p .selftracked && : > .selftracked/skip-pending
       exit 0
     fi
     exit 0 ;;
@@ -32,7 +33,12 @@ case "$1" in
   state) exit ${STUB_STATE_RC:-0} ;;
   stale) exit ${STUB_STALE_RC:-0} ;;
   config)
-    [ "$2" = ls ] && echo "production_globs = ${STUB_GLOBS:-internal/**}"
+    # Mirror the real config ls: three keys, ORDER BY key (§6.2).
+    if [ "$2" = ls ]; then
+      echo "idle_days = ${STUB_IDLE:-14}"
+      echo "prime_cap = ${STUB_CAP:-200}"
+      echo "production_globs = ${STUB_GLOBS:-internal/**}"
+    fi
     exit 0 ;;
   epic)
     if [ "$2" = list ] && [ -n "${STUB_EPICS:-}" ]; then
@@ -212,6 +218,18 @@ func TestGeneratedPostCommitWarnings(t *testing.T) {
 		}
 	})
 
+	t.Run("no false mismatch when dump.sql is absent from HEAD", func(t *testing.T) { // INV-435 false-positive guard
+		work := newRepo(t)
+		commitFile(t, work, "readme.md", "hi\n", "init readme") // HEAD has no dump.sql
+		// A leftover local (gitignored) sidecar must NOT be read as a mismatch.
+		must(t, os.MkdirAll(filepath.Join(work, instanceDir), 0o750))
+		must(t, os.WriteFile(filepath.Join(work, instanceDir, "dump.hash"), []byte(sha256Hex("whatever")+"\n"), 0o644))
+		_, stderr, _ := runScript(t, writeHookFile(t, work, "post-commit"), work, nil, withStub(t, true))
+		if strings.Contains(stderr, "does not match the sidecar") {
+			t.Errorf("no dump.sql in HEAD must not fire a mismatch warning; got: %s", stderr)
+		}
+	})
+
 	t.Run("sidecar match is silent", func(t *testing.T) { // INV-435 negative
 		work := newRepo(t)
 		const dumpBytes = "-- committed dump A\n"
@@ -242,6 +260,27 @@ func TestChainingRecipeHazards(t *testing.T) {
 		out, _, _ := runScript(t, incumbent, work, map[string]string{"STUB_VERIFY_RC": "1"}, withStub(t, true))
 		if strings.Contains(out, "REACHED_INCUMBENT_TAIL") {
 			t.Errorf("propagation must stop the incumbent before its tail; got stdout: %s", out)
+		}
+	})
+
+	t.Run("SELFTRACKED_SKIP bypasses only our gate; the incumbent's runs (INV-425)", func(t *testing.T) {
+		work := newRepo(t)
+		installGeneratedHook(t, work, "pre-commit")
+		// The incumbent chains ours, then runs its OWN gate afterwards.
+		incumbent := filepath.Join(work, "incumbent-pre-commit")
+		must(t, os.WriteFile(incumbent, []byte(
+			"#!/bin/sh\n.selftracked/hooks/pre-commit || exit $?\necho INCUMBENT_GATE_RAN\n"), 0o755))
+		out, _, code := runScript(t, incumbent, work, map[string]string{"SELFTRACKED_SKIP": "1"}, withStub(t, true))
+		if code != 0 {
+			t.Fatalf("SELFTRACKED_SKIP must let the chained commit proceed (exit 0), got %d", code)
+		}
+		// Our gate is bypassed but still records the skip marker...
+		if _, err := os.Stat(filepath.Join(work, instanceDir, "skip-pending")); err != nil {
+			t.Errorf("INV-425: SELFTRACKED_SKIP must still record the skip marker: %v", err)
+		}
+		// ...and the incumbent's own gate is untouched — it still runs.
+		if !strings.Contains(out, "INCUMBENT_GATE_RAN") {
+			t.Errorf("INV-425: the incumbent's own gate must still run; got: %s", out)
 		}
 	})
 

@@ -156,6 +156,13 @@ func writeHooks(root string) error {
 		if err := os.WriteFile(target, content, execMode); err != nil {
 			return fmt.Errorf("init: write hook %s: %w", h.name, err)
 		}
+		// os.WriteFile only applies the mode when creating the file; a
+		// --force refresh over an existing hook that lost its +x (a prior
+		// checkout, an umask, core.fileMode=false) would otherwise stay
+		// non-executable and git would silently skip it. Chmod unconditionally.
+		if err := os.Chmod(target, execMode); err != nil {
+			return fmt.Errorf("init: chmod hook %s: %w", h.name, err)
+		}
 	}
 	return nil
 }

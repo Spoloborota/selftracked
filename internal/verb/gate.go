@@ -122,8 +122,13 @@ func ConvertSkipMarker(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	if err := regenerateDerived(ctx, db); err != nil {
+	// Clear the marker immediately after the commit — before the derived-file
+	// tail — so a failure in regenerateDerived cannot leave a converted event
+	// AND a still-pending marker for the next write to re-convert. This
+	// matches the write-verb pipeline's ordering (Write clears right after
+	// mutateInTx too), so both conversion sites share one safety envelope.
+	if err := clearSkipMarker(); err != nil {
 		return err
 	}
-	return clearSkipMarker()
+	return regenerateDerived(ctx, db)
 }

@@ -2,11 +2,14 @@ package verb
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
@@ -188,5 +191,23 @@ func assertConverted(t *testing.T, dir string) {
 	}
 	if _, err := os.Stat(markerPath(dir)); !os.IsNotExist(err) {
 		t.Fatalf("marker not cleared after conversion (stat err: %v)", err)
+	}
+	// The conversion re-dumped: the event must be in the tracked dump, and
+	// the sidecar must hash the very dump on disk — no drift between DB,
+	// dump, and sidecar after a gate-skip conversion (INV-351).
+	dumpBytes, err := os.ReadFile(filepath.Join(dir, instanceDir, dumpFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(dumpBytes), "gate-skip") {
+		t.Fatal("regenerated dump.sql does not carry the gate-skip event")
+	}
+	sidecar, err := os.ReadFile(filepath.Join(dir, instanceDir, hashFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(dumpBytes)
+	if got, want := strings.TrimSpace(string(sidecar)), hex.EncodeToString(sum[:]); got != want {
+		t.Fatalf("sidecar %q does not hash the post-conversion dump %q", got, want)
 	}
 }

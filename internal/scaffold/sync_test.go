@@ -98,6 +98,40 @@ func TestFileSyncExclusionDocumented(t *testing.T) {
 	}
 }
 
+// TestGeneratedHooksAreExecutable guards the executable bit the golden test
+// (bytes only) cannot see: git silently ignores a non-executable hook, so a
+// mode regression would ship an inert gate. A --force refresh must also
+// RESTORE +x on a hook that lost it on disk (os.WriteFile alone would not).
+func TestGeneratedHooksAreExecutable(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	ctx := context.Background()
+	if err := writeScaffold(ctx, root, false); err != nil {
+		t.Fatal(err)
+	}
+	assertExecutable := func(name string) {
+		fi, err := os.Stat(filepath.Join(root, hooksDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fi.Mode().Perm()&0o111 == 0 {
+			t.Errorf("hook %s is not executable (mode %v); git would skip it", name, fi.Mode().Perm())
+		}
+	}
+	assertExecutable("pre-commit")
+	assertExecutable("post-commit")
+
+	// Strip +x, then refresh: init --force must put it back.
+	hook := filepath.Join(root, hooksDir, "pre-commit")
+	if err := os.Chmod(hook, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeScaffold(ctx, root, true); err != nil {
+		t.Fatal(err)
+	}
+	assertExecutable("pre-commit")
+}
+
 func appendLine(t *testing.T, path, line string) {
 	t.Helper()
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
