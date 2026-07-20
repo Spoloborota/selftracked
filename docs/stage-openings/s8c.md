@@ -188,3 +188,111 @@ three that had drifted — this open pins them up front):
 The `make gates` chain (build/vet/test-race/lint/govulncheck/check-pins/
 check-inventory) is the close gate; interim evidence per D-EP8 (no CI, no
 push).
+
+## Correction at close
+
+The close review (five fresh critics — spec fidelity, code correctness, data
+semantics, governance, security) found places where this record, written
+before the code, did not match what shipped. Recorded here rather than
+silently rewritten (D-EP13's close obligation):
+
+- **Fixture-address drift.** The "Resolved verification commands" section
+  promised `internal/verb/pipeline_test.go` would be extended to assert the
+  write-verb STATE.md refresh. It was not: the wiring assertion shipped in the
+  new `internal/verb/state_verb_test.go` (`TestWriteVerbRefreshesState`) and in
+  `internal/cli/testdata/state.txtar`. The obligation IS covered — only the
+  promised address drifted (the same class the S8b close named).
+- **The `.golangci.yml` change was not named in the opening record.** S8c
+  configured `tagliatelle` to snake_case (the spec mandates snake_case JSON
+  contracts, §11.1) — a repo-wide lint-gate change. It is sound on the merits
+  (it enforces conformance *to* the spec, not a deviation from it, and no
+  pre-existing camelCase multi-word tag is silently broken), but the opening
+  record's scope re-read did not mention touching the lint gate. Named here.
+- **INV-469's test was weaker than its promised verification.** The delivered
+  `TestPrimeTotalsAndNoProseScan` checked the totals field-count and the
+  no-duplicate-parked rule, not the promised "scan all prime output fields"
+  for prose. The close added the reflective walk (`stringJSONFields` over the
+  whole `primeOutput` type graph), so the "only goal/title are prose" property
+  is now mechanically checked, not manually asserted.
+
+## Accepted critic fixes and refutations
+
+Applied at close (commit c0d75c4, `make gates` exit 0):
+
+- The INV-469 reflective type-graph scan (above).
+- `atomicWrite` chmod moved after the rename (a security-lens TOCTOU: the temp
+  file is never world-readable under its predictable name; STATE.md only ever
+  transitions 0600→0644 in place).
+- A fourth SessionStart fixture branch: a present-but-divergent DB makes the
+  healthy `prime` branch report `dump_divergence` via the flag and succeed, so
+  the chain short-circuits before `load`/error (the INV-455↔chain interaction
+  the three-branch fixture had not exercised).
+- A `fillStale` degradation test for the not-a-git-repo case (not only unborn
+  HEAD).
+- A `divergenceReport` comment correction (sidecar healing is every write
+  verb's job, not `load`'s).
+
+Refuted, and why (refute-by-default):
+
+- **Cross-statement snapshot race in `prime`/`state`.** Two critics flagged
+  (one reproduced empirically) that a `COUNT` and its paired `SELECT ... LIMIT`
+  run as separate autocommit reads, so a concurrent writer committing between
+  them can make a `totals.X` and its capped list disagree. Refuted as an S8c
+  defect on the single-writer axiom (§1) — the same basis on which S8b refuted
+  the structurally identical concurrent-writer duplicate-event finding. The
+  system does not defend concurrent access by design; the inconsistency is a
+  momentary off-by-a-few in an advisory count that self-heals next `prime`.
+  Escalated to the owner below with the known remedy.
+- **`sprint_goals[]` is not epic-status-scoped; `epics_active[]` is.** A
+  reachable state (verified: `epicTransition`/`pause` has no IN-PROGRESS-story
+  blocker, unlike `dissolve`) lets an IN-PROGRESS story sit under a PAUSED or
+  BACKLOG epic, which `prime` then surfaces in `sprint_goals[]` while its epic
+  is absent from `epics_active[]`. Refuted as an S8c defect: §11.1 reads
+  "`sprint_goals[]` (every IN-PROGRESS story)" with no status qualifier, and
+  scoping it would deviate from the spec. Surfacing a dangling in-progress
+  story is aligned with "nothing hides" (§2), not against it. The upstream
+  question — should `pause` block an IN-PROGRESS story? — is parked below.
+- **PLANNED/DISSOLVED stories absent from `epics_active[].stories`.** §11.1
+  names exactly four buckets (done, in_progress, ready[], blocked[]); PLANNED
+  and DISSOLVED are deliberately outside them (INV-458). Spec-conformant.
+- **R1 check 3 cadence.** Skipped by `--fast` (the pre-commit path), so a
+  bypass-introduced STATE.md drift is caught only by full `verify`. This is
+  §7's serialization-bound partition by design — the normal commit path
+  regenerates STATE.md right after, so it is fresh by construction; the check
+  runs exactly where §7 places it.
+- **`dumpNeedsNewerBinary` fails closed to false on a garbage schema_version.**
+  A corrupt (non-numeric/overflowing) version is not "requires a newer binary"
+  — it is a broken dump the loader/R1 catch. Fail-closed-to-false keeps `prime`
+  emittable, consistent with the SessionStart-must-emit principle.
+- **Orphaned `*.tmp-*` on unclean shutdown; write-verb error when STATE.md
+  regeneration fails after the DB commit.** Both are pre-existing shapes shared
+  with `dump`/`load` (§8.3 crash-safety: the DB is the local truth, derived
+  files heal on the next write); STATE.md joining the dump as a derived file is
+  consistent, not a new defect.
+
+## Escalated to the owner (post-review)
+
+- **§11.1 wording overstates `load` (spec-fidelity).** §11.1 and this record
+  say the fallback `load` "fast-forwards a missing/behind DB and refuses a
+  divergent one." The actual `load` (`internal/load/verb.go`) refuses ANY
+  existing DB without `--force` — it does not fast-forward a behind DB. The
+  SessionStart chain is nonetheless correct: `prime` fails only when the DB is
+  missing, so `load` only ever sees the fresh-clone (no-DB) case and rebuilds;
+  a present-but-behind DB is handled by `prime` itself via `dump_divergence`
+  (INV-455), never by `load`. So the code and the three reachable branches are
+  right, but the spec's characterization of `load` is imprecise. A wording
+  question for the owner, like the S8b rc-triage note — the script/behavior is
+  correct, the prose describing `load` is not.
+- **The snapshot race (above), if snapshot consistency is wanted.** A read
+  transaction wrapping `prime`'s (and `state`'s) queries would give a
+  point-in-time view across all statements. Not applied under the single-writer
+  axiom; recorded so the owner can choose to harden it.
+
+## Parked (owner / a later stage)
+
+- **`pause` can orphan an IN-PROGRESS story.** `epicTransition` (`pause`,
+  `activate`) runs a bare status UPDATE with no blocker check, unlike
+  `dissolve`. A paused epic can retain an IN-PROGRESS story, which `prime`
+  surfaces as a sprint goal for an epic absent from `epics_active[]`. Whether
+  `pause` should refuse (like `dissolve`) or the orphan is intended is an S6 /
+  owner question, not `prime`'s to decide.
