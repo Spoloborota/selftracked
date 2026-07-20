@@ -51,10 +51,10 @@ accounting check counts them so the proportion stays visible.
 | S5a | 40 |
 | S5b | 31 |
 | S6 | 73 |
-| S7 | 38 |
+| S7 | 36 |
 | S8a | 39 |
 | S8b | 35 |
-| S8c | 27 |
+| S8c | 29 |
 | S9 | 30 |
 | S10 | 1 |
 | S11 | 25 |
@@ -360,7 +360,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-272 | §6.2 | `verify` catalog entry is a stub cross-reference to §7 for its full contract; signature is `verify [--quiet] [--fast]` | catalog-convention | S7 | fx-verify-signature-stub-crossref-sec7 | planned |  |
 | INV-273 | §6.2 | `prime` catalog entry is a stub cross-reference to §11.1 for its full contract; signature is `prime` (no args) | catalog-convention | S8c | fx-prime-signature-stub-crossref-sec11-1 | planned |  |
 | INV-274 | §6.2 | `state` regenerates STATE.md via deterministic rendering: fixed sections, fixed ordering, last 10 events | deliverable | S8c | fx-state-deterministic-render-fixed-sections | planned |  |
-| INV-275 | §6.2; cf. §7 R14 | R14 checks that STATE.md byte-matches its DB-derived render | verify-rule | S7 | fx-state-r14-matches-db | planned |  |
+| INV-275 | §6.2; cf. §7 R14 | R14 checks that STATE.md byte-matches its DB-derived render | verify-rule | S8c | fx-state-r14-matches-db | planned | moved S7→S8c: the check needs the deterministic renderer (INV-274), built here — amendment r14-rides-its-renderer-at-s8c |
 | INV-276 | §6.2 | `gate skip-mark` writes the gitignored `.selftracked/skip-pending` marker file and performs no DB write mid-commit | schema-gate | S8b | fx-gate-skip-mark-writes-marker-no-db-write | planned |  |
 | INV-277 | §6.2 | The next write verb, or `load` (which runs after a divergence), converts the pending skip marker into a `gate-skip` events row | verb-contract | S8b | fx-gate-skip-marker-converted-to-events-row | planned |  |
 | INV-278 | §6.2; cf. §7 R15 | `verify` (including `--fast`, via R15) reports a pending skip marker while it remains unconverted | verify-rule | S7 | fx-gate-skip-r15-reports-pending-marker | planned |  |
@@ -378,7 +378,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-290 | §7; cf. §9 | R1 is skipped from --fast deliberately: the pre-commit hook regenerates dump + STATE.md immediately after (§9) so the pair is fresh by construction, and the whole hook still costs exactly one serialization pass (the hook's dominant cost at multi-year event volume — long-horizon research doc), while detection rules including R12's forgery signature still run at the commit boundary | process | S8b | fx-fast-one-serialization-pass | planned |  |
 | INV-291 | §7; R1 | R1 check 1: dump regenerated from the live DB byte-equals the tracked dump.sql | verify-rule | S7 | fx-r1-regen-byte-equal-tracked | planned |  |
 | INV-292 | §7; R1 | R1 check 2: the tracked dump, loaded in-memory via driver Serialize/Deserialize, re-dumps byte-equally | verify-rule | S7 | fx-r1-reload-redump-byte-equal | planned |  |
-| INV-293 | §7; R1 (R14 folded here) | R1 check 3: STATE.md byte-equals its render — this folds the former standalone R14 (STATE.md rule) into R1 | verify-rule | S7 | fx-r1-state-md-byte-equal-render | planned |  |
+| INV-293 | §7; R1 (R14 folded here) | R1 check 3: STATE.md byte-equals its render — this folds the former standalone R14 (STATE.md rule) into R1 | verify-rule | S8c | fx-r1-state-md-byte-equal-render | planned | moved S7→S8c with INV-275: R1's STATE.md check needs the renderer (INV-274) — amendment r14-rides-its-renderer-at-s8c |
 | INV-294 | §7; R2 | R2: every path root referenced in the DB must exist on disk | verify-rule | S7 | fx-r2-missing-path-root | planned |  |
 | INV-295 | §7; R3 | R3: every non-archived artifact of a non-ephemeral class must resolve | verify-rule | S7 | fx-r3-unresolved-artifact | planned |  |
 | INV-296 | §7; R4; cf. §5.7/§6.2 | R4 conjunct 1: worklog.story must be in stories(epic) or match V-[0-9]+, and the V- form is legal only on CLOSED epics | verify-rule | S6 | fx-r4-worklog-story-scope | verified-by-command | local: `make gates` @ 551bb98 (interim, D-EP8) |
