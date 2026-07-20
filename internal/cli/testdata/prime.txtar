@@ -1,0 +1,37 @@
+# S8c prime: the §11.1 JSON contract through the real binary. A fresh init
+# emits every list empty and both §8 booleans false; a created task lands in
+# the triage queue; a moved tracked dump flips dump_divergence read-only.
+
+exec git init
+expectexit 0 selftracked init
+
+# A fresh tracker: the stable contract shape, all lists empty, no divergence.
+expectexit 0 selftracked prime --json
+stdout '"epics_active":\[\]'
+stdout '"ready":\[\]'
+stdout '"triage":\[\]'
+stdout '"in_review":\[\]'
+stdout '"sprint_goals":\[\]'
+stdout '"totals":\{'
+stdout '"dump_divergence":false'
+stdout '"dump_requires_newer_binary":false'
+# migrated is omitempty and absent when nothing migrated (S8c never migrates).
+! stdout 'migrated'
+
+# A created task appears in the triage queue with its ref, no title prose.
+expectexit 0 selftracked create --title 'triage this'
+expectexit 0 selftracked prime --json
+stdout '"triage":\["#1"\]'
+! stdout 'triage this'
+
+# prime without --json is a human digest, not the contract.
+expectexit 0 selftracked prime
+stdout 'triage: 1'
+
+# A moved tracked dump (a pull) flips dump_divergence — read-only: prime must
+# not rewrite the dump it reports on.
+cp .selftracked/dump.sql dump.before
+exec sh -c 'printf -- "-- pulled\n" | cat - .selftracked/dump.sql > dump.moved && cp dump.moved .selftracked/dump.sql'
+expectexit 0 selftracked prime --json
+stdout '"dump_divergence":true'
+cmp .selftracked/dump.sql dump.moved

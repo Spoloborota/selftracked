@@ -17,29 +17,34 @@ import (
 	"github.com/Spoloborota/selftracked/internal/load"
 	"github.com/Spoloborota/selftracked/internal/rules"
 	"github.com/Spoloborota/selftracked/internal/schema"
+	"github.com/Spoloborota/selftracked/internal/state"
 )
 
 // errTamperedConfig marks a config value no verb could have written — a
 // raw-SQL tamper surfaced while a rule tried to read it.
 var errTamperedConfig = errors.New("config value is not verb-writable")
 
-// r1 is the serialization rule (§7), checks 1 and 2. Check 3 (STATE.md
-// byte-equals its render, the folded R14) rides S8c with its renderer
-// (amendment r14-rides-its-renderer-at-s8c), so it is absent here by
-// design, not omission.
+// r1 is the serialization rule (§7), checks 1–3. Check 3 (STATE.md
+// byte-equals its render, the folded R14) lands here at S8c with the
+// renderer (amendment r14-rides-its-renderer-at-s8c).
 //
 //  1. The dump regenerated from the live DB byte-equals tracked dump.sql
 //     — a mismatch is a dirty dump (INV-350).
 //  2. The tracked dump, loaded into a fresh database and re-serialized,
 //     byte-equals itself — proving the tracked bytes round-trip through
 //     the real §8.5 loader, not a second parser.
+//  3. STATE.md byte-equals its render from the live DB — the former
+//     standalone R14, folded into R1 (INV-275/293). A committed STATE.md
+//     that drifts from the DB (a hand-edit, a `commit -n` bypass) is caught
+//     here; `load` faithfully rebuilds the DB and does NOT paper over the
+//     drift, so this check remains the surface that surfaces it.
 //
 // dbOnlyClean says whether the live DB passed the DB-only rules (R6–R9,
 // R12). When it did NOT, check 2 is skipped: load.Build re-runs those same
 // rules and would refuse, surfacing the ALREADY-reported violation a second
 // time mislabelled as an R1 "does not rebuild" failure (found by the S7
-// close review). Check 1 runs regardless — it is orthogonal to the data's
-// rule-cleanliness.
+// close review). Checks 1 and 3 run regardless — each is orthogonal to the
+// data's rule-cleanliness.
 func r1(ctx context.Context, db *sql.DB, dir string, dbOnlyClean bool) ([]rules.Violation, error) {
 	var out []rules.Violation
 	regen, err := dump.Serialize(ctx, db)
@@ -60,6 +65,13 @@ func r1(ctx context.Context, db *sql.DB, dir string, dbOnlyClean bool) ([]rules.
 			Message: "dump.sql does not match the database (dirty dump); run selftracked dump",
 		})
 	}
+	stateV, err := r1StateCheck(ctx, db, dir)
+	if err != nil {
+		return nil, err
+	}
+	if stateV != nil {
+		out = append(out, *stateV)
+	}
 	if !dbOnlyClean {
 		return out, nil // check 2 would only re-surface the DB-only violation
 	}
@@ -71,6 +83,31 @@ func r1(ctx context.Context, db *sql.DB, dir string, dbOnlyClean bool) ([]rules.
 		out = append(out, *v)
 	}
 	return out, nil
+}
+
+// r1StateCheck is R1 check 3 (the folded R14): STATE.md at the repo root
+// byte-equals its render from the live DB. An unreadable STATE.md is a
+// violation (the tracked projection is gone), not an infrastructure failure.
+func r1StateCheck(ctx context.Context, db *sql.DB, dir string) (*rules.Violation, error) {
+	rendered, err := state.Render(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("R1 check 3: render STATE.md: %w", err)
+	}
+	tracked, err := os.ReadFile(filepath.Join(filepath.Dir(dir), stateFile))
+	if err != nil {
+		// An unreadable STATE.md is a rule VIOLATION (the projection is gone),
+		// not an infrastructure failure — the missing file is report data.
+		//nolint:nilerr // the missing STATE.md is data in the report, not a run failure
+		return &rules.Violation{Rule: "R1", Message: "STATE.md is unreadable: " + err.Error()}, nil
+	}
+	if !bytes.Equal(rendered, tracked) {
+		return &rules.Violation{
+			Rule:    "R1",
+			Message: "STATE.md does not match the database (stale projection); run selftracked state",
+		}, nil
+	}
+	//nolint:nilnil // (no violation, no error) is the clean result
+	return nil, nil
 }
 
 // reloadRedump runs R1 check 2. It returns a *Violation for a genuine

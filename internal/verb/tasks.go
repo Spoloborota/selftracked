@@ -52,7 +52,7 @@ func Verbs() []cli.Verb {
 			setStatusVerb(), reopenVerb(), parkVerb(), unparkVerb(), editVerb(),
 		},
 		RelationVerbs(), ArtifactVerbs(), DictVerbs(),
-		{StaleVerb(), GateVerb()},
+		{StaleVerb(), GateVerb(), StateVerb(), PrimeVerb()},
 		EpicVerbs(), StoryVerbs(), CriteriaVerbs(),
 	}
 	var n int

@@ -15,6 +15,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/rules"
 	"github.com/Spoloborota/selftracked/internal/schema"
+	"github.com/Spoloborota/selftracked/internal/state"
 	"github.com/Spoloborota/selftracked/internal/verify"
 )
 
@@ -85,7 +86,9 @@ func (h *harness) execNoFK(query string) {
 	}
 }
 
-// regen rewrites dump.sql from the live DB, so R1 stays green after a seed.
+// regen rewrites dump.sql AND STATE.md from the live DB, so R1 (checks 1 and
+// 3) stays green after a seed — a real tracker carries both, and R1 check 3
+// (the folded R14, S8c) now asserts STATE.md byte-equals its render.
 func (h *harness) regen() {
 	h.t.Helper()
 	h.withDB(func(db *sql.DB) {
@@ -94,6 +97,13 @@ func (h *harness) regen() {
 			h.t.Fatal(err)
 		}
 		if err := dump.WriteFiles(h.dir, text); err != nil {
+			h.t.Fatal(err)
+		}
+		stateMD, err := state.Render(context.Background(), db)
+		if err != nil {
+			h.t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(h.root, "STATE.md"), stateMD, 0o644); err != nil {
 			h.t.Fatal(err)
 		}
 	})
@@ -190,6 +200,49 @@ func TestR1TamperedDumpDoesNotReload(t *testing.T) {
 	}
 	rep := h.verify(false)
 	mustRed(t, rep, "R1") // both check 1 (mismatch) and check 2 (won't parse) fire
+}
+
+// --- R1 check 3 (the folded R14): STATE.md byte-equals its render (INV-275/293) ---
+
+// TestR1StateMdTamperRed: a STATE.md that no longer matches its render is a
+// red R1 finding — the former standalone R14, now check 3.
+func TestR1StateMdTamperRed(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	// A consistent tracker is green (the render matches the committed file).
+	if hasRule(h.verify(false).Red, "R1") {
+		t.Fatal("a consistent tracker must not fire R1")
+	}
+	// Hand-edit STATE.md so it drifts from the DB-derived render.
+	if err := os.WriteFile(filepath.Join(h.root, "STATE.md"), []byte("# tampered\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustRed(t, h.verify(false), "R1")
+}
+
+// TestR1StateMdMissingRed: an absent STATE.md is red — the tracked projection
+// is gone, which R1 check 3 treats as a violation, not an infra failure.
+func TestR1StateMdMissingRed(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	if err := os.Remove(filepath.Join(h.root, "STATE.md")); err != nil {
+		t.Fatal(err)
+	}
+	mustRed(t, h.verify(false), "R1")
+}
+
+// TestR1StateCheckIsNotFast is the partition assertion: R1 check 3 is a
+// serialization-bound rule (§7), so --fast skips it — a tampered STATE.md is
+// invisible to the pre-commit path, which regenerates it right after anyway.
+func TestR1StateCheckIsNotFast(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	if err := os.WriteFile(filepath.Join(h.root, "STATE.md"), []byte("# tampered\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if hasRule(h.verify(true).Red, "R1") {
+		t.Fatal("--fast must skip R1 (STATE.md check included)")
+	}
 }
 
 // --- R2: a missing path root is red (INV-294) ---

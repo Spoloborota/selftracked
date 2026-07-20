@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/load"
 	"github.com/Spoloborota/selftracked/internal/scaffold"
 	"github.com/Spoloborota/selftracked/internal/schema"
+	"github.com/Spoloborota/selftracked/internal/state"
 	"github.com/Spoloborota/selftracked/internal/verb"
 	"github.com/Spoloborota/selftracked/internal/verify"
 )
@@ -121,6 +123,35 @@ func TestScripts(t *testing.T) {
 				}
 				ts.Check(os.Symlink(args[2], ts.MkAbs(args[0])))
 			},
+			// sessionstart runs the SessionStart hook command exactly as it
+			// ships in the generated .claude/settings.json — extracted from
+			// that file, not transcribed — so the three-branch behavior test
+			// (INV-454–457) is tied to the shipped artifact. Its stdout/stderr
+			// flow into the script's captured output for assertion.
+			"sessionstart": func(ts *testscript.TestScript, neg bool, args []string) {
+				if neg || len(args) != 0 {
+					ts.Fatalf("usage: sessionstart")
+				}
+				var cfg struct {
+					Hooks struct {
+						SessionStart []struct {
+							Hooks []struct {
+								Command string `json:"command"`
+							} `json:"hooks"`
+						} `json:"SessionStart"` //nolint:tagliatelle // Claude Code's key is PascalCase, not ours
+					} `json:"hooks"`
+				}
+				ts.Check(json.Unmarshal([]byte(ts.ReadFile(".claude/settings.json")), &cfg))
+				if len(cfg.Hooks.SessionStart) != 1 || len(cfg.Hooks.SessionStart[0].Hooks) != 1 {
+					ts.Fatalf("SessionStart must be a single command hook (INV-454)")
+				}
+				cmd := cfg.Hooks.SessionStart[0].Hooks[0].Command
+				// The stored command is itself `sh -c '...'`; run it through a
+				// shell so the nested selftracked resolves on the script PATH.
+				if err := ts.Exec("sh", "-c", cmd); err != nil {
+					ts.Fatalf("sessionstart hook exited nonzero (the hook must always exit 0): %v", err)
+				}
+			},
 			// seeddb builds .selftracked/db.sqlite with one of everything —
 			// there are no creating verbs until S5a, and the dump scenarios
 			// need data to serialize.
@@ -148,6 +179,11 @@ func TestScripts(t *testing.T) {
 				text, err := dump.Serialize(ctx, db)
 				ts.Check(err)
 				ts.Check(dump.WriteFiles(dir, text))
+				// A real tracker also carries STATE.md at the repo root; R1
+				// check 3 (the folded R14, S8c) asserts it matches its render.
+				stateMD, err := state.Render(ctx, db)
+				ts.Check(err)
+				ts.Check(os.WriteFile(ts.MkAbs("STATE.md"), stateMD, 0o644))
 			},
 		},
 	})

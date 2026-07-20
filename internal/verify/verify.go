@@ -5,7 +5,8 @@
 // red (R1–R9, R12: a violation fails the run) and advisory (R10, R11, R13,
 // R15: reported, exit unaffected) — and the pre-commit `--fast` partition
 // runs only the pure-SQL rules plus R15, skipping serialization/filesystem/
-// git work (§7). R14 / R1 check 3 (STATE.md) rides S8c with its renderer.
+// git work (§7). R14 / R1 check 3 (STATE.md byte-equals its render) lands
+// here at S8c with the renderer (amendment r14-rides-its-renderer-at-s8c).
 package verify
 
 import (
@@ -19,11 +20,13 @@ import (
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
-// Instance paths (§9). verify reads them; it writes nothing.
+// Instance paths (§9). verify reads them; it writes nothing. STATE.md is a
+// sibling of the instance dir at the repo root (dir's parent), not inside it.
 const (
 	instanceDir = ".selftracked"
 	dbFile      = "db.sqlite"
 	dumpFile    = "dump.sql"
+	stateFile   = "STATE.md"
 	skipMarker  = "skip-pending"
 )
 

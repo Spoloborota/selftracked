@@ -1,0 +1,44 @@
+# S8c state: the CLI surface of the STATE.md renderer (§6.2, INV-274). A
+# write verb refreshes STATE.md through the wired pipeline; `state`
+# regenerates it standalone; a tampered STATE.md is red R1 (check 3), which
+# `state` heals.
+
+exec git init
+expectexit 0 selftracked init
+
+# A fresh init already carries a consistent STATE.md: verify is green.
+expectexit 0 selftracked verify
+stdout 'verify full: 0 violation'
+
+# A write verb refreshes STATE.md through the pipeline; the new task's ref
+# shows up in the projection, and verify stays green.
+expectexit 0 selftracked create --title 'do a thing'
+grep '#1' STATE.md
+expectexit 0 selftracked verify
+stdout 'verify full: 0 violation'
+
+# A hand-edited STATE.md drifts from its render: R1 check 3 goes red.
+cp STATE.md STATE.saved
+exec sh -c 'printf "# tampered\n" > STATE.md'
+expectexit 1 selftracked verify
+stdout 'FAIL R1'
+
+# `state` regenerates STATE.md from the DB, healing the drift: verify green.
+expectexit 0 selftracked state
+expectexit 0 selftracked verify
+stdout 'verify full: 0 violation'
+cmp STATE.md STATE.saved
+
+# Watch-item (S8b→S8c): `load` rebuilds the DB from the tracked dump and does
+# NOT regenerate STATE.md, so a committed STATE.md that drifts from the dump
+# stays visible to R1 check 3 rather than being masked. Here: drift STATE.md,
+# drop the DB (a fresh-clone load), load, and confirm verify still catches it.
+exec sh -c 'printf "# committed drift\n" > STATE.md'
+rm .selftracked/db.sqlite
+expectexit 0 selftracked load
+expectexit 1 selftracked verify
+stdout 'FAIL R1'
+# `state` is what heals it — load faithfully mirrored the dump, nothing more.
+expectexit 0 selftracked state
+expectexit 0 selftracked verify
+stdout 'verify full: 0 violation'

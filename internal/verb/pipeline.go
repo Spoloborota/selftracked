@@ -38,10 +38,10 @@ const (
 	codeNotFound = "not-found"
 )
 
-// stateRender is the hook S8c fills with the STATE.md renderer; until
-// then the slot exists (the §6.1 order is load-bearing) and renders
-// nothing.
-var stateRender = func(context.Context, *sql.DB, string) error { return nil }
+// stateRender is the pipeline's STATE.md slot (the §6.1 order is
+// load-bearing). Wired at S8c to renderState, so every write verb refreshes
+// STATE.md between the dump and the sidecar.
+var stateRender = renderState
 
 // traceStep, when set by a white-box test, observes the pipeline's §6.1
 // order — the order is a spec obligation (INV-180), so it must be

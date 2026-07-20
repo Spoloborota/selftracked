@@ -14,13 +14,17 @@ import (
 	"github.com/Spoloborota/selftracked/internal/cli"
 )
 
+// staleName is the verb and its refusal code — one token, so `prime`'s
+// `json:"stale"` tags do not tip goconst over its threshold on a coincidence.
+const staleName = "stale"
+
 // StaleVerb returns §6.2's `stale`: git-changed files intersected with
 // resolved non-ephemeral artifact links of non-terminal work, ordered
 // path ASC — deterministic, so hooks and humans see one list.
 func StaleVerb() cli.Verb {
 	var since string
 	var quiet bool
-	return cli.Verb{Name: "stale", Subs: []cli.Sub{{
+	return cli.Verb{Name: staleName, Subs: []cli.Sub{{
 		Arity: 0,
 		Usage: "stale [--since REF] [--quiet] [--json]",
 		Flags: func(fs *flag.FlagSet) {
@@ -58,7 +62,7 @@ func staleRun(e *cli.Env, since string, quiet bool) error {
 	sort.Strings(stale) // path ASC, deterministically (§6.2)
 	if quiet {
 		if len(stale) > 0 {
-			return &cli.CodedError{Code: "stale", Message: fmt.Sprintf("%d stale artifact(s)", len(stale)), Status: refusal}
+			return &cli.CodedError{Code: staleName, Message: fmt.Sprintf("%d stale artifact(s)", len(stale)), Status: refusal}
 		}
 		return nil
 	}

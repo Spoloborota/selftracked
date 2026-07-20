@@ -34,6 +34,17 @@ linters:
     # Superseded by gomodguard_v2, which stays enabled by the default:all
     # posture; running both only produces a deprecation warning per run.
     - gomodguard
+  settings:
+    # tagliatelle defaults JSON tags to camelCase, but the spec's JSON
+    # contracts are snake_case by mandate — §11.1's `prime` names
+    # `epics_active`, `dump_divergence`, `criteria_unmet`, and the dump
+    # header speaks the same dialect. The field names ARE the contract; the
+    # lint follows the spec, not the reverse. Single-word tags (ref, status)
+    # are identical in either case, so nothing already shipped changes.
+    tagliatelle:
+      case:
+        rules:
+          json: snake
   exclusions:
     rules:
       # Table-driven fixture suites are this project's test idiom (one

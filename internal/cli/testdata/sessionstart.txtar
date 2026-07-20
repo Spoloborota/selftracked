@@ -1,0 +1,26 @@
+# S8c SessionStart: the §11.1 hook's three branches, driven through the exact
+# command the generated .claude/settings.json ships (INV-454–457). Each branch
+# emits exactly one JSON object and the hook always exits 0.
+
+exec git init
+expectexit 0 selftracked init
+
+# Branch 1 — healthy: prime succeeds, one JSON object with the contract.
+sessionstart
+stdout '"epics_active"'
+stdout '"dump_divergence":false'
+
+# Branch 2 — missing DB (fresh clone): prime fails, load rebuilds from the
+# tracked dump, prime then succeeds. The DB is rebuilt as a side effect.
+rm .selftracked/db.sqlite
+sessionstart
+stdout '"epics_active"'
+exists .selftracked/db.sqlite
+
+# Branch 3 — irreconcilable: no DB and a dump the loader refuses. Both prime
+# and load fail; the static error JSON is all the session sees (INV-457).
+rm .selftracked/db.sqlite
+exec sh -c 'printf "not a valid dump\n" > .selftracked/dump.sql'
+sessionstart
+stdout 'selftracked state unavailable'
+stdout 'see .selftracked/dump.sql'
