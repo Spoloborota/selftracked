@@ -12,36 +12,44 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6, S7, S8a. The full
-v0 verb catalog and its integrity engine are live, and now the thing that
-stands a tracker up: `init` turns an empty repo into a working tracker in
-one command — the database (meta + the five seeded path roots, created so a
-fresh `verify` is green), the deterministic dump, STATE.md, and every
-generated document (PROMPT.md, AGENTS.md, the class READMEs, the ADR
-template, the `.claude/` rule + skill + SessionStart settings, `.gitignore`).
-The STATE.md renderer (`internal/state`) is a pure DB→bytes projection the
-S8c `state` verb and R14 will reuse. `init` is non-destructive: it refuses
-on a clone (pointing at `load`), `--force` refreshes without wiping data,
-and it never clobbers an adopter's own files. The repository now carries
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6, S7, S8a, S8b. The
+full v0 verb catalog, its integrity engine, and `init` are live; S8b adds
+what makes the gate self-enforcing. `init` now generates the tracked git
+hooks (`.selftracked/hooks/{pre,post-commit}`): the pre-commit is §9
+verbatim — verify `--fast`, dump + STATE refresh, staging, a non-blocking
+`stale` — and the post-commit is warn-only (untraced production commit;
+the sidecar/blob mismatch that is the only in-repo trace of `git commit
+-n`). `gate skip-mark` writes the per-machine skip marker with no DB write
+mid-commit; the next write verb, or `load`, converts it into a `gate-skip`
+event. `init` prints the per-machine activation: the takeover command on a
+clean repo, a chaining recipe (exit-propagated pre-commit, top-placed
+post-commit, subprocess-not-source) when a hooksPath or incumbent hook
+exists. The §8.4 sync matrix is complete: R11 detects chaining against the
+real generated hooks, a two-writer edit conflicts textually with no merge
+driver, and the sidecar hashes the last dump. The repository carries
 `internal/{schema,ref,cli,verb,dump,load,rules,verify,state,scaffold}`. All
 local, nothing pushed.
 
-**Next:** S8b — hooks + the §8.4 divergence matrix full: the generated
-pre/post-commit scripts, the chaining-recipe detection for all three
-incumbent states, `gate skip-mark`, and the sidecar divergence matrix —
-tested against real git repos. Open per D-EP13.
+**Next:** S8c — `state`, `prime` (§11.1 contract, incl. the `dump_divergence`
+read-only report that rode here from S8b), the SessionStart chain, and R1
+check 3 / R14 (STATE.md byte-equals its render) landing with the renderer.
+Open per D-EP13. Watch-item at open: `load` must refresh STATE.md whether or
+not a gate-skip marker is pending (parked below).
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
 
-**What is waiting on the owner:** nothing blocking S8a. Two post-review
-items from the S7 close: (1) the amendment `r14-rides-its-renderer-at-s8c`
-(applied under D-EP14, moving R14/STATE.md's check to S8c); (2) a
-**poison-pill bug in the closed `set-status` verb**, surfaced by the S7
-semantics critic and confirmed by hand — see the open question below. It
-is out of S7 scope (R7 itself is correct), so it did not block the close,
-but it lets two legal verbs build a tracker no fresh clone can `load`.
+**What is waiting on the owner:** nothing blocking S8c. Post-review items,
+none blocking: (1) four amendments applied under D-EP14 —
+`r14-rides-its-renderer-at-s8c`, and the two filed at the S8b open
+(`gate-skip-joins-the-r8-carve-out`, spec rev 3.17; `prime-divergence-rides-prime-at-s8c`,
+plan rev 15); (2) the §9 pre-commit's rc-triage does not distinguish a
+signal-killed verify from a RED one — a spec-wording note, since the script
+is quoted verbatim (parked below); (3) the **poison-pill bug in the closed
+`set-status` verb** from the S7 close — out of scope, not blocking, but it
+lets two legal verbs build a tracker no fresh clone can `load` (open
+question below).
 
 ## Stages
 
@@ -60,7 +68,7 @@ but it lets two legal verbs build a tracker no fresh clone can `load`.
 | S6 — epic/story/worklog/criteria verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `551bb98`, no CI has run (D-EP8) | All 73 rows `verified-by-command`. Largest verb stage; close critic found a real INV-119 blocker (self-transition re-affirm) and invented scope (ready-requires-DoD) — both fixed, one amendment filed. Adjudications below |
 | S7 — `verify` | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `fed963f`, no CI has run (D-EP8) | All 36 rows `verified-by-command` (38 at open − 2: R14/STATE.md's INV-275/293 moved to S8c via amendment `r14-rides-its-renderer-at-s8c`, their renderer being S8c's). Opened per D-EP13 (`docs/stage-openings/s7.md`). Four close critics; one real code defect (R1 check 2 double-counting a DB-only violation), an over-strict-vs-spec R9, an unamended R10 deviation, and branch-level fixture gaps — all fixed before the flip. Critics also found a poison-pill in the closed `set-status` verb (out of scope; parked below). Adjudications in the close entry |
 | S8a — `init` scaffold + generated docs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `e15759f`, no CI has run (D-EP8) | All 39 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s8a.md`). Three close critics found two real data-loss bugs — init clobbering a clone's tracked dump, and `--force` wiping the DB — plus a §6.1 write-order inversion, an over-broad adoption claim, and durable-doc rule-2 content dropped by paraphrase; all fixed before the flip. Adjudications in the close entry |
-| S8b — hooks + sidecar matrix | FULL | not started | — | — |
+| S8b — hooks + sidecar matrix | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `dfe7daf`, no CI has run (D-EP8) | All 34 rows `verified-by-command` (35 at open − 1: INV-361 `prime` divergence → S8c via amendment `prime-divergence-rides-prime-at-s8c`, riding its verb). Opened per D-EP13 (`docs/stage-openings/s8b.md`); a second amendment widened the R8 carve-out to the S8b-born `gate-skip` event. Four close critics found six robustness defects — a non-executable-hook-on-refresh no-op, an asymmetric marker-clear window, subdir-blind activation, a post-commit false-positive, plus INV-425 uncovered and stale opening-record addresses — all fixed before the flip. Adjudications in the close entry; correction-at-close in the opening record |
 | S8c — `state`, `prime`, SessionStart | FULL | not started | — | — |
 | S9 — `import` | FULL | not started | — | — |
 | S10 — dogfood switchover | FULL | not started | — | — |
@@ -88,6 +96,8 @@ but it lets two legal verbs build a tracker no fresh clone can `load`.
 | `instance-scoped-events-and-r8` | **spec** §5.9/§7 (R8 carve-out for `paths`/`config` events) | accepted 2026-07-20, D-EP14 | spec rev 3.15 |
 | `dod-shape-is-authoring-convention` | **spec** §2; INV-017 verification | accepted 2026-07-20, D-EP14 | spec rev 3.16 |
 | `r14-rides-its-renderer-at-s8c` | execution plan §4 (S7/S8c); INV-275/293 → S8c | accepted 2026-07-20, D-EP14 | plan rev 14 |
+| `gate-skip-joins-the-r8-carve-out` | **spec** §7 R8 + §5.9; `internal/rules` r8; INV-302/137 | accepted 2026-07-20, D-EP14 | spec rev 3.17 |
+| `prime-divergence-rides-prime-at-s8c` | execution plan §4 (S8b/S8c); INV-361 → S8c | accepted 2026-07-20, D-EP14 | plan rev 15 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -257,6 +267,46 @@ flagged (the §8.4 core has exactly four branches; the version gate is
 still the S2 stub) and that the interim reopen-of-DUPLICATE refusal
 matches what the pending link-tables amendment promises.
 
+S8b gave the tracker its git hooks and finished the §8.4 sync matrix,
+and drew four critics — spec fidelity, code correctness, shell
+robustness, data/semantics + test design. The open filed two forced
+corrections before any code: INV-361 (`prime`'s read-only divergence
+report) rides its verb to S8c, and the S8b-born `gate-skip` event joins
+the R8 instance-scoped carve-out (its entity is a fixed token, not a §4
+ref) — both proposal-first under D-EP14. The critics found no data-loss
+bug this time, but six real robustness defects, all fixed before the
+flip. The sharpest was silent: `os.WriteFile` sets a file's mode only on
+creation, so a `--force` refresh over a hook that had lost its executable
+bit left it inert — git skips a non-executable hook with no diagnostic,
+turning the gate into a no-op; `writeHooks` now chmods unconditionally and
+a test asserts it (the golden compares bytes, never mode). Two more: the
+standalone marker conversion (`load`'s path) cleared the skip marker only
+after the whole derived-file tail, a wider failure window than the write
+pipeline's clear-right-after-commit — now symmetric; and activation
+resolved the incumbent hooks directory as `<cwd>/.git/hooks`, so an
+`init` from a subdirectory missed a real top-level incumbent and would
+have printed the takeover that disables it — now resolved via git, the
+way verify's R11 already did. The shell critic reproduced a
+false-positive in the post-commit: hashing an empty `git show` (dump.sql
+absent from HEAD) yields the empty-string hash, a non-empty value that
+fired a spurious "you bypassed the gate" warning — now gated on `git
+cat-file -e`, and `command -v` replaces a `sha256sum||shasum` fallback
+that could hash a drained stdin. The spec critic caught INV-425 skipped
+in the coverage enumeration (SELFTRACKED_SKIP bypasses only our gate) —
+its fixture and the row are added — and three stale addresses in the
+opening record (test files delivered under other names); the correction
+is recorded in `docs/stage-openings/s8b.md` rather than silently
+rewritten. Refuted: the single marker collapsing multiple pre-write skips
+into one event (the spec models one marker, not a counter); concurrent
+duplicate events (the single-writer axiom the system does not defend
+against by design); and the pre-commit's rc-triage not distinguishing a
+signal-killed verify from a RED one — real, but the script is §9
+**verbatim**, so it is a spec-wording note for the owner, not a change
+here. One latent trap is parked for S8c: once its `stateRender` stub is
+wired, `load` must refresh STATE.md whether or not a gate-skip marker
+happened to be pending, or the refresh silently couples to an unrelated
+per-machine fact.
+
 S8a stood a tracker up from an empty repo and drew three critics —
 content fidelity, code correctness, fixture adequacy. The two sharpest
 findings were data-loss bugs the critics could reproduce by reading. First:
@@ -376,6 +426,8 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 |---|---|---|
 | Plan §2.1 describes an OpenSpec change as "proposal + delta" with a `tasks.md` pointer; the three change directories hold only `proposal.md` | first-commit review | The tool is adopted but not installed, so the convention has nothing to run against yet. Revisit when it is. |
 | `internal/dump`'s `WriteDumpFile` creates `dump.sql` at mode 0600 (from `os.CreateTemp`+rename), not the 0644 the other tracked files use | S8a close review (code critic) | More restrictive, not a leak, and pre-dates S8a; git tracks content not mode, so it is cosmetic. If it matters, `internal/dump` is the owner. |
+| Once S8c wires the `stateRender` stub, `load`'s STATE.md refresh will depend on whether a gate-skip marker happened to be pending (the standalone conversion runs `regenerateDerived`, `load`'s no-marker path does not) | S8b close review (data/semantics critic) | An **S8c watch-item**, not a current bug (stateRender is a no-op today). S8c must render STATE.md on `load` regardless of the marker, or the refresh couples to an unrelated per-machine fact. |
+| The §9 pre-commit's rc-triage treats every non-{0,2} exit as a bypassable RED, including signal deaths (130/137/143) | S8b close review (shell-robustness critic) | The script is quoted **verbatim** from §9, so changing it is a spec-wording decision. Raised for owner post-review; not an implementation change. |
 
 ## Open questions for the owner
 

@@ -125,3 +125,58 @@ threat-model equivalence; the review states what was checked.
 The `make gates` chain (build/vet/test-race/lint/govulncheck/check-pins/
 check-inventory) is the close gate; interim evidence per D-EP8 (no CI, no
 push).
+
+## Correction at close
+
+The close review (four fresh critics) found three places where this record,
+written before the code, did not match what was delivered. Recorded here
+rather than silently rewritten, so the diff between plan and reality is
+legible (D-EP13's close-review obligation):
+
+- **Line citation.** The scope section said the pre-commit is "verbatim §9,
+  lines 1082–1103." The correct span is `docs/v0-spec.md` **1089–1108**
+  (fence at 1088). The generated template byte-matches that block — only the
+  citation was off (a secondary-source number, the exact failure the
+  provenance rule names).
+- **Verification-file locations.** The "Resolved verification commands"
+  section named files that were delivered under different names/mechanisms:
+  the activation/chaining tests live in `internal/scaffold/activate_test.go`
+  (not `hooks_test.go`); the INV-307 R11 fixture is the testscript
+  `internal/cli/testdata/hooks-r11.txtar` (not an extension of
+  `internal/verify/r11_test.go`); the INV-362/INV-003 two-writer fixture is
+  `TestTwoWriterDumpConflictsLoudly` in `internal/scaffold/sync_test.go` (not
+  in `internal/verb/pipeline_test.go`). All the tests exist and pass; only
+  their promised addresses were wrong.
+- **INV-425 was omitted.** The coverage enumeration stepped from "419–424" to
+  "426–433", skipping INV-425 (SELFTRACKED_SKIP bypasses only our gate). The
+  close review added the fixture
+  (`TestChainingRecipeHazards/...INV-425`) and the row closes with the rest.
+
+## Accepted critic fixes and refutations
+
+Applied at close (commit dfe7daf): the hook executable-bit chmod on refresh
+(+ test); the ConvertSkipMarker marker-clear moved before the derived-file
+tail (symmetry with the write pipeline); activation's incumbent-hooks-dir
+resolved via git (subdir-safe, + test); the post-commit sidecar check gated
+on `git cat-file -e` to kill an empty-hash false positive; the config-ls test
+stub made realistic; the gate-skip conversion tests extended to assert
+dump/sidecar consistency.
+
+Refuted, and why: the single marker collapses multiple pre-write skips into
+one event — the spec models one marker, not a counter; concurrent-writer
+duplicate events fall under the single-writer axiom (§1) the system does not
+defend against by design; the pre-commit's rc-triage does not distinguish a
+signal-killed verify from a RED one — but the script is §9 **verbatim**, so
+this is a spec-design observation raised for owner post-review, not an
+implementation change here.
+
+## Parked for later (owner post-review / S8c)
+
+- **STATE.md refresh coupling (S8c watch-item).** Once S8c wires the
+  `stateRender` stub, `load`'s STATE.md refresh will depend on whether a
+  gate-skip marker happened to be pending (the standalone conversion runs
+  `regenerateDerived`, `load`'s no-marker path does not). S8c must render
+  STATE.md on `load` regardless, or the coupling becomes observable.
+- **Signal-death rc-triage (owner).** The §9 pre-commit treats every
+  non-{0,2} exit as a bypassable RED, including 130/137/143 (signal deaths).
+  A spec-wording question for the owner, since the script is quoted verbatim.
