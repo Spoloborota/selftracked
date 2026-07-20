@@ -23,14 +23,24 @@ func TestRenderDeterministic(t *testing.T) {
 	if err := schema.Create(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	// Populate a little so the render is not the empty case.
-	for _, q := range []string{
+	// Populate MULTIPLE rows per section, so the test exercises ordering and
+	// the 10-event window, not a trivially-stable single-row result set.
+	seed := []string{
+		// Two active epics, inserted out of slug order to test ORDER BY slug.
+		`INSERT INTO epics (slug, goal, status, created_at) VALUES ('zebra','later','ACTIVE','2020-01-01T00:00:00Z')`,
 		`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','ship it','ACTIVE','2020-01-01T00:00:00Z')`,
+		`INSERT INTO epics (slug, goal, status, status_note, created_at) ` +
+			`VALUES ('paused','x','PAUSED','waiting','2020-01-01T00:00:00Z')`,
 		`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','a','DONE')`,
 		`INSERT INTO stories (epic, id, title, status) VALUES ('e','S2','b','IN-PROGRESS')`,
 		`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t','OPEN','d','d')`,
-		`INSERT INTO events (at, entity, event, detail) VALUES ('2020-01-02T00:00:00Z','#1','create','made it')`,
-	} {
+	}
+	// Thirteen events so the LIMIT 10 window and DESC ordering both bite.
+	for i := 1; i <= 13; i++ {
+		seed = append(seed, `INSERT INTO events (at, entity, event, detail) VALUES `+
+			`('2020-01-02T00:00:00Z','#1','create','made it')`)
+	}
+	for _, q := range seed {
 		if _, err := db.ExecContext(ctx, q); err != nil {
 			t.Fatalf("seed %q: %v", q, err)
 		}
@@ -48,12 +58,24 @@ func TestRenderDeterministic(t *testing.T) {
 	}
 	got := string(first)
 	for _, want := range []string{
-		"# Project state", "## Active epics", "**e** — ship it",
+		"# Project state", "## Active epics", "**e** — ship it", "**zebra** — later",
 		"1 done, 1 in progress", "## Task queue", "open: 1", "## Recent activity", "#1 create: made it",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("render missing %q; got:\n%s", want, got)
 		}
+	}
+	// Active epics are ordered by slug: 'e' before 'zebra'.
+	if strings.Index(got, "**e**") > strings.Index(got, "**zebra**") {
+		t.Fatal("active epics must be slug-ordered (e before zebra)")
+	}
+	// PAUSED epics are silent.
+	if strings.Contains(got, "**paused**") {
+		t.Fatal("a PAUSED epic must not appear in Active epics")
+	}
+	// The recent-activity window is capped at 10 even with 13 events seeded.
+	if n := strings.Count(got, "#1 create: made it"); n != 10 {
+		t.Fatalf("recent activity must cap at 10 events, rendered %d", n)
 	}
 }
 

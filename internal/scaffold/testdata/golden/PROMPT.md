@@ -11,7 +11,11 @@ fixed set of verbs — never by touching the database or the dump directly.
 `.selftracked/db.sqlite`, never hand-edit `dump.sql`. Write invariants are
 enforced by the schema and detected by `verify`; raw *reads* are not
 technically prevented, but every read verb is cheaper than the SQL it would
-replace, so there is no reason to reach past them.
+replace, so there is no reason to reach past them. The generated
+`.claude/settings.json` carries a deny-list entry for `sqlite3` — a
+convention backstop, not a hard boundary (a determined caller can still
+read, which is why the honest mitigation is that the read verbs are the
+easier path).
 
 **PO (product-owner) decisions are never answered by an agent.** When a
 choice belongs to the owner, raise it: move the question task to
@@ -53,25 +57,33 @@ non-goal for machine checking; rule 2's validator is deferred; the
 project's executable-gates principle governs database state, not doc
 authoring. Guidance is what a disciplined crew follows anyway:
 
-1. **Prose never duplicates DB-enumerable state** — counts, id or status
-   lists. Cite the verb (`list`, `show`, `log`) or `STATE.md` instead.
+1. **Prose never duplicates DB-enumerable state** (counts, id or status
+   lists) — cite the verb (`list`, `show`, `log`) or `STATE.md` instead.
    Every prose copy of an enumerable list drifts silently the day the
    enumeration changes.
 2. **A DB-derived number that must live in a durable doc is anchored** `as
    of dump <sha12>` — the first 12 hex of the SHA-256 of the last
    **committed** dump:
-   `git show HEAD:.selftracked/dump.sql | shasum -a 256`, truncated to 12
-   hex. Anchor the committed blob, not the working-tree file: mid-session
-   the tree holds a dump state that may never reach a commit. A number
-   derived from this session's writes has no committed epoch yet — commit
-   first, anchor after. The gitignored divergence sidecar
-   (`.selftracked/dump.hash`) is NOT a shortcut for this digest. A bare
-   date is too coarse the day the DB changes twice.
+   `git show HEAD:.selftracked/dump.sql | shasum -a 256`, then truncate to
+   12 hex. Anchor the committed blob, not the working-tree file:
+   mid-session the tree holds a dump state that may never reach a commit,
+   and an anchor to it is unverifiable forever (the deferred validator
+   checks against committed history). Freshness corollary: a number derived
+   from THIS session's writes has no committed epoch yet — state trails git
+   by one commit — so commit first, anchor after; anchoring it to HEAD's
+   dump cites an epoch that cannot contain it. The gitignored divergence
+   sidecar (`.selftracked/dump.hash`) is NOT a shortcut for this digest: it
+   tracks the working-tree dump and during any session with pending writes
+   is routinely one commit ahead of HEAD (and fresh clones have none; a
+   crash window can leave a stale one). A bare date is too coarse an anchor
+   the day the DB changes twice. Honesty note: the anchor pins the *epoch*,
+   not the arithmetic — a wrong number beside a fresh hash still needs
+   review to catch.
 3. **Event dates and date-bearing filenames come from the system clock**
-   (`date`), never from the session narrative. The verbs enforce this for
-   database rows; you also *name* dated files, and a wrong date baked into
-   a filename is permanent — filenames are identifiers, and renaming breaks
-   every recorded reference.
+   (`date`), never from the session narrative — the verbs already enforce
+   this for database rows, but agents also *name* dated files (research
+   docs, reports), and a wrong date baked into a filename is permanent:
+   filenames are identifiers, and renaming breaks every recorded reference.
 
 ## Conventions
 

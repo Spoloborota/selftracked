@@ -32,7 +32,23 @@ grep '\.selftracked/skip-pending' .gitignore
 # A seeded root exists so verify's R2 is green (INV-064).
 exists docs/research
 
-# Re-init without --force refuses (INV-188); with --force it succeeds.
+# Re-init without --force refuses (INV-188); with --force it refreshes
+# (the database is preserved — see the Go test).
 expectexit 1 selftracked init
 stderr 'already exists'
 expectexit 0 selftracked init --force
+
+# A clone — tracked dump.sql, no local db.sqlite — must refuse and point at
+# load rather than overwrite the tracked state, even with --force.
+mkdir clone/.selftracked
+cp clonedump.txt clone/.selftracked/dump.sql
+cd clone
+expectexit 1 selftracked init
+stderr 'run selftracked load'
+expectexit 1 selftracked init --force
+grep 'tracked state to keep' .selftracked/dump.sql
+cd ..
+
+-- clonedump.txt --
+-- tracked state to keep
+

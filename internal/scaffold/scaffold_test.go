@@ -157,31 +157,116 @@ func TestInitSeedsMetaAndPaths(t *testing.T) {
 	if version == "" || boundary != "0" {
 		t.Fatalf("meta seed wrong: schema_version=%q events_archived_through=%q", version, boundary)
 	}
-	var paths int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM path_dictionary`).Scan(&paths); err != nil {
+	// Assert the SPECIFIC seeded classes, not just a count against the same
+	// slice that produced them — and that none of the opt-in classes
+	// (INV-404: documented, never pre-registered) leaked into the seed.
+	seeded := map[string]int{}
+	rows, err := db.Query(`SELECT class, ephemeral FROM path_dictionary`)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if paths != len(defaultRoots) {
-		t.Fatalf("expected %d seeded path rows, got %d", len(defaultRoots), paths)
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var class string
+		var ephemeral int
+		if err := rows.Scan(&class, &ephemeral); err != nil {
+			t.Fatal(err)
+		}
+		seeded[class] = ephemeral
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"research": 0, "adr": 0, "workdir": 1, "run": 1, "report": 0}
+	if len(seeded) != len(want) {
+		t.Fatalf("seeded classes = %v, want %v", seeded, want)
+	}
+	for class, eph := range want {
+		if got, ok := seeded[class]; !ok || got != eph {
+			t.Errorf("class %s: seeded=%v (present=%v), want ephemeral=%d", class, got, ok, eph)
+		}
+	}
+	for _, optIn := range []string{"runbook", "guide", "rfc", "src", "external"} {
+		if _, present := seeded[optIn]; present {
+			t.Errorf("opt-in class %q must NOT be pre-registered (INV-404)", optIn)
+		}
 	}
 }
 
-// TestInitForce covers INV-188's --force: a second init refuses without it
-// and rebuilds with it.
-func TestInitForce(t *testing.T) {
+// TestInitForcePreservesData covers INV-188's --force: a second init
+// refuses without it, and --force REFRESHES rather than rebuilds — a task
+// recorded before the re-init must survive (the close review's data-loss
+// finding: --force must not silently destroy a populated tracker).
+func TestInitForcePreservesData(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	ctx := context.Background()
 	if err := writeScaffold(ctx, root, false); err != nil {
 		t.Fatal(err)
 	}
-	var exists *existsError
-	if err := writeScaffold(ctx, root, false); err == nil || !errors.As(err, &exists) {
+	execOn(t, root, `INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('keep me','OPEN','d','d')`)
+
+	var ee *existsError
+	if err := writeScaffold(ctx, root, false); !errors.As(err, &ee) {
 		t.Fatalf("second init without --force must refuse with existsError, got %v", err)
 	}
 	if err := writeScaffold(ctx, root, true); err != nil {
 		t.Fatalf("second init with --force must succeed, got %v", err)
 	}
+	if n := countTasks(t, root, "keep me"); n != 1 {
+		t.Fatalf("--force destroyed tracked data: 'keep me' task count = %d, want 1", n)
+	}
+}
+
+// TestInitRefusesOnClone covers the CRITICAL guard: a clone has the tracked
+// dump.sql but no (gitignored) db.sqlite; init must refuse and point at
+// load rather than overwrite the tracked state — even with --force.
+func TestInitRefusesOnClone(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, instanceDir), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	const tracked = "-- tracked dump, do not clobber\n"
+	writeFile(t, root, filepath.Join(instanceDir, dumpFile), tracked)
+
+	var ce *cloneError
+	if err := writeScaffold(context.Background(), root, false); !errors.As(err, &ce) {
+		t.Fatalf("init on a clone must refuse with cloneError, got %v", err)
+	}
+	if err := writeScaffold(context.Background(), root, true); !errors.As(err, &ce) {
+		t.Fatalf("--force must NOT override the clone guard, got %v", err)
+	}
+	if got := readFile(t, root, filepath.Join(instanceDir, dumpFile)); got != tracked {
+		t.Fatalf("init clobbered a clone's tracked dump: %q", got)
+	}
+}
+
+func execOn(t *testing.T, root, query string, args ...any) {
+	t.Helper()
+	db, err := schema.Open(filepath.Join(root, instanceDir, dbFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.ExecContext(context.Background(), query, args...); err != nil {
+		t.Fatalf("exec %q: %v", query, err)
+	}
+}
+
+func countTasks(t *testing.T, root, title string) int {
+	t.Helper()
+	db, err := schema.Open(filepath.Join(root, instanceDir, dbFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var n int
+	if err := db.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM tasks WHERE title = ?`, title).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }
 
 // TestInitDoesNotClobberAdopterFiles covers the adoption posture: an
@@ -190,12 +275,19 @@ func TestInitDoesNotClobberAdopterFiles(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	writeFile(t, root, "AGENTS.md", "MY OWN AGENTS FILE\n")
+	if err := os.MkdirAll(filepath.Join(root, ".claude"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, ".claude/settings.json", "{\"mine\":true}\n")
 	writeFile(t, root, ".gitignore", "node_modules/\n")
 	if err := writeScaffold(context.Background(), root, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, root, "AGENTS.md"); got != "MY OWN AGENTS FILE\n" {
 		t.Fatalf("init clobbered the adopter's AGENTS.md: %q", got)
+	}
+	if got := readFile(t, root, ".claude/settings.json"); got != "{\"mine\":true}\n" {
+		t.Fatalf("init clobbered the adopter's .claude/settings.json: %q", got)
 	}
 	gi := readFile(t, root, ".gitignore")
 	if !strings.Contains(gi, "node_modules/") || !strings.Contains(gi, ".selftracked/db.sqlite") {
@@ -224,4 +316,100 @@ func readFile(t *testing.T, root, rel string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// TestPrivacyContentPublishesToDumpAndState covers INV-484: user-authored
+// content — here a local path, the documented leak — appears verbatim in
+// the published surfaces (dump.sql and STATE.md), which is what the privacy
+// warning exists to make agents expect. The append-only worklog/events
+// tables mean it also persists; --force below regenerates the surfaces from
+// the DB without dropping it.
+func TestPrivacyContentPublishesToDumpAndState(t *testing.T) {
+	t.Parallel()
+	const secret = "/Users/someone/private/notes.md"
+	root := t.TempDir()
+	if err := writeScaffold(context.Background(), root, false); err != nil {
+		t.Fatal(err)
+	}
+	const insTask = `INSERT INTO tasks (title, status, created_at, updated_at) VALUES (?, 'OPEN', 'd', 'd')`
+	const insEvent = `INSERT INTO events (at, entity, event, detail) VALUES ('2020-01-01T00:00:00Z','#1','set-status',?)`
+	execOn(t, root, insTask, "see "+secret)
+	execOn(t, root, insEvent, "ref "+secret)
+	// Refresh the derived surfaces from the DB.
+	if err := writeScaffold(context.Background(), root, true); err != nil {
+		t.Fatal(err)
+	}
+	if dump := readFile(t, root, filepath.Join(instanceDir, dumpFile)); !strings.Contains(dump, secret) {
+		t.Error("INV-484: a local path in a task title is published to dump.sql")
+	}
+	if st := readFile(t, root, stateFile); !strings.Contains(st, secret) {
+		t.Error("INV-484: a local path in an event detail is published to STATE.md")
+	}
+}
+
+// TestTaskStoryCorrelationNotSchematic covers INV-475: the task↔story
+// correspondence is conventional (shared epic + prose), not a schema link —
+// the tasks table carries no story reference, so with several blocked
+// stories and several IN-REVIEW tasks in one epic nothing in the data model
+// says which task answers which story.
+func TestTaskStoryCorrelationNotSchematic(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := writeScaffold(context.Background(), root, false); err != nil {
+		t.Fatal(err)
+	}
+	db, err := schema.Open(filepath.Join(root, instanceDir, dbFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.QueryContext(context.Background(), `SELECT name FROM pragma_table_info('tasks')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatal(err)
+		}
+		if name == "story" {
+			t.Fatal("INV-475: tasks has a 'story' column — the correlation would be schematic, not conventional")
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestNoConfigFileReader covers INV-545's second clause: no code path reads
+// a config file. Configuration lives only in meta rows edited via `config`;
+// a stray config-file reader would reintroduce the file the design forbids.
+func TestNoConfigFileReader(t *testing.T) {
+	t.Parallel()
+	forbidden := []string{
+		"config.toml", "config.json", "config.yaml", "config.yml",
+		".selftracked/config", "selftracked.toml",
+	}
+	roots := []string{"../../internal", "../../cmd"}
+	for _, r := range roots {
+		err := filepath.WalkDir(r, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {
+				return err
+			}
+			b, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			for _, tok := range forbidden {
+				if strings.Contains(string(b), tok) {
+					t.Errorf("INV-545: %s references a config-file path %q — configuration must live in meta only", p, tok)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }

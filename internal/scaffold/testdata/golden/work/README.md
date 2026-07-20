@@ -1,8 +1,10 @@
 # work/ — the `workdir` class (and its siblings)
 
-Scratch space for work in progress: working directories, run outputs,
-reports. These classes are **ephemeral** — `verify` does not require their
-artifacts to resolve on disk, because they come and go.
+Scratch space and outputs of the work: working directories, run outputs,
+reports. Two of the three classes seeded here are **ephemeral** — `verify`
+does not require an ephemeral class's artifacts to resolve on disk, because
+they come and go — while `report` is durable, so a linked report must
+still resolve.
 
 - **Classes seeded here:** `workdir` (root `work`, ephemeral), `run` (root
   `work/runs`, ephemeral), `report` (root `work/reports`, non-ephemeral).

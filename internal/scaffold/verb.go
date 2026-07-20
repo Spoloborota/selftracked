@@ -33,6 +33,10 @@ func run(e *cli.Env, force bool) error {
 		if errors.As(err, &ex) {
 			return &cli.CodedError{Code: "exists", Message: ex.Error(), Status: 1}
 		}
+		var clone *cloneError
+		if errors.As(err, &clone) {
+			return &cli.CodedError{Code: "clone", Message: clone.Error(), Status: 1}
+		}
 		return err
 	}
 	_, _ = fmt.Fprintln(e.Stdout, "initialized selftracked in .selftracked/ — run selftracked verify")

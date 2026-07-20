@@ -27,6 +27,8 @@ var templates embed.FS
 const (
 	instanceDir = ".selftracked"
 	dbFile      = "db.sqlite"
+	dumpFile    = "dump.sql"
+	stateFile   = "STATE.md"
 	dirMode     = 0o750
 	fileMode    = 0o644
 
@@ -68,33 +70,53 @@ var staticFiles = []struct{ tmpl, target string }{
 	{"templates/claude_settings.json", settingsTarget},
 }
 
-// protectedTargets are files a host project commonly already owns; init
-// never overwrites them (it would clobber the adopter's own content). A
-// fresh repo has none of these, so they are written normally there.
-var protectedTargets = map[string]bool{
-	agentsTarget:   true,
-	settingsTarget: true,
-}
-
-// writeScaffold performs a full init under root. force permits
-// re-initializing over an existing tracker (the DB and dump are rebuilt;
-// generated docs are refreshed; protected and merge files are still
-// handled gently).
+// writeScaffold sets up (or refreshes) a tracker under root. It is
+// deliberately non-destructive:
+//
+//   - A clone — a tracked dump.sql present with no local db.sqlite (the DB
+//     is gitignored) — is NEVER re-initialised: init would overwrite the
+//     tracked state with an empty one. It refuses and points at `load`,
+//     even with --force, because a clone's truth is its dump.
+//   - An existing tracker (db.sqlite present) refuses without --force. With
+//     --force it is REFRESHED, not rebuilt: the derived files (dump, STATE)
+//     are regenerated from the existing database and the generated docs are
+//     refreshed — no row is dropped, the DB is opened read-only.
+//   - A fresh repo gets the full build.
+//
+// Generated documents are never overwritten if they already exist
+// (writeStatic), so an adopted repo's own PROMPT.md/README/ADR files
+// survive; only files init itself owns exclusively (the dump, STATE.md, the
+// database) are rewritten.
 func writeScaffold(ctx context.Context, root string, force bool) error {
-	dbPath := filepath.Join(root, instanceDir, dbFile)
-	if _, err := os.Stat(dbPath); err == nil && !force {
-		return &existsError{path: dbPath}
+	instance := filepath.Join(root, instanceDir)
+	hasDB := exists(filepath.Join(instance, dbFile))
+	hasDump := exists(filepath.Join(instance, dumpFile))
+
+	if hasDump && !hasDB {
+		return &cloneError{path: filepath.Join(instance, dumpFile)}
+	}
+	if hasDB && !force {
+		return &existsError{path: filepath.Join(instance, dbFile)}
 	}
 	if err := makeDirs(root); err != nil {
 		return err
 	}
-	if err := buildDatabase(ctx, root); err != nil {
+	if hasDB {
+		if err := refreshDatabase(ctx, root); err != nil { // --force: keep the data
+			return err
+		}
+	} else if err := buildDatabase(ctx, root); err != nil { // fresh
 		return err
 	}
 	if err := writeStatic(root); err != nil {
 		return err
 	}
 	return mergeGitignore(root)
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // makeDirs creates the instance dir, every seeded root, and the .claude
@@ -114,12 +136,10 @@ func makeDirs(root string) error {
 	return nil
 }
 
-// buildDatabase creates the DB (schema.Create seeds meta), seeds the
-// default path dictionary, writes the dump + sidecar, and renders STATE.md.
+// buildDatabase creates a fresh DB (schema.Create seeds meta), seeds the
+// default path dictionary, and writes the derived files.
 func buildDatabase(ctx context.Context, root string) error {
-	instance := filepath.Join(root, instanceDir)
-	dbPath := filepath.Join(instance, dbFile)
-	_ = os.Remove(dbPath) // --force: rebuild from scratch, no stale rows
+	dbPath := filepath.Join(root, instanceDir, dbFile)
 	db, err := schema.Open(dbPath)
 	if err != nil {
 		return fmt.Errorf("init: open db: %w", err)
@@ -131,19 +151,46 @@ func buildDatabase(ctx context.Context, root string) error {
 	if err := seedPathDictionary(ctx, db); err != nil {
 		return err
 	}
+	return writeDerived(ctx, root, db)
+}
+
+// refreshDatabase regenerates the derived files from an EXISTING database
+// (the --force path). The DB is opened read-only: --force refreshes the
+// tracker's generated surfaces, it does not touch a single tracked row.
+func refreshDatabase(ctx context.Context, root string) error {
+	dbPath := filepath.Join(root, instanceDir, dbFile)
+	db, err := schema.OpenRead(dbPath)
+	if err != nil {
+		return fmt.Errorf("init: open db: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	return writeDerived(ctx, root, db)
+}
+
+// writeDerived serializes the dump and renders STATE.md in the §6.1/§8.3
+// order — dump file, THEN STATE.md, THEN the sidecar — so a crash between
+// steps leaves derived files stale, never a sidecar that certifies a dump
+// paired with the wrong STATE.md. (The composite dump.WriteFiles writes the
+// sidecar immediately after the dump, which is why init cannot use it; the
+// S5a close review split those functions for exactly this reason.)
+func writeDerived(ctx context.Context, root string, db *sql.DB) error {
+	instance := filepath.Join(root, instanceDir)
 	text, err := dump.Serialize(ctx, db)
 	if err != nil {
 		return fmt.Errorf("init: serialize: %w", err)
 	}
-	if err := dump.WriteFiles(instance, text); err != nil {
+	if err := dump.WriteDumpFile(instance, text); err != nil {
 		return fmt.Errorf("init: write dump: %w", err)
 	}
 	stateMD, err := state.Render(ctx, db)
 	if err != nil {
 		return fmt.Errorf("init: render STATE.md: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "STATE.md"), stateMD, fileMode); err != nil {
-		return fmt.Errorf("init: write STATE.md: %w", err)
+	if err := writeAt(filepath.Join(root, stateFile), stateMD); err != nil {
+		return err
+	}
+	if err := dump.WriteSidecar(instance, text); err != nil {
+		return fmt.Errorf("init: write sidecar: %w", err)
 	}
 	return nil
 }
@@ -167,23 +214,24 @@ func seedPathDictionary(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// writeStatic writes every generated document, skipping a protected target
-// that already exists so an adopted repo's own AGENTS.md / .claude settings
-// are never clobbered.
+// writeStatic writes every generated document, skipping any target that
+// already exists. init cannot tell an adopter's own PROMPT.md / README /
+// ADR template from a stale selftracked copy, so it never overwrites one —
+// a generated doc is authored once, and refreshing it is a delete-and-init
+// the owner performs deliberately. Only the files init owns exclusively
+// (the dump, STATE.md, the DB) are rewritten on --force.
 func writeStatic(root string) error {
 	for _, f := range staticFiles {
 		target := filepath.Join(root, f.target)
-		if protectedTargets[f.target] {
-			if _, err := os.Stat(target); err == nil {
-				continue // adopter already owns this file
-			}
+		if exists(target) {
+			continue // never clobber an existing file
 		}
 		content, err := templates.ReadFile(f.tmpl)
 		if err != nil {
 			return fmt.Errorf("init: read template %s: %w", f.tmpl, err)
 		}
-		if err := os.WriteFile(target, content, fileMode); err != nil {
-			return fmt.Errorf("init: write %s: %w", f.target, err)
+		if err := writeAt(target, content); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -255,5 +303,14 @@ func writeAt(path string, b []byte) error {
 type existsError struct{ path string }
 
 func (e *existsError) Error() string {
-	return e.path + " already exists; pass --force to reinitialize"
+	return e.path + " already exists; pass --force to refresh the generated files (the database is preserved)"
+}
+
+// cloneError is init's refusal on a clone: a tracked dump with no local DB.
+// Re-initialising would discard the tracked state, so init points at load.
+type cloneError struct{ path string }
+
+func (e *cloneError) Error() string {
+	return "a tracked " + e.path + " is present but there is no local database; " +
+		"run selftracked load to rebuild it — init would discard the tracked state"
 }
