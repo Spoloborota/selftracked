@@ -4,25 +4,32 @@
 
 exec git init
 
-# A fresh init succeeds and immediately verifies green (INV-402/493). The
-# only findings are R11 advisories (hooks arrive at S8b), so exit stays 0.
+# A fresh init succeeds and immediately verifies green (INV-402/493). On a
+# clean repo init prints the takeover command (INV-419); the hooks are now
+# generated but inactive until the owner activates them, so verify stays 0.
 expectexit 0 selftracked init
 stdout 'initialized selftracked'
+stdout 'git config core.hooksPath \.selftracked/hooks'
 expectexit 0 selftracked verify
 
-# Layout (§9): the tracked surface and the generated docs exist.
+# Layout (§9): the tracked surface, the generated docs, and the tracked
+# hooks exist (INV-396/399/400/401).
 exists .selftracked/dump.sql
 exists STATE.md
 exists PROMPT.md
 exists AGENTS.md
 exists docs/decisions/_template.md
 exists .claude/settings.json
+exists .selftracked/hooks/pre-commit
+exists .selftracked/hooks/post-commit
 
-# .gitignore covers the local files and NOT the tracked dump (INV-397/398/417).
+# .gitignore covers the local files and NOT the tracked dump or the tracked
+# hooks (INV-397/398/401/417).
 grep '\.selftracked/db\.sqlite' .gitignore
 grep '\.selftracked/dump\.hash' .gitignore
 grep '\.selftracked/skip-pending' .gitignore
 ! grep 'dump\.sql$' .gitignore
+! grep 'hooks' .gitignore
 
 # No config file exists — configuration lives in meta (INV-545).
 ! exists selftracked.toml

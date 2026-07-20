@@ -11,6 +11,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/schema"
+	"github.com/Spoloborota/selftracked/internal/verb"
 )
 
 const (
@@ -83,8 +84,16 @@ func run(e *cli.Env, force bool) error {
 		return fmt.Errorf("load: rename: %w", err)
 	}
 	// The sidecar records the dump these bytes came from (§8.4's writer
-	// list names load; the comparison matrix is S8b's).
+	// list names load).
 	if err := dump.WriteSidecar(dir, text); err != nil {
+		return fmt.Errorf("load: %w", err)
+	}
+	// A gate skip recorded before this load (§6.2) is converted now: load
+	// is "what runs after a divergence", and INV-277 names it as the marker
+	// converter alongside the next write verb. The conversion re-dumps, so
+	// the freshly loaded state gains one local unsynced event — exactly the
+	// skip that had not yet reached the tracked history.
+	if err := verb.ConvertSkipMarker(ctx); err != nil {
 		return fmt.Errorf("load: %w", err)
 	}
 	_, _ = fmt.Fprintln(e.Stdout, "loaded", dbPath, "from", dumpPath)

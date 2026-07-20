@@ -1,0 +1,49 @@
+#!/bin/sh
+# selftracked post-commit (warn-only, §9). A post-commit cannot fail a
+# commit — the commit already exists — so every path exits 0; it only
+# warns. Safe to run first in a chained incumbent post-commit.
+command -v selftracked >/dev/null 2>&1 || exit 0
+
+warn() { printf '\033[33mselftracked: %s\033[0m\n' "$1" >&2; }
+
+# --- Untraced production commit (INV-434) -----------------------------
+# A commit touching a production path (meta.production_globs) whose message
+# names neither a task (#NN) nor an epic slug is untraced work.
+msg=$(git log -1 --pretty=%B 2>/dev/null)
+files=$(git diff-tree --no-commit-id --name-only -r --root HEAD 2>/dev/null)
+globs=$(selftracked config ls 2>/dev/null | sed -n 's/^production_globs = //p')
+touched_prod=0
+if [ -n "$globs" ] && [ -n "$files" ]; then
+  for f in $files; do
+    for g in $globs; do
+      # A case pattern matches without FNM_PATHNAME, so `*` spans `/` and a
+      # stored `dir/**` glob matches any path beneath it.
+      case "$f" in $g) touched_prod=1 ;; esac
+    done
+    [ "$touched_prod" = 1 ] && break
+  done
+fi
+if [ "$touched_prod" = 1 ]; then
+  traced=0
+  case "$msg" in *#[0-9]*) traced=1 ;; esac
+  if [ "$traced" = 0 ]; then
+    for slug in $(selftracked epic list 2>/dev/null | sed -n 's/^epic:\([a-z0-9][a-z0-9-]*\).*/\1/p'); do
+      case "$msg" in *"$slug"*) traced=1; break ;; esac
+    done
+  fi
+  [ "$traced" = 0 ] && warn "untraced commit: touches a production path with no #NN or epic slug in the message"
+fi
+
+# --- Bypassed pre-commit signature (INV-435) --------------------------
+# The committed dump.sql blob must hash to the sidecar. A mismatch right
+# after a commit means the commit carried a stale dump — the only in-repo
+# trace of `git commit -n`, which skips the whole hook chain and writes no
+# R15 marker.
+sha256() { sha256sum 2>/dev/null || shasum -a 256; }
+committed=$(git show HEAD:.selftracked/dump.sql 2>/dev/null | sha256 | cut -d' ' -f1)
+expected=$(cat .selftracked/dump.hash 2>/dev/null)
+if [ -n "$committed" ] && [ -n "$expected" ] && [ "$committed" != "$expected" ]; then
+  warn "committed dump.sql does not match the sidecar — a bypassed pre-commit (git commit -n) left a stale dump"
+fi
+
+exit 0

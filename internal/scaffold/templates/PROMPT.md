@@ -5,6 +5,17 @@ deterministically to `.selftracked/dump.sql` (the one tracked, reviewed,
 synced surface) and projected to `STATE.md`. You interact with it through a
 fixed set of verbs — never by touching the database or the dump directly.
 
+## Sync (§8.4)
+
+Git is the only sync channel: `.selftracked/dump.sql` and the generated docs
+travel through commits, and nothing else does. If this repo also lives under
+a file-sync service (Dropbox, iCloud, a synced Drive), **exclude
+`.selftracked/db.sqlite*` and `.selftracked/dump.hash` from it** — they are
+per-machine, and syncing them races two machines' databases and manufactures
+conflict copies. True two-writer accidents surface as textual conflicts in
+`dump.sql` or duplicate-key `load` failures — loud by construction, never a
+silent automatic merge (no merge driver ships).
+
 ## The rule (§11.2)
 
 **State changes only through verbs.** Never run `sqlite3` against

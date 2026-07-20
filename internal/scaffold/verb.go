@@ -28,7 +28,8 @@ func Verb() cli.Verb {
 }
 
 func run(e *cli.Env, force bool) error {
-	if err := writeScaffold(context.Background(), ".", force); err != nil {
+	ctx := context.Background()
+	if err := writeScaffold(ctx, ".", force); err != nil {
 		var ex *existsError
 		if errors.As(err, &ex) {
 			return &cli.CodedError{Code: "exists", Message: ex.Error(), Status: 1}
@@ -40,5 +41,6 @@ func run(e *cli.Env, force bool) error {
 		return err
 	}
 	_, _ = fmt.Fprintln(e.Stdout, "initialized selftracked in .selftracked/ — run selftracked verify")
+	_, _ = fmt.Fprintln(e.Stdout, hookActivation(ctx, "."))
 	return nil
 }

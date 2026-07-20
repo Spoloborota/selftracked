@@ -34,6 +34,8 @@ const (
 
 	// codeDiverged marks every §8.4 divergence refusal.
 	codeDiverged = "diverged"
+	// codeNotFound marks a missing local instance.
+	codeNotFound = "not-found"
 )
 
 // stateRender is the hook S8c fills with the STATE.md renderer; until
@@ -68,7 +70,7 @@ func requireInstance() (string, error) {
 	dbPath := filepath.Join(instanceDir, dbFile)
 	if _, err := os.Stat(dbPath); err != nil {
 		return "", &cli.CodedError{
-			Code:    "not-found",
+			Code:    codeNotFound,
 			Message: "no " + dbPath + " here; run selftracked init first",
 			Status:  refusal,
 		}
@@ -93,6 +95,15 @@ func Write(ctx context.Context, mutate func(tx *sql.Tx) ([]Event, error)) error 
 		return err
 	}
 
+	// A pending gate-skip marker is folded into this verb's own transaction
+	// (INV-277): the gate-skip event rides ahead of the verb's own events so
+	// the one serialization pass that follows records both. `load` cannot
+	// fold — it has no mutation — so it calls ConvertSkipMarker standalone.
+	mutation, hadSkip, err := foldPendingSkip(mutate)
+	if err != nil {
+		return err
+	}
+
 	db, err := schema.OpenWrite(dbPath)
 	if err != nil {
 		return fmt.Errorf("open for write: %w", err)
@@ -100,10 +111,41 @@ func Write(ctx context.Context, mutate func(tx *sql.Tx) ([]Event, error)) error 
 	defer func() { _ = db.Close() }()
 
 	step("transaction")
-	if err := mutateInTx(ctx, db, mutate); err != nil {
+	if err := mutateInTx(ctx, db, mutation); err != nil {
 		return err
 	}
+	// Clear the marker only after its event has committed. If this fails the
+	// event is already durable and the next write would re-convert the stale
+	// marker into a duplicate gate-skip row — rare, and the returned error
+	// tells the operator to remove .selftracked/skip-pending by hand.
+	if hadSkip {
+		if err := clearSkipMarker(); err != nil {
+			return err
+		}
+	}
 	return regenerateDerived(ctx, db)
+}
+
+// foldPendingSkip wraps mutate so that, when a gate-skip marker is pending,
+// the gate-skip event is prepended to the verb's own events. It returns the
+// (possibly wrapped) mutation and whether a marker was folded (so the caller
+// clears it after commit).
+func foldPendingSkip(mutate func(tx *sql.Tx) ([]Event, error)) (func(tx *sql.Tx) ([]Event, error), bool, error) {
+	present, moment, err := readSkipMarker()
+	if err != nil {
+		return nil, false, err
+	}
+	if !present {
+		return mutate, false, nil
+	}
+	wrapped := func(tx *sql.Tx) ([]Event, error) {
+		events, err := mutate(tx)
+		if err != nil {
+			return nil, err
+		}
+		return append([]Event{gateSkipEvent(moment)}, events...), nil
+	}
+	return wrapped, true, nil
 }
 
 // mutateInTx is the transaction half: mutation plus its events rows,

@@ -1,0 +1,25 @@
+# S8b gate: the CLI surface of the skip marker (§6.2). `gate skip-mark`
+# writes the per-machine marker with no DB write (INV-276); verify reports
+# it as an R15 advisory but stays green (INV-279); the next write verb
+# converts it into a gate-skip event and clears it (INV-277).
+
+exec git init
+expectexit 0 selftracked init
+
+# gate skip-mark leaves the marker behind.
+expectexit 0 selftracked gate skip-mark
+exists .selftracked/skip-pending
+
+# verify names the pending marker (R15) without failing.
+expectexit 0 selftracked verify
+stdout 'warn R15'
+
+# The next write verb converts the marker: the marker is gone and the
+# regenerated dump records the gate-skip event.
+expectexit 0 selftracked create --title 'ship a thing'
+! exists .selftracked/skip-pending
+grep 'gate-skip' .selftracked/dump.sql
+
+# With the marker converted, verify no longer reports R15.
+expectexit 0 selftracked verify
+! stdout 'R15'

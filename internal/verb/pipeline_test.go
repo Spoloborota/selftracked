@@ -32,7 +32,7 @@ func TestWritePipelineOrder(t *testing.T) {
 			`INSERT INTO tasks (title, created_at, updated_at) VALUES ('t', 'd', 'd')`); err != nil {
 			return nil, fmt.Errorf("seed write: %w", err)
 		}
-		return []Event{{Entity: "#1", Event: "create", Detail: "t"}}, nil
+		return []Event{{Entity: "#1", Event: evCreate, Detail: "t"}}, nil
 	})
 	if err != nil {
 		t.Fatalf("Write: %v", err)

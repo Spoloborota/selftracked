@@ -29,8 +29,10 @@ const (
 	dbFile      = "db.sqlite"
 	dumpFile    = "dump.sql"
 	stateFile   = "STATE.md"
+	hooksDir    = ".selftracked/hooks"
 	dirMode     = 0o750
 	fileMode    = 0o644
+	execMode    = 0o755
 
 	// Target paths referenced in more than one place.
 	promptTarget   = "PROMPT.md"
@@ -88,30 +90,74 @@ var staticFiles = []struct{ tmpl, target string }{
 // survive; only files init itself owns exclusively (the dump, STATE.md, the
 // database) are rewritten.
 func writeScaffold(ctx context.Context, root string, force bool) error {
-	instance := filepath.Join(root, instanceDir)
-	hasDB := exists(filepath.Join(instance, dbFile))
-	hasDump := exists(filepath.Join(instance, dumpFile))
-
-	if hasDump && !hasDB {
-		return &cloneError{path: filepath.Join(instance, dumpFile)}
-	}
-	if hasDB && !force {
-		return &existsError{path: filepath.Join(instance, dbFile)}
+	hasDB, err := guardExisting(filepath.Join(root, instanceDir), force)
+	if err != nil {
+		return err
 	}
 	if err := makeDirs(root); err != nil {
 		return err
 	}
-	if hasDB {
-		if err := refreshDatabase(ctx, root); err != nil { // --force: keep the data
-			return err
-		}
-	} else if err := buildDatabase(ctx, root); err != nil { // fresh
+	if err := buildOrRefresh(ctx, root, hasDB); err != nil {
 		return err
 	}
 	if err := writeStatic(root); err != nil {
 		return err
 	}
+	if err := writeHooks(root); err != nil {
+		return err
+	}
 	return mergeGitignore(root)
+}
+
+// guardExisting enforces the non-destructive contract and reports whether a
+// local database is present. A clone (tracked dump, no DB) is never
+// re-initialised; an existing tracker refuses without --force.
+func guardExisting(instance string, force bool) (bool, error) {
+	hasDB := exists(filepath.Join(instance, dbFile))
+	hasDump := exists(filepath.Join(instance, dumpFile))
+	if hasDump && !hasDB {
+		return false, &cloneError{path: filepath.Join(instance, dumpFile)}
+	}
+	if hasDB && !force {
+		return false, &existsError{path: filepath.Join(instance, dbFile)}
+	}
+	return hasDB, nil
+}
+
+// buildOrRefresh builds a fresh database or, when one already exists (the
+// --force path), refreshes the derived files from it without dropping a row.
+func buildOrRefresh(ctx context.Context, root string, hasDB bool) error {
+	if hasDB {
+		return refreshDatabase(ctx, root) // --force: keep the data
+	}
+	return buildDatabase(ctx, root) // fresh
+}
+
+// hookFiles are the generated git hooks (§9). They are TRACKED (not
+// gitignored, INV-401): the tracked surface a clone inherits so
+// `core.hooksPath .selftracked/hooks` activates the same gate everywhere.
+var hookFiles = []struct{ tmpl, name string }{
+	{"templates/hooks/pre-commit", "pre-commit"},
+	{"templates/hooks/post-commit", "post-commit"},
+}
+
+// writeHooks writes the pre-commit and post-commit scripts executable,
+// under the selftracked-owned .selftracked/hooks/. Unlike the generated
+// docs (writeStatic), these are always rewritten: they live in
+// selftracked's own namespace, never an adopter's, so a refresh keeps them
+// current rather than preserving a stale copy.
+func writeHooks(root string) error {
+	for _, h := range hookFiles {
+		content, err := templates.ReadFile(h.tmpl)
+		if err != nil {
+			return fmt.Errorf("init: read hook %s: %w", h.tmpl, err)
+		}
+		target := filepath.Join(root, hooksDir, h.name)
+		if err := os.WriteFile(target, content, execMode); err != nil {
+			return fmt.Errorf("init: write hook %s: %w", h.name, err)
+		}
+	}
+	return nil
 }
 
 func exists(path string) bool {
@@ -122,7 +168,7 @@ func exists(path string) bool {
 // makeDirs creates the instance dir, every seeded root, and the .claude
 // subdirectories.
 func makeDirs(root string) error {
-	fixed := []string{instanceDir, ".claude/rules", ".claude/skills/selftracked"}
+	fixed := []string{instanceDir, hooksDir, ".claude/rules", ".claude/skills/selftracked"}
 	dirs := make([]string, 0, len(fixed)+len(defaultRoots))
 	dirs = append(dirs, fixed...)
 	for _, r := range defaultRoots {

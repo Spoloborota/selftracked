@@ -1,0 +1,18 @@
+# S8b R11 (INV-307): the advisory hook-chaining detector, run against init's
+# ACTUAL generated hooks. Fresh init generates .selftracked/hooks/ but does
+# not activate it, so R11 warns that the per-machine gate is inactive; once
+# core.hooksPath points at .selftracked/hooks the effective hook location IS
+# ours and R11 goes silent.
+
+exec git init
+expectexit 0 selftracked init
+
+# Generated, not activated: R11 fires (advisory — verify still exits 0).
+expectexit 0 selftracked verify
+stdout 'warn R11'
+
+# Activate the gate on this machine: the effective hook location becomes
+# .selftracked/hooks, which R11 recognizes as chained.
+exec git config core.hooksPath .selftracked/hooks
+expectexit 0 selftracked verify
+! stdout 'R11'
