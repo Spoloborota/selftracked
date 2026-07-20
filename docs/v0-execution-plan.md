@@ -1,6 +1,6 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 15.** Revision history: rev 1 →
+Status: **ACTIVE, revision 16.** Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →
@@ -17,8 +17,11 @@ amendment `r14-rides-its-renderer-at-s8c` (R14/STATE.md check moves
 S7 → S8c, where its renderer is built) → rev 14 → the S8b open filed two:
 `prime-divergence-rides-prime-at-s8c` (INV-361 moves S8b → S8c with the
 `prime` verb it reads) and `gate-skip-joins-the-r8-carve-out` (the
-S8b-born `gate-skip` event joins the R8 instance-scoped exemption) → this
-revision. Governs the implementation of `docs/v0-spec.md`
+S8b-born `gate-skip` event joins the R8 instance-scoped exemption) → rev 15 →
+the S8c open filed `migrated-field-rides-migration-at-s11` (INV-464's
+`migrated` field, whose positive verification needs the migration engine,
+moves S8c → S11; the contract slot is still built at S8c) → this revision.
+Governs the implementation of `docs/v0-spec.md`
 and the project's spec lifecycle beyond it. Derived from
 `docs/research/2026-07-18-spec-to-execution-planning.md`; tooling facts
 re-verified against primary sources on 2026-07-18 (see that document's
@@ -199,10 +202,10 @@ produce those states).
 | **S7** | `verify`: R1 (checks 1–2), R2–R13, R15 + `--fast` partition (R14 / R1 check 3 — STATE.md byte-equals its render — rides S8c with its renderer, amendment `r14-rides-its-renderer-at-s8c`) | Red fixture per R-rule + R11 variant table; `--fast` rule set asserted by fixture |
 | **S8a** | `init` full: scaffold, seeded roots, class READMEs, ADR template, PROMPT.md (three authoring rules), STATE.md, **AGENTS.md, `.claude/` files (§11.2 rule + §11.3 skill as shipped content)**, `.gitignore`, meta seeding | Golden-file fixtures for every generated artifact; fresh `init` ⇒ `verify` green |
 | **S8b** | Hooks + §8.4 full: generated pre/post-commit, chaining-recipe detection (all three incumbent states), `gate skip-mark` + marker→`gate-skip` events conversion (the R8 carve-out widens to the new event, amendment `gate-skip-joins-the-r8-carve-out`), sidecar divergence matrix | testscript with real git repos; the §8.4 non-migration matrix: (1) sidecar match, (2) mismatch + regenerate-match heal, (3) mismatch + differ refuse, (4) missing sidecar — each a fixture (branches (5) DB-version-ahead residue heal and (6) migration-in-externally-changed-state land at S11 with the real gate); `commit -n` backstop fixture; gate-skip-leaves-R8-green fixture. POSIX-runner scope per spec §9's stated limitation |
-| **S8c** | `state`, `prime` (§11.1 contract, incl. `dump_divergence` read-only report — INV-361, moved from S8b with the verb, amendment `prime-divergence-rides-prime-at-s8c`), SessionStart chain; R1 check 3 / R14 (STATE.md byte-equals its render) landed with the renderer (amendment `r14-rides-its-renderer-at-s8c`) | prime golden JSON (caps, totals, payload-shape rule, `dump_divergence` on a diverged dump); three-branch SessionStart fixture; the R14 red fixture (STATE.md tampered ⇒ verify red) |
+| **S8c** | `state`, `prime` (§11.1 contract, incl. `dump_divergence` read-only report — INV-361, moved from S8b with the verb, amendment `prime-divergence-rides-prime-at-s8c`), SessionStart chain; R1 check 3 / R14 (STATE.md byte-equals its render) landed with the renderer (amendment `r14-rides-its-renderer-at-s8c`). The `prime` `migrated` field's contract slot is built here (`omitempty`, never populated at S8c); its value and verification ride to S11 with the migration engine (amendment `migrated-field-rides-migration-at-s11`) | prime golden JSON (caps, totals, payload-shape rule, `dump_divergence` on a diverged dump, `dump_requires_newer_binary` on a forged newer header); three-branch SessionStart fixture; the R14 red fixture (STATE.md tampered ⇒ verify red) |
 | **S9** | `import` + `--legacy` (§6.2/§10) | Synthetic legacy corpus round-trip → `verify` green → golden dump; date-priority matrix incl. calendar-day warn; source-map determinism fixture |
 | **S10** | **Dogfood switchover**: inventory + ledger imported into `.selftracked/` as the first epic; ledger deleted; self-host begins. Most of this scope is plan-native (§3 rule 5) and therefore carries no inventory rows — the single row this stage owns understates it | `selftracked verify` green on this repo's live tracker; the import IS the importer's first rehearsal; the inventory file retires here too (kept in git history — §9). Placement is consistent with spec §16 as written: its sentence names both `init` and `import` as the switchover's ingredients |
-| **S11** | §8.6 version gate real: two-comparison gate, forward-only refusals, escalation choreography (v1: refusal paths; golden migration corpus starts at schema v2, per spec §16) + §8.4 migration branches (5)–(6) | Refusal fixtures at load and prime (typed field); escalation-race/busy fixtures; §8.4 branch-(5)/(6) fixtures driven by a synthetic version bump |
+| **S11** | §8.6 version gate real: two-comparison gate, forward-only refusals, escalation choreography (v1: refusal paths; golden migration corpus starts at schema v2, per spec §16) + §8.4 migration branches (5)–(6); `prime` reports `migrated:vK→vN` (INV-387, INV-464 — the field's contract slot is built at S8c, its value populates here, amendment `migrated-field-rides-migration-at-s11`) | Refusal fixtures at load and prime (typed field); escalation-race/busy fixtures; §8.4 branch-(5)/(6) fixtures driven by a synthetic version bump; a migrating `prime` emits `migrated:vK→vN`, absent on a non-migrating invocation |
 | **S12** | Pilot ladder rungs 3–4 of D13's four (testscript synthetics → self-host — both closed by S0–S10 — → **gitignored disposable-clone import rehearsal** → colocated live install) + remaining §16 deliverables: README final, CONTRIBUTING (DCO + AI clause), the generic migration guide | Rehearsal: repeated from-scratch imports of the disposable clone corpus, `verify` green each round, importer defects filed as stories; colocated install: host-gates-stay-authoritative checklist executed; migration guide walked against the S9 fixture corpus; docs link-check |
 
 Cross-stage rule: nothing later silently re-opens an earlier closure — a

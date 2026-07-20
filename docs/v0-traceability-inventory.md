@@ -54,10 +54,10 @@ accounting check counts them so the proportion stays visible.
 | S7 | 36 |
 | S8a | 39 |
 | S8b | 34 |
-| S8c | 30 |
+| S8c | 29 |
 | S9 | 30 |
 | S10 | 1 |
-| S11 | 25 |
+| S11 | 26 |
 | S12 | 11 |
 | deferred | 28 |
 
@@ -549,7 +549,7 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-461 | §11.1 | `prime` stable JSON contract field `totals{}`: part of the stable contract, carries the full count of every capped list plus `parked` — no separate scalar exists for parked, one authoritative representation | format | S8c | test: assert totals{} enumerates a count for every capped list plus parked, and no duplicate parked scalar exists elsewhere in the payload | planned |  |
 | INV-462 | §11.1 | `prime` stable JSON contract field `dump_divergence` (bool) | format | S8c | test: schema-validate boolean type and presence | planned |  |
 | INV-463 | §11.1 | `prime` stable JSON contract field `dump_requires_newer_binary` (bool) — §8.6 forward-only condition surfaced at session start | format | S8c | test: force a newer-than-binary dump header on a readable DB, assert prime sets this field true | planned |  |
-| INV-464 | §11.1 | `prime` stable JSON contract field `migrated` — present only when this invocation performed a migration (§8.6) | format | S8c | test: trigger a migrating prime invocation, assert migrated field present with vK→vN value; assert absent on a non-migrating invocation | planned |  |
+| INV-464 | §11.1 | `prime` stable JSON contract field `migrated` — present only when this invocation performed a migration (§8.6) | format | S11 | test: trigger a migrating prime invocation, assert migrated field present with vK→vN value; assert absent on a non-migrating invocation | planned | moved S8c→S11: the positive case needs the migration engine (INV-379–389), built at S11 beside its sourcing twin INV-387 — amendment migrated-field-rides-migration-at-s11 (the omitempty contract slot is still built at S8c) |
 | INV-465 | §11.1 | `prime` stable JSON contract field `sprint_goals[]`: every IN-PROGRESS story; multiple entries mean "finish or choose explicitly", never a silent pick | verb-contract | S8c | test: create two IN-PROGRESS stories across epics, assert both appear in sprint_goals with no auto-selection behavior elsewhere | planned |  |
 | INV-466 | §11.1 | The backlog-type lists — `ready[]`, `triage[]`, `in_review[]`, `stale[]`, `epics_paused[]`, `epics_backlog[]` — are capped at the validated `prime_cap` config key (default 20) | schema-gate | S8c | test: seed more than prime_cap entries in each list, assert each is truncated to prime_cap in prime output | planned |  |
 | INV-467 | §11.1 | Capped lists use stated deterministic order: id ASC generally; `stale[]` ordered path ASC; epic lists ordered slug ASC | verify-rule | S8c | test: seed unordered entries in each capped list, assert output order matches the stated key per list | planned |  |
