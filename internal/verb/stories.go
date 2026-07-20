@@ -187,7 +187,7 @@ func moveStory(ctx context.Context, tx *sql.Tx, slug, sid string, m move) ([]Eve
 func storyReadyVerb(e *cli.Env, slug, sid string) error {
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		return moveStory(context.Background(), tx, slug, sid, move{
-			sources: []string{storyPlanned}, target: storyReady, detail: "ready",
+			sources: []string{storyPlanned}, target: storyReady, detail: subReady,
 		})
 	})
 	if err != nil {

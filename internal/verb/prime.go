@@ -398,9 +398,10 @@ func fillDivergence(ctx context.Context, db *sql.DB, out *primeOutput, _ int) er
 }
 
 // divergenceReport is §8.4's comparison performed read-only: it never heals
-// the sidecar or writes anything (that is `load`'s job). True means the
-// tracked dump differs from both the sidecar hash and this DB's
-// serialization — the "someone pulled a new dump.sql" case (§8.4/INV-455).
+// the sidecar or writes anything. Sidecar healing on crash-residue is every
+// write verb's job (divergenceCore in the write pipeline); prime only reports.
+// True means the tracked dump differs from both the sidecar hash and this
+// DB's serialization — the "someone pulled a new dump.sql" case (§8.4/INV-455).
 func divergenceReport(ctx context.Context, db *sql.DB, dir string) (bool, error) {
 	tracked, trackedErr := os.ReadFile(filepath.Join(dir, dumpFile)) //nolint:gosec // fixed .selftracked path
 	sidecar, sidecarErr := os.ReadFile(filepath.Join(dir, hashFile)) //nolint:gosec // fixed .selftracked path

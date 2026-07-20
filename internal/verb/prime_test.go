@@ -212,6 +212,55 @@ func TestPrimeTotalsAndNoProseScan(t *testing.T) {
 	if _, dup := generic["parked"]; dup {
 		t.Fatal("a top-level parked field duplicates totals.parked (INV-461)")
 	}
+
+	// INV-469 as its verification promises: a reflective walk of the whole
+	// primeOutput type graph, asserting the complete set of string-bearing
+	// json fields is EXACTLY the known set. Adding any new string field —
+	// prose or identifier — trips this, forcing a reviewer to classify it and
+	// keeping "the only prose is goal/title" a checked property, not a manual
+	// observation. The two prose fields (goal, title) are named; every other
+	// string here is an identifier/path by construction.
+	got := stringJSONFields(reflect.TypeFor[primeOutput]())
+	want := map[string]bool{
+		// identifiers / paths (not prose):
+		"epics_paused": true, "epics_backlog": true, "ready": true,
+		"triage": true, "in_review": true, "stale": true, "migrated": true,
+		"slug": true, "story": true, "epic": true, "blocked": true,
+		// the ONLY two prose fields (INV-469):
+		"goal": true, "title": true,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("prime string-field set drifted (INV-469 guard):\n got %v\nwant %v", got, want)
+	}
+}
+
+// stringJSONFields walks a struct type graph and returns the set of json tag
+// names of every string-typed (or []string-typed) leaf field. Recurses into
+// nested structs and slices of structs. Used to keep INV-469's "only two
+// prose fields" a mechanically-checked property.
+func stringJSONFields(t reflect.Type) map[string]bool {
+	out := map[string]bool{}
+	var walk func(reflect.Type, string)
+	walk = func(rt reflect.Type, tag string) {
+		//nolint:exhaustive // only String/Slice/Struct matter; default skips the rest
+		switch rt.Kind() {
+		case reflect.String:
+			if tag != "" {
+				out[tag] = true
+			}
+		case reflect.Slice:
+			walk(rt.Elem(), tag)
+		case reflect.Struct:
+			for i := range rt.NumField() {
+				f := rt.Field(i)
+				name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+				walk(f.Type, name)
+			}
+		default:
+		}
+	}
+	walk(t, "")
+	return out
 }
 
 // TestPrimeDumpDivergenceReadOnly is INV-361/462: prime reports
@@ -367,6 +416,30 @@ func TestPrimeStaleDegradesWithoutGit(t *testing.T) {
 	}
 	if len(out.Stale) != 0 {
 		t.Fatalf("stale = %v, want empty on unborn HEAD", out.Stale)
+	}
+}
+
+// TestPrimeStaleDegradesOutsideGitRepo covers the other git-failure path a
+// critic flagged as untested: a directory that is not a git repository at all
+// (not merely a repo with no commits). fillStale must still degrade to empty
+// rather than sink prime — the SessionStart surface must emit whenever the DB
+// is readable, even where git cannot answer.
+func TestPrimeStaleDegradesOutsideGitRepo(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir) // no git init: `git diff HEAD` fails with "not a git repository"
+	seedInstance(t, dir)
+
+	db, err := schema.OpenRead(filepath.Join(dir, instanceDir, dbFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var out primeOutput
+	if err := fillStale(context.Background(), db, &out, 20); err != nil {
+		t.Fatalf("fillStale must not error outside a git repo: %v", err)
+	}
+	if len(out.Stale) != 0 {
+		t.Fatalf("stale = %v, want empty outside a git repo", out.Stale)
 	}
 }
 

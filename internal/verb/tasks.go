@@ -27,6 +27,8 @@ const (
 	jsonRefKey    = "ref"
 	jsonEpicKey   = "epic"
 	jsonStatusKey = "status"
+	jsonTitleKey  = "title"
+	jsonStoryKey  = "story"
 
 	// setStatusArity: <id> <STATUS>.
 	setStatusArity = 2
@@ -220,7 +222,7 @@ func showTask(ctx context.Context, e *cli.Env, db *sql.DB, id int64) error {
 	}
 	if e.JSON {
 		return printJSON(e, map[string]any{
-			jsonRefKey: t.renderID, "title": t.Title,
+			jsonRefKey: t.renderID, jsonTitleKey: t.Title,
 			jsonStatusKey: t.Status, "note": t.Note, "parked": t.Parked, jsonEpicKey: t.Epic,
 		})
 	}
@@ -292,7 +294,7 @@ func showStory(ctx context.Context, e *cli.Env, db *sql.DB, r ref.Ref) error {
 	}
 	if e.JSON {
 		return printJSON(e, map[string]any{
-			jsonEpicKey: r.Epic, "story": r.Story, "title": title, jsonStatusKey: status, "episodes": episodes,
+			jsonEpicKey: r.Epic, jsonStoryKey: r.Story, jsonTitleKey: title, jsonStatusKey: status, "episodes": episodes,
 		})
 	}
 	_, _ = fmt.Fprintf(e.Stdout, "epic:%s/%s [%s] %s\n", r.Epic, r.Story, status, title)

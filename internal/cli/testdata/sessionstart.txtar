@@ -17,6 +17,15 @@ sessionstart
 stdout '"epics_active"'
 exists .selftracked/db.sqlite
 
+# Branch 1b — a present DB whose tracked dump has moved under it (a pull): the
+# healthy prime branch reports dump_divergence via the FLAG and succeeds, so
+# the chain short-circuits there — it never falls to load or the error branch
+# (INV-455). This is why a divergent-but-readable DB is not "irreconcilable".
+exec sh -c 'printf -- "-- pulled a newer dump\n" | cat - .selftracked/dump.sql > d && mv d .selftracked/dump.sql'
+sessionstart
+stdout '"dump_divergence":true'
+! stdout 'selftracked state unavailable'
+
 # Branch 3 — irreconcilable: no DB and a dump the loader refuses. Both prime
 # and load fail; the static error JSON is all the session sees (INV-457).
 rm .selftracked/db.sqlite

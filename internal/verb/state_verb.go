@@ -78,12 +78,16 @@ func atomicWrite(target string, text []byte) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write %s: %w", target, err)
 	}
-	// STATE.md is a tracked, world-readable projection (§9) — 0644 like the
-	// scaffold's other generated docs; os.CreateTemp makes it 0600.
-	if err := os.Chmod(tmpName, stateFileMode); err != nil {
+	if err := os.Rename(tmpName, target); err != nil {
 		return fmt.Errorf("write %s: %w", target, err)
 	}
-	if err := os.Rename(tmpName, target); err != nil {
+	// STATE.md is a tracked, world-readable projection (§9) — 0644 like the
+	// scaffold's other generated docs; os.CreateTemp makes the temp 0600.
+	// chmod runs AFTER the rename, never before: the temp file is never
+	// world-readable under its predictable name, and the final file only ever
+	// transitions 0600→0644 (stricter→looser once in place), so no content is
+	// exposed to other local users before it lands.
+	if err := os.Chmod(target, stateFileMode); err != nil {
 		return fmt.Errorf("write %s: %w", target, err)
 	}
 	return nil
