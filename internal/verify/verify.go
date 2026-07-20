@@ -124,6 +124,7 @@ func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool)
 		return fmt.Errorf("verify: %w", err)
 	}
 	rep.route(dbOnly)
+	dbOnlyClean := len(dbOnly) == 0 // gates R1 check 2 — see r1's doc
 
 	// R15 is the only advisory rule cheap enough for the commit boundary.
 	rep.route(r15(dir))
@@ -133,7 +134,7 @@ func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool)
 
 	// Full-only rules, each returning its findings or an infra error.
 	for _, run := range []func() ([]rules.Violation, error){
-		func() ([]rules.Violation, error) { return r1(ctx, db, dir) },
+		func() ([]rules.Violation, error) { return r1(ctx, db, dir, dbOnlyClean) },
 		func() ([]rules.Violation, error) { return r2(ctx, db, dir) },
 		func() ([]rules.Violation, error) { return r3(ctx, db, dir) },
 		func() ([]rules.Violation, error) { return r5(ctx, db, dir) },

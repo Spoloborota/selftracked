@@ -11,7 +11,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/Spoloborota/selftracked/internal/ref"
 )
@@ -263,29 +262,28 @@ func r9(ctx context.Context, db *sql.DB) ([]Violation, error) {
 	return append(out, boundary...), nil
 }
 
-// boundaryViolation is R9's second clause: the archive boundary must be
-// present, a non-negative integer, and exactly 0 in schema v1.
+// boundaryViolation is R9's second clause: in schema v1 the archive
+// boundary must be present and the exact byte-string "0". §8.2's tamper
+// argument is TEXTUAL — the only value any verb writes is the canonical
+// "0" seed, so ANY other spelling is the raw-SQL signature. A numeric test
+// would let "+0", "-0", "00" pass (all parse to 0) even though no verb
+// could have written them (found by the S7 close review); the string test
+// catches the tamper act itself, not merely a non-zero value.
 func boundaryViolation(ctx context.Context, db *sql.DB) ([]Violation, error) {
-	var raw string
+	var raw sql.NullString
 	err := db.QueryRowContext(ctx,
-		`SELECT COALESCE((SELECT value FROM meta WHERE key = 'events_archived_through'), '')`).Scan(&raw)
+		`SELECT value FROM meta WHERE key = 'events_archived_through'`).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) || !raw.Valid {
+		return []Violation{{Rule: "R9", Message: "meta.events_archived_through is missing"}}, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("R9: %w", err)
 	}
-	if raw == "" {
-		return []Violation{{Rule: "R9", Message: "meta.events_archived_through is missing"}}, nil
-	}
-	n, isNonNeg := parseNonNegInt(raw)
-	switch {
-	case !isNonNeg:
+	if raw.String != "0" {
 		return []Violation{{
-			Rule:    "R9",
-			Message: "meta.events_archived_through is not a non-negative integer: " + raw,
-		}}, nil
-	case n != 0:
-		return []Violation{{
-			Rule:    "R9",
-			Message: "meta.events_archived_through = " + raw + "; must be 0 in schema v1 — raw-SQL tamper signature",
+			Rule: "R9",
+			Message: "meta.events_archived_through = " + raw.String +
+				`; must be exactly "0" in schema v1 — any other value is the raw-SQL tamper signature`,
 		}}, nil
 	}
 	return nil, nil
@@ -340,14 +338,4 @@ func collect(rows *sql.Rows, out []Violation, rule, format string) ([]Violation,
 		return nil, fmt.Errorf("%s: %w", rule, err)
 	}
 	return out, nil
-}
-
-// parseNonNegInt swallows the parse error deliberately: a malformed value
-// is a rule VIOLATION result, not an execution failure.
-func parseNonNegInt(s string) (int64, bool) {
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil || n < 0 {
-		return 0, false
-	}
-	return n, true
 }

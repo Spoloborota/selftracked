@@ -33,7 +33,14 @@ var errTamperedConfig = errors.New("config value is not verb-writable")
 //  2. The tracked dump, loaded into a fresh database and re-serialized,
 //     byte-equals itself — proving the tracked bytes round-trip through
 //     the real §8.5 loader, not a second parser.
-func r1(ctx context.Context, db *sql.DB, dir string) ([]rules.Violation, error) {
+//
+// dbOnlyClean says whether the live DB passed the DB-only rules (R6–R9,
+// R12). When it did NOT, check 2 is skipped: load.Build re-runs those same
+// rules and would refuse, surfacing the ALREADY-reported violation a second
+// time mislabelled as an R1 "does not rebuild" failure (found by the S7
+// close review). Check 1 runs regardless — it is orthogonal to the data's
+// rule-cleanliness.
+func r1(ctx context.Context, db *sql.DB, dir string, dbOnlyClean bool) ([]rules.Violation, error) {
 	var out []rules.Violation
 	regen, err := dump.Serialize(ctx, db)
 	if err != nil {
@@ -53,41 +60,58 @@ func r1(ctx context.Context, db *sql.DB, dir string) ([]rules.Violation, error) 
 			Message: "dump.sql does not match the database (dirty dump); run selftracked dump",
 		})
 	}
-	// Check 2: reload the tracked bytes through the actual loader and
-	// re-dump. A failure to even parse/build is itself a round-trip failure.
-	if v := reloadRedump(ctx, tracked); v != nil {
+	if !dbOnlyClean {
+		return out, nil // check 2 would only re-surface the DB-only violation
+	}
+	v, err := reloadRedump(ctx, tracked)
+	if err != nil {
+		return nil, err
+	}
+	if v != nil {
 		out = append(out, *v)
 	}
 	return out, nil
 }
 
-func reloadRedump(ctx context.Context, tracked []byte) *rules.Violation {
+// reloadRedump runs R1 check 2. It returns a *Violation for a genuine
+// round-trip defect (the tracked bytes will not parse, the loader refuses
+// them, or the re-dump differs) and an error ONLY for an infrastructure
+// failure (no temp dir, an open/serialize failure) — the §7 engine reports
+// rule findings as data and reserves errors for the environment.
+func reloadRedump(ctx context.Context, tracked []byte) (*rules.Violation, error) {
 	parsed, err := load.Parse(tracked)
 	if err != nil {
-		return &rules.Violation{Rule: "R1", Message: "tracked dump does not reload: " + err.Error()}
+		return &rules.Violation{Rule: "R1", Message: "tracked dump does not reload: " + err.Error()}, nil
 	}
 	tmp, err := os.MkdirTemp("", "verify-r1-*")
 	if err != nil {
-		return &rules.Violation{Rule: "R1", Message: "R1 check 2 could not run: " + err.Error()}
+		return nil, fmt.Errorf("R1 check 2: temp dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 	built, err := load.Build(ctx, tmp, parsed)
 	if err != nil {
-		return &rules.Violation{Rule: "R1", Message: "tracked dump does not rebuild: " + err.Error()}
+		if errors.Is(err, load.ErrRefused) {
+			// The loader refused the tracked bytes: a whitelist/grammar/DDL
+			// rejection — the dump does not round-trip. (A data-rule refusal
+			// cannot reach here: r1 skips check 2 unless the DB is clean.)
+			return &rules.Violation{Rule: "R1", Message: "tracked dump does not rebuild: " + err.Error()}, nil
+		}
+		return nil, fmt.Errorf("R1 check 2: rebuild: %w", err)
 	}
 	rdb, err := schema.OpenRead(built)
 	if err != nil {
-		return &rules.Violation{Rule: "R1", Message: "R1 check 2 could not open the rebuilt db: " + err.Error()}
+		return nil, fmt.Errorf("R1 check 2: open rebuilt db: %w", err)
 	}
 	defer func() { _ = rdb.Close() }()
 	redumped, err := dump.Serialize(ctx, rdb)
 	if err != nil {
-		return &rules.Violation{Rule: "R1", Message: "R1 check 2 could not re-dump: " + err.Error()}
+		return nil, fmt.Errorf("R1 check 2: re-dump: %w", err)
 	}
 	if !bytes.Equal(redumped, tracked) {
-		return &rules.Violation{Rule: "R1", Message: "tracked dump does not survive a reload/re-dump round-trip"}
+		return &rules.Violation{Rule: "R1", Message: "tracked dump does not survive a reload/re-dump round-trip"}, nil
 	}
-	return nil
+	//nolint:nilnil // (no violation, no error) is exactly the clean round-trip result
+	return nil, nil
 }
 
 // r2 is §7's path-root rule: every root in the dictionary exists on disk.
@@ -186,11 +210,18 @@ func r5(ctx context.Context, db *sql.DB, dir string) ([]rules.Violation, error) 
 	return out, nil
 }
 
-// r10 (advisory) is the idle report: ACTIVE epics with no READY/IN-PROGRESS
-// story whose latest non-correction worklog append (or, absent any, their
-// creation) is older than idle_days. Correction rows are excluded so an
-// unrelated historical correction cannot reset a neglected epic's clock
-// (§5.7). PAUSED/BACKLOG epics are silent by design.
+// r10 (advisory) is the idle report, §7 verbatim: ACTIVE epics with no
+// READY/IN-PROGRESS story and no non-correction worklog append in
+// idle_days. An epic with no such append at all counts as idle (COALESCE to
+// the empty string, which sorts before any timestamp). Correction rows are
+// excluded so an unrelated historical correction cannot reset a neglected
+// epic's clock (§5.7, INV-117). PAUSED/BACKLOG epics are silent by design.
+//
+// The comparison is lexical, which is sound because every verb writes dates
+// in one canonical form (now(): ISO-8601 UTC, ...Z). A non-canonical stored
+// date (only reachable by raw SQL, or by an importer that fails to
+// normalise — an S9 obligation) would compare wrongly; R10 is advisory and
+// assumes the canonical storage the write path guarantees.
 func r10(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
 	var raw string
 	if err := db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'idle_days'`).Scan(&raw); err != nil {
@@ -208,7 +239,7 @@ func r10(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
 		WHERE e.status = 'ACTIVE'
 		  AND NOT EXISTS (SELECT 1 FROM stories s WHERE s.epic = e.slug AND s.status IN ('READY','IN-PROGRESS'))
 		  AND COALESCE((SELECT MAX(w.date) FROM worklog w
-		                WHERE w.epic = e.slug AND w.corrects IS NULL), e.created_at) < ?
+		                WHERE w.epic = e.slug AND w.corrects IS NULL), '') < ?
 		ORDER BY e.slug`, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("R10: %w", err)
@@ -252,9 +283,14 @@ func commitRefs(cell string) []string {
 	var refs []string
 	for _, f := range fields {
 		if before, after, isRange := strings.Cut(f, ".."); isRange {
+			// Trim any residual dots so a three-dot range (a...b) yields the
+			// two endpoints, not "a" and ".b" — the symmetric-difference form
+			// is out of the sanctioned <sha>..<sha> grammar but is a common
+			// git idiom, and a leading-dot token would misreport which ref
+			// failed to resolve.
 			for _, part := range []string{before, after} {
-				if part != "" {
-					refs = append(refs, part)
+				if p := strings.Trim(part, "."); p != "" {
+					refs = append(refs, p)
 				}
 			}
 			continue

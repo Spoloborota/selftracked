@@ -76,7 +76,10 @@ func (h *harness) execNoFK(query string) {
 		h.t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	db.SetMaxOpenConns(1) // pin one connection so PRAGMA foreign_keys(off) holds
+	// A bare sql.Open (no schema DSN) leaves foreign_keys at SQLite's OFF
+	// default; pinning one connection keeps every statement on that same
+	// FK-off connection rather than a pooled one that might differ.
+	db.SetMaxOpenConns(1)
 	if _, err := db.ExecContext(context.Background(), query); err != nil {
 		h.t.Fatalf("raw seed %q: %v", query, err)
 	}
@@ -109,9 +112,12 @@ func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	//nolint:gosec // test helper, fixed git binary
 	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...)
+	// Isolate from the machine's global/system git config — a global
+	// core.hooksPath or includeIf would otherwise leak into R5/R11 tests.
 	cmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+		"GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
@@ -295,35 +301,69 @@ func TestR5CommitResolution(t *testing.T) {
 	}
 }
 
-// --- the DB-only red rules verify must surface (R6-R9, R12) ---
+// --- the DB-only red rules verify must surface, each branch (R4, R6-R9, R12) ---
 
 func TestDBRulesRoutedToRed(t *testing.T) {
 	t.Parallel()
+	// Every case regens the dump after seeding, so R1 stays green and only
+	// the target rule fires; a fresh harness has no events, so no boundary
+	// tamper drops rows. mustRed asserts the target is among the red set.
 	cases := []struct {
 		name string
 		rule string
 		seed func(h *harness)
 	}{
-		{"R6-done-story-no-worklog", "R6", func(h *harness) {
+		{name: "R4-vrow-on-non-closed-epic", rule: "R4", seed: func(h *harness) {
+			// Clause 1b: a V-row is legal only on a CLOSED epic.
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+			h.exec(`INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e', 1, 'V-1', 'd', 'DONE')`)
+		}},
+		{name: "R6-done-story-no-worklog", rule: "R6", seed: func(h *harness) {
 			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
 			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
 		}},
-		{"R7-duplicates-link-no-dup_of", "R7", func(h *harness) {
+		{name: "R6-worklog-done-no-done-story", rule: "R6", seed: func(h *harness) {
+			// Second direction: a DONE worklog row whose story is not DONE.
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','PLANNED')`)
+			h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits) VALUES ('e', 1, 'S1', 'd', 'DONE', 'abc')`)
+		}},
+		{name: "R7-duplicates-link-no-dup_of", rule: "R7", seed: func(h *harness) {
 			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('a','OPEN','d','d')`)
 			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('b','OPEN','d','d')`)
 			// A duplicates link with no matching dup_of: the mapping is not one-to-one.
 			h.exec(`INSERT INTO task_links (from_task, to_task, type) VALUES (1, 2, 'duplicates')`)
 		}},
-		{"R8-unresolved-event-entity", "R8", func(h *harness) {
-			// An events entity that parses but names a task that does not exist.
+		{name: "R8-unresolved-event-entity", rule: "R8", seed: func(h *harness) {
+			// Existence branch: parses, but names a task that does not exist.
 			h.exec(`INSERT INTO events (at, entity, event) VALUES ('d', '#999', 'set-status')`)
 		}},
-		{"R9-boundary-tamper", "R9", func(h *harness) {
+		{name: "R8-malformed-event-entity", rule: "R8", seed: func(h *harness) {
+			// Grammar branch: does not parse as a §4 reference at all.
+			h.exec(`INSERT INTO events (at, entity, event) VALUES ('d', 'not a ref', 'set-status')`)
+		}},
+		{name: "R9-boundary-tamper", rule: "R9", seed: func(h *harness) {
 			h.exec(`UPDATE meta SET value = '5' WHERE key = 'events_archived_through'`)
 		}},
-		{"R12-terminal-no-trail", "R12", func(h *harness) {
+		{name: "R9-boundary-noncanonical-zero", rule: "R9", seed: func(h *harness) {
+			// "00" is numerically zero but not the canonical byte-string — a
+			// raw write no verb could have made (regression for the S7 fix).
+			h.exec(`UPDATE meta SET value = '00' WHERE key = 'events_archived_through'`)
+		}},
+		{name: "R9-sqlite-sequence-floor", rule: "R9", seed: func(h *harness) {
+			// The AUTOINCREMENT high-water dropped below MAX(id): a raw tamper.
+			// sqlite_sequence is not serialized, so the dump is unaffected.
+			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t','OPEN','d','d')`)
+			h.exec(`UPDATE sqlite_sequence SET seq = 0 WHERE name = 'tasks'`)
+		}},
+		{name: "R12-terminal-task-no-trail", rule: "R12", seed: func(h *harness) {
 			h.exec(`INSERT INTO tasks (title, status, status_note, created_at, updated_at)
 			        VALUES ('t','DONE','done','d','d')`)
+		}},
+		{name: "R12-terminal-epic-no-trail", rule: "R12", seed: func(h *harness) {
+			// The epic branch: a CLOSED epic with no matching events row.
+			h.exec(`INSERT INTO epics (slug, goal, status, close_sweep, created_at)
+			        VALUES ('e','g','CLOSED','swept','d')`)
 		}},
 	}
 	for _, c := range cases {
@@ -331,11 +371,7 @@ func TestDBRulesRoutedToRed(t *testing.T) {
 			t.Parallel()
 			h := newHarness(t)
 			c.seed(h)
-			// No regen for the boundary case (regen would drop events); R1
-			// may also fire, which is fine — we assert the target is present.
-			if c.rule != "R9" {
-				h.regen()
-			}
+			h.regen()
 			mustRed(t, h.verify(false), c.rule)
 		})
 	}
@@ -445,5 +481,256 @@ func TestNoTracker(t *testing.T) {
 	_, err := verify.Run(context.Background(), t.TempDir(), false)
 	if err == nil {
 		t.Fatal("verify on a directory with no tracker must error")
+	}
+}
+
+// --- R1 check 2 must not re-surface a DB-only violation as a second finding ---
+
+// TestR1CheckTwoNoDoubleCount guards the S7-close fix: an R6 violation must
+// appear once (as R6), never a second time mislabelled R1 "does not
+// rebuild" — load.Build re-runs the DB-only rules, and check 2 is skipped
+// when the DB is already dirty.
+func TestR1CheckTwoNoDoubleCount(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
+	h.regen()
+	rep := h.verify(false)
+	mustRed(t, rep, "R6")
+	if hasRule(rep.Red, "R1") {
+		t.Fatalf("R6 must not also surface as an R1 rebuild failure; red=%v", rep.Red)
+	}
+}
+
+// --- R7's chain clause (INV-301's named clause): dup_of target is DUPLICATE ---
+
+func TestR7ChainClause(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	// C(3) OPEN ← B(2) DUPLICATE ← A(1) DUPLICATE. A points at B, itself a
+	// DUPLICATE: a chain. Links are added so only the chain clause fires.
+	h.exec(`INSERT INTO tasks (id, title, status, created_at, updated_at) VALUES (3,'c','OPEN','d','d')`)
+	h.exec(`INSERT INTO tasks (id, title, status, dup_of, created_at, updated_at) VALUES (2,'b','DUPLICATE',3,'d','d')`)
+	h.exec(`INSERT INTO tasks (id, title, status, dup_of, created_at, updated_at) VALUES (1,'a','DUPLICATE',2,'d','d')`)
+	h.exec(`INSERT INTO task_links (from_task, to_task, type) VALUES (1,2,'duplicates'),(2,3,'duplicates')`)
+	// Terminal DUPLICATE tasks need an events trail or R12 also fires.
+	h.exec(`INSERT INTO events (at, entity, event) VALUES ('d','#1','set-status'),('d','#2','set-status')`)
+	h.regen()
+	mustRed(t, h.verify(false), "R7")
+}
+
+// --- R11 driven in situ through verify.Run, not only the string matcher ---
+
+func TestR11InSitu(t *testing.T) {
+	// t.Setenv (no t.Parallel): isolate the in-process git calls verify makes
+	// from the machine's global/system config, e.g. a global core.hooksPath.
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+
+	// Subtests are NOT parallel: t.Setenv above forbids it, and each mutates
+	// process-global git config state through its own repo anyway.
+	//nolint:paralleltest // parent uses t.Setenv; parallel subtests would panic
+	t.Run("hooksPath-points-at-ours-clears", func(t *testing.T) {
+		h := newHarness(t)
+		if err := os.MkdirAll(filepath.Join(h.dir, "hooks"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		git(t, h.root, "config", "core.hooksPath", ".selftracked/hooks")
+		if hasRule(h.verify(false).Advisory, "R11") {
+			t.Fatal("R11 must clear when the effective hooks dir IS .selftracked/hooks")
+		}
+	})
+
+	//nolint:paralleltest // parent uses t.Setenv; parallel subtests would panic
+	t.Run("chained-hook-content-clears", func(t *testing.T) {
+		h := newHarness(t)
+		for _, name := range []string{"pre-commit", "post-commit"} {
+			writeHook(t, h.root, name, "#!/bin/sh\nexec .selftracked/hooks/"+name+" \"$@\"\n")
+		}
+		if hasRule(h.verify(false).Advisory, "R11") {
+			t.Fatal("R11 must clear when both hook files chain their counterpart")
+		}
+	})
+
+	//nolint:paralleltest // parent uses t.Setenv; parallel subtests would panic
+	t.Run("hook-exists-but-unchained-warns", func(t *testing.T) {
+		h := newHarness(t)
+		writeHook(t, h.root, "pre-commit", "#!/bin/sh\nexec ./some-other-linter\n")
+		if !hasRule(h.verify(false).Advisory, "R11") {
+			t.Fatal("a hook that exists but does not chain the counterpart must warn")
+		}
+	})
+}
+
+func writeHook(t *testing.T, root, name, body string) {
+	t.Helper()
+	dir := filepath.Join(root, ".git", "hooks")
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// --- a populated, valid tracker has no red findings (not a vacuous green) ---
+
+func TestPopulatedTrackerNoRed(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	// A real commit so the DONE worklog row's R5 reference resolves.
+	if err := os.WriteFile(filepath.Join(h.root, "f.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git(t, h.root, "add", "-A")
+	git(t, h.root, "commit", "-m", "seed")
+	sha := git(t, h.root, "rev-parse", "HEAD")
+
+	// A valid DONE story with its matching DONE worklog row (R4/R6 pass).
+	const wl = `INSERT INTO worklog (epic, seq, story, date, state, commits)
+	            VALUES ('e',1,'S1','2020-01-02T00:00:00Z','DONE',?)`
+	h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
+	h.exec(wl, sha)
+	// A valid duplicate pair with its link and an events trail (R7/R12 pass).
+	h.exec(`INSERT INTO tasks (id, title, status, created_at, updated_at) VALUES (1,'canon','OPEN','d','d')`)
+	h.exec(`INSERT INTO tasks (id, title, status, dup_of, created_at, updated_at) VALUES (2,'dupe','DUPLICATE',1,'d','d')`)
+	h.exec(`INSERT INTO task_links (from_task, to_task, type) VALUES (2,1,'duplicates')`)
+	h.exec(`INSERT INTO events (at, entity, event) VALUES ('d','#2','set-status')`)
+	h.regen()
+
+	rep := h.verify(false)
+	if len(rep.Red) != 0 {
+		t.Fatalf("a populated, valid tracker must have no red findings; got %v", rep.Red)
+	}
+}
+
+// --- R13 negative control: an OPEN task WITH a home link is not flagged ---
+
+func TestR13OpenTaskWithHomeNotFlagged(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	if err := os.MkdirAll(filepath.Join(h.root, "docs/research"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.root, "docs/research/home.md"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.exec(`INSERT INTO path_dictionary (class, scope, root) VALUES ('research','','docs/research')`)
+	h.exec(`INSERT INTO artifacts (class, scope, relpath) VALUES ('research','','home.md')`)
+	h.exec(`INSERT INTO tasks (id, title, status, created_at, updated_at) VALUES (1,'t','OPEN','d','d')`)
+	h.exec(`INSERT INTO task_artifacts (task, artifact, role) VALUES (1,1,'home')`)
+	h.regen()
+	if hasRule(h.verify(false).Advisory, "R13") {
+		t.Fatal("an OPEN task with a home link must not be flagged by R13")
+	}
+}
+
+// --- INV-495: a mechanized audit that every emittable rule has a red fixture ---
+
+// TestRuleFixtureCoverage is the gate INV-495 asks for: a failing fixture
+// per rule, enumerated so a rule added to the engine without one is caught
+// here rather than by a manual second pass (the way R7/R8 were the first
+// time). wantRules is the authoritative list of what the §7 engine can emit
+// (Stage 0's fk plus every Stage-1 rule except R14, deferred to S8c); adding
+// a rule to the engine means adding it here AND a fixture below, or this
+// test fails. integrity_check is excluded: its red state (a corrupt page)
+// is not constructible hermetically without risking an unopenable DB.
+func TestRuleFixtureCoverage(t *testing.T) {
+	t.Parallel()
+	wantRules := []string{
+		"fk", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "R13", "R15",
+	}
+	advisory := map[string]bool{"R10": true, "R11": true, "R13": true, "R15": true}
+	fixtures := map[string]func(h *harness){
+		"fk": func(h *harness) {
+			h.execNoFK(`INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('ghost', 999, 'home')`)
+			h.regen()
+		},
+		"R1": func(h *harness) {
+			_ = os.WriteFile(filepath.Join(h.dir, "dump.sql"), []byte("garbage\n"), 0o600)
+		},
+		"R2": func(h *harness) {
+			h.exec(`INSERT INTO path_dictionary (class, scope, root) VALUES ('research','','docs/research')`)
+			h.regen()
+		},
+		"R3": func(h *harness) {
+			_ = os.MkdirAll(filepath.Join(h.root, "docs/research"), 0o750)
+			h.exec(`INSERT INTO path_dictionary (class, scope, root) VALUES ('research','','docs/research')`)
+			h.exec(`INSERT INTO artifacts (class, scope, relpath) VALUES ('research','','gone.md')`)
+			h.regen()
+		},
+		"R4": func(h *harness) {
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+			h.exec(`INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e',1,'V-1','d','DONE')`)
+			h.regen()
+		},
+		"R5": func(h *harness) {
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
+			h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits)
+			        VALUES ('e',1,'S1','d','DONE','deadbeefdeadbeefdeadbeef')`)
+			h.regen()
+		},
+		"R6": func(h *harness) {
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
+			h.regen()
+		},
+		"R7": func(h *harness) {
+			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('a','OPEN','d','d')`)
+			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('b','OPEN','d','d')`)
+			h.exec(`INSERT INTO task_links (from_task, to_task, type) VALUES (1,2,'duplicates')`)
+			h.regen()
+		},
+		"R8": func(h *harness) {
+			h.exec(`INSERT INTO events (at, entity, event) VALUES ('d','#999','set-status')`)
+			h.regen()
+		},
+		"R9": func(h *harness) {
+			h.exec(`UPDATE meta SET value = '5' WHERE key = 'events_archived_through'`)
+			h.regen()
+		},
+		"R10": func(h *harness) {
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2000-01-01T00:00:00Z')`)
+			h.regen()
+		},
+		"R11": func(_ *harness) {}, // a fresh git repo has no chained hooks
+		"R12": func(h *harness) {
+			h.exec(`INSERT INTO tasks (title, status, status_note, created_at, updated_at) VALUES ('t','DONE','d','d','d')`)
+			h.regen()
+		},
+		"R13": func(h *harness) {
+			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t','OPEN','d','d')`)
+			h.regen()
+		},
+		"R15": func(h *harness) {
+			_ = os.WriteFile(filepath.Join(h.dir, "skip-pending"), []byte(""), 0o600)
+		},
+	}
+
+	// Completeness: the fixture set must match wantRules exactly.
+	if len(fixtures) != len(wantRules) {
+		t.Fatalf("fixture count %d != wantRules count %d", len(fixtures), len(wantRules))
+	}
+	for _, r := range wantRules {
+		if _, ok := fixtures[r]; !ok {
+			t.Fatalf("rule %s is in wantRules but has no red fixture", r)
+		}
+	}
+	// Each fixture must actually make verify emit its rule.
+	for _, rule := range wantRules {
+		t.Run(rule, func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			fixtures[rule](h)
+			rep := h.verify(false)
+			if advisory[rule] {
+				mustAdvisory(t, rep, rule)
+			} else {
+				mustRed(t, rep, rule)
+			}
+		})
 	}
 }
