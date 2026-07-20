@@ -22,7 +22,11 @@ type Violation struct {
 	Message string
 }
 
-// DBOnly runs the pure-SQL Stage-1 subset: R6, R7, R8, R9, R12.
+// DBOnly runs the pure-SQL Stage-1 subset `load` depends on: R6, R7, R8,
+// R9, R12. This set is §8.5's contract (a boundary forgery or trail-less
+// terminal state never survives to the rename), fixed when S4 closed —
+// R4 is deliberately NOT here. `verify` and `--fast` need R4 too, so they
+// call R4 alongside DBOnly (see verify); `load` keeps calling DBOnly alone.
 func DBOnly(ctx context.Context, db *sql.DB) ([]Violation, error) {
 	var all []Violation
 	for _, run := range []func(context.Context, *sql.DB) ([]Violation, error){
@@ -35,6 +39,54 @@ func DBOnly(ctx context.Context, db *sql.DB) ([]Violation, error) {
 		all = append(all, v...)
 	}
 	return all, nil
+}
+
+// R4 is the worklog structural rule (§7): every worklog.story is a real
+// story of its epic or a `V-<n>` row (V only on a CLOSED epic), and every
+// correction row targets an existing SMALLER seq of the SAME story that is
+// itself a non-correction row (the no-chains backstop, R7's shape) whose
+// state it mirrors. Pure-SQL, so it joins the `--fast` set — a malformed
+// correction is caught at the commit boundary — but it is not in DBOnly:
+// see the note there.
+func R4(ctx context.Context, db *sql.DB) ([]Violation, error) {
+	var out []Violation
+	// 1a: a non-V story that does not exist among the epic's stories.
+	rows, err := db.QueryContext(ctx, `
+		SELECT w.epic, w.seq FROM worklog w
+		WHERE w.story NOT GLOB 'V-[0-9]*'
+		  AND NOT EXISTS (SELECT 1 FROM stories s WHERE s.epic = w.epic AND s.id = w.story)`)
+	if err != nil {
+		return nil, fmt.Errorf("R4: %w", err)
+	}
+	out, err = collect(rows, out, "R4", "worklog %v/%v names a story that does not exist")
+	if err != nil {
+		return nil, err
+	}
+	// 1b: a V-row on an epic that is not CLOSED.
+	rows, err = db.QueryContext(ctx, `
+		SELECT w.epic, w.seq FROM worklog w
+		WHERE w.story GLOB 'V-[0-9]*'
+		  AND NOT EXISTS (SELECT 1 FROM epics e WHERE e.slug = w.epic AND e.status = 'CLOSED')`)
+	if err != nil {
+		return nil, fmt.Errorf("R4: %w", err)
+	}
+	out, err = collect(rows, out, "R4", "worklog %v/%v is a V-row on a non-CLOSED epic")
+	if err != nil {
+		return nil, err
+	}
+	// 2–4: a correction whose target is missing, not smaller, a different
+	// story, itself a correction, or a different state.
+	rows, err = db.QueryContext(ctx, `
+		SELECT w.epic, w.seq FROM worklog w
+		WHERE w.corrects IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM worklog t
+			WHERE t.epic = w.epic AND t.seq = w.corrects AND t.seq < w.seq
+			  AND t.story = w.story AND t.corrects IS NULL AND t.state = w.state)`)
+	if err != nil {
+		return nil, fmt.Errorf("R4: %w", err)
+	}
+	return collect(rows, out, "R4",
+		"worklog %v/%v corrects a row that is missing, larger, a different story/state, or itself a correction")
 }
 
 // r6: DONE story ⇔ DONE worklog row with non-empty commits, both

@@ -11,6 +11,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/load"
 	"github.com/Spoloborota/selftracked/internal/verb"
+	"github.com/Spoloborota/selftracked/internal/verify"
 )
 
 func main() {
@@ -24,7 +25,7 @@ func run() int {
 	// The catalog's verbs register here as their stages build them; a verb
 	// absent from this list does not exist — which is the §1 contract, not
 	// a gap: an agent never gets a verb that does not fully work.
-	base := []cli.Verb{dump.Verb(), load.Verb()}
+	base := []cli.Verb{dump.Verb(), load.Verb(), verify.Verb()}
 	catalog := make([]cli.Verb, 0, len(base)+len(verb.Verbs()))
 	catalog = append(catalog, base...)
 	catalog = append(catalog, verb.Verbs()...)

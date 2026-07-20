@@ -1,0 +1,39 @@
+# S7 verify: the CLI contract end to end — green, the --fast partition,
+# --quiet, the dirty-dump refusal, and --json — driven through the real
+# binary. Rule-level red fixtures live white-box in internal/verify; this
+# scenario proves the verb's surface: exit codes, output, partition.
+
+exec git init
+seeddb
+
+# Full verify on a consistent tracker: exit 0. R11 warns (a fresh repo has
+# no chained hooks) — advisory, so the exit stays 0.
+expectexit 0 selftracked verify
+stdout 'warn R11'
+stdout 'verify full: 0 violation'
+
+# --fast is the pure-SQL partition: it skips the git-bound R11, so no R11
+# warning appears, and it reports itself as --fast.
+expectexit 0 selftracked verify --fast
+! stdout 'R11'
+stdout 'verify --fast: 0 violation'
+
+# --quiet suppresses the report entirely; the exit code still speaks.
+expectexit 0 selftracked verify --quiet
+! stdout '.'
+
+# A dirty dump (the tracked bytes no longer match the database) is a red R1
+# refusal: exit 1, FAIL on stdout, the coded error on stderr.
+cp bad.sql .selftracked/dump.sql
+expectexit 1 selftracked verify
+stdout 'FAIL R1'
+stderr 'integrity violation'
+
+# --json renders the machine report; the red finding carries its severity.
+expectexit 1 selftracked verify --json
+stdout '"rule":"R1"'
+stdout '"severity":"red"'
+
+-- bad.sql --
+PRAGMA evil;
+this is not a valid dump
