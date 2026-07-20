@@ -12,25 +12,33 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6. The full v0 verb catalog is live: task lifecycle, relations, artifact links, the path dictionary, config, stale, logs, and now the epic/story machinery — epic lifecycle with the atomic six-condition close, the story state machine with WIP/DoR and source-guarded transitions, worklog V-rows and corrections, runnable criteria. The repository now carries the full
-schema layer (`internal/schema`: DDL, connection posture, three test
-suites) and the CLI skeleton (`internal/ref` grammar, `internal/cli`
-dispatcher with a closed registry and structural `--json`, the §6.1 exit
-mapper, the version-gate stub, the testscript e2e harness, `cmd/selftracked`
-built under both decided names). All local, nothing pushed.
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6, S7. The full v0
+verb catalog is live, and now the integrity engine behind it: `verify`
+runs Stage 0 (integrity/foreign-key checks) and the Stage-1 rule battery —
+R1 (dump byte-equality + a reload/re-dump round-trip through the real
+loader), R2/R3 (path roots, artifact resolution), R4 (worklog structure),
+R5 (`git cat-file`), the DB-only R6–R9/R12, and the advisory R10/R11/R13/R15
+— splitting findings red vs advisory, with a `--fast` pre-commit partition.
+The repository carries the full schema layer (`internal/schema`), the CLI
+skeleton and verb catalog (`internal/{ref,cli,verb,dump,load,rules}`), and
+now `internal/verify`. All local, nothing pushed.
 
-**Next:** S7 — `verify`: the verb wraps the DB-only rules engine S4
-already built (R6–R9, R12) and adds the filesystem/git/serialization
-rules (R1–R3, R5, R10, R11, R13–R15) and the `--fast` partition. Open
-per D-EP13.
+**Next:** S8a — `init` full: the scaffold, seeded path roots, class
+READMEs, the ADR template, PROMPT.md, STATE.md, AGENTS.md, the `.claude/`
+files, `.gitignore`, and meta seeding — with a fresh `init` ⇒ `verify`
+green as the joint acceptance. Open per D-EP13.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
 
-**What is waiting on the owner:** nothing blocking. Amendments now apply
-under the D-EP14 pre-authorization: proposals are still filed as
-artifacts first, the owner reviews after the fact and may revert.
+**What is waiting on the owner:** nothing blocking S8a. Two post-review
+items from the S7 close: (1) the amendment `r14-rides-its-renderer-at-s8c`
+(applied under D-EP14, moving R14/STATE.md's check to S8c); (2) a
+**poison-pill bug in the closed `set-status` verb**, surfaced by the S7
+semantics critic and confirmed by hand — see the open question below. It
+is out of S7 scope (R7 itself is correct), so it did not block the close,
+but it lets two legal verbs build a tracker no fresh clone can `load`.
 
 ## Stages
 
@@ -47,7 +55,7 @@ artifacts first, the owner reviews after the fact and may revert.
 | S5a — task-lifecycle verbs | FULL | done (interim evidence) | `make gates` · 2026-07-19 · all green · local run @ `0699fba`, no CI has run (D-EP8) | All 40 rows `verified-by-command`. Opened per D-EP13; 18 placement moves at open; close critic hand-drove the binary and found five resolved-but-unfixtured rows plus a latent §6.1 order inversion — all closed before the flip. Adjudications in the close entry |
 | S5b — relation/artifact/dictionary verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `b051a2a`, no CI has run (D-EP8) | All 31 rows `verified-by-command`. Two amendments applied under D-EP14 during the stage; close critic found four blockers (symlink containment escape, root-move-into-existing-dir corruption, --with-files zero coverage, untested epic-link path) — all fixed before the flip |
 | S6 — epic/story/worklog/criteria verbs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `551bb98`, no CI has run (D-EP8) | All 73 rows `verified-by-command`. Largest verb stage; close critic found a real INV-119 blocker (self-transition re-affirm) and invented scope (ready-requires-DoD) — both fixed, one amendment filed. Adjudications below |
-| S7 — `verify` | FULL | not started | — | — |
+| S7 — `verify` | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `fed963f`, no CI has run (D-EP8) | All 36 rows `verified-by-command` (38 at open − 2: R14/STATE.md's INV-275/293 moved to S8c via amendment `r14-rides-its-renderer-at-s8c`, their renderer being S8c's). Opened per D-EP13 (`docs/stage-openings/s7.md`). Four close critics; one real code defect (R1 check 2 double-counting a DB-only violation), an over-strict-vs-spec R9, an unamended R10 deviation, and branch-level fixture gaps — all fixed before the flip. Critics also found a poison-pill in the closed `set-status` verb (out of scope; parked below). Adjudications in the close entry |
 | S8a — `init` scaffold + generated docs | FULL | not started | — | — |
 | S8b — hooks + sidecar matrix | FULL | not started | — | — |
 | S8c — `state`, `prime`, SessionStart | FULL | not started | — | — |
@@ -74,6 +82,9 @@ artifacts first, the owner reviews after the fact and may revert.
 | `epic-close-story-cardinality` | **spec** §6.4 | accepted 2026-07-19 | spec rev 3.13 |
 | `link-tables-are-relations-not-history` | **spec** §5 triggers, `ddl.sql`, INV-153/154/155 | accepted 2026-07-19 | spec rev 3.14 |
 | `pre-authorized-amendment-cadence` | execution plan §5, §10 | accepted 2026-07-19 (D-EP14) | plan rev 13 |
+| `instance-scoped-events-and-r8` | **spec** §5.9/§7 (R8 carve-out for `paths`/`config` events) | accepted 2026-07-20, D-EP14 | spec rev 3.15 |
+| `dod-shape-is-authoring-convention` | **spec** §2; INV-017 verification | accepted 2026-07-20, D-EP14 | spec rev 3.16 |
+| `r14-rides-its-renderer-at-s8c` | execution plan §4 (S7/S8c); INV-275/293 → S8c | accepted 2026-07-20, D-EP14 | plan rev 14 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -243,6 +254,42 @@ flagged (the §8.4 core has exactly four branches; the version gate is
 still the S2 stub) and that the interim reopen-of-DUPLICATE refusal
 matches what the pending link-tables amendment promises.
 
+S7 gave `verify` its rules and drew four critics — spec fidelity, code
+correctness, semantics, and fixture adequacy. The open had already made
+one forced placement correction: R14 / R1's third check (STATE.md
+byte-equals its render) cannot precede the renderer that produces STATE.md,
+and that renderer is S8c's, so INV-275/293 moved there by amendment and R1
+shipped with checks 1–2 only. The critics found one genuine code defect:
+R1 check 2 reuses the real loader (`load.Build`), which re-runs the DB-only
+rules and refuses on any of them — so a single R6/R9/R12 violation surfaced
+twice, once correctly and once mislabelled "the dump does not rebuild", and
+a real infrastructure failure (no temp dir) became a rule finding rather
+than an exit-2 error. Check 2 is now gated on a clean DB-only pass and
+reports infra failures as errors. Two smaller fidelity fixes: R9's boundary
+clause accepted `"+0"`/`"00"` (a numeric-zero test where §8.2's tamper
+argument is textual — tightened to the exact byte-string `"0"`), and R10
+carried a `created_at` idle floor that §7 never states — an unamended
+deviation, reverted to the literal rule. The fixture critic and the spec
+critic together showed the red-fixture set was rule-complete but
+branch-thin: R9's `sqlite_sequence` floor (a distinct row, INV-303) and
+R7's chain clause (INV-301's named clause) had no fixture at all, and
+several rules exercised only one of two code paths. All now covered, and
+`TestRuleFixtureCoverage` is the mechanized per-rule audit INV-495 asks for
+— the gate that would have caught the R7/R8 miss the first implementation
+pass made and only a manual second pass found.
+
+The semantics critic found the build's most dangerous defect, and it is
+**not** in S7: two legal `set-status DUPLICATE` verbs can build a task
+chain (A duplicate-of B, then B duplicate-of C leaves A pointing at a
+now-DUPLICATE B) that R7 correctly flags — and because R7 runs inside
+`load`, a fresh clone of that tracker cannot `load` it. R7 is right; the
+`set-status` verb (a closed stage) fails to prevent the chain. Confirmed by
+hand, parked for the owner below, and out of S7's scope — it did not block
+the close. Refuted: the R12-authenticity note (§1.1/INV-012 already state
+that a forger who also inserts a matching events row defeats R12 — detection,
+not prevention) and the GLOB-looseness note (`V-[0-9]*` inherits the DDL's
+own pattern; not new to S7).
+
 S6, the largest verb stage, closed on the sharpest report of the build.
 The blocker was subtle and real: the story transition verbs trusted only
 the schema matrix trigger, which treats a same-status write as a legal
@@ -294,7 +341,27 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 
 ## Open questions for the owner
 
-1. **Amendment `link-tables-are-relations-not-history`** (raised at S5a
+1. **`set-status DUPLICATE` can build an unloadable tracker** (raised at
+   the S7 close by the semantics critic, confirmed by hand, 2026-07-20).
+   *What breaks:* mark task A `DUPLICATE --dup-of B` while B is OPEN
+   (allowed), then mark B `DUPLICATE --dup-of C` while C is OPEN (also
+   allowed). Now A.dup_of = B and B.status = DUPLICATE — a chain. R7
+   ("no dup_of target is itself DUPLICATE") correctly flags it, and R7 runs
+   inside `load`'s pre-rename checks (§8.5), so a fresh clone of that
+   tracker **refuses to load**. *Why it arises:* `duplicateTarget`
+   (`internal/verb/tasks.go:554`) checks that the *target's* status isn't
+   DUPLICATE, but never checks whether the task being marked DUPLICATE is
+   already someone else's `dup_of` target. §5.5 intends the verb to enforce
+   no-chains "re-checked by R7"; the verb enforces one direction only.
+   *Scope:* the defect is in `set-status` (a closed stage), not in `verify`
+   — R7 is correct — so it did not block S7. *What it needs:* a reverse
+   guard in the verb (refuse marking a task DUPLICATE while it is a dup
+   target, or re-point the dependant), plus a fixture; likely a small
+   bugfix batch of its own. Recommendation: schedule it before S10
+   (dogfood switchover), since self-hosting makes an unloadable tracker a
+   live hazard rather than a hypothetical.
+
+2. **Amendment `link-tables-are-relations-not-history`** (raised at S5a
    implementation, 2026-07-19): §5 puts no-delete triggers on
    `task_links`/`task_artifacts`/`epic_artifacts`, but `reopen` must clear
    the duplicates link, `rel rm` and `unlink` must delete link rows, and
