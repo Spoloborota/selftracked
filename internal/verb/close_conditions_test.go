@@ -1,4 +1,4 @@
-//nolint:testpackage,lll // white-box: conditions (2)/(5) are unreachable through the S6 CLI (verbs write status+worklog atomically, worklog is append-only), so the fixture seeds the pathological state directly; import (S9) reaches it live
+//nolint:lll // white-box: conditions (2)/(5) are unreachable through the S6 CLI (verbs write status+worklog atomically, worklog is append-only), so the fixture seeds the pathological state directly; import (S9) reaches it live
 package verb
 
 import (

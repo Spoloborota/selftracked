@@ -15,6 +15,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/load"
+	"github.com/Spoloborota/selftracked/internal/scaffold"
 	"github.com/Spoloborota/selftracked/internal/schema"
 	"github.com/Spoloborota/selftracked/internal/verb"
 	"github.com/Spoloborota/selftracked/internal/verify"
@@ -30,7 +31,7 @@ func TestMain(m *testing.M) {
 		// Fixture verbs for the dispatcher scenarios, plus the real catalog
 		// verbs as their stages land them — same wiring main.go uses.
 		r := fixtureRegistry()
-		base := []cli.Verb{dump.Verb(), load.Verb(), verify.Verb()}
+		base := []cli.Verb{dump.Verb(), load.Verb(), verify.Verb(), scaffold.Verb()}
 		catalog := make([]cli.Verb, 0, len(base)+len(verb.Verbs()))
 		catalog = append(catalog, base...)
 		catalog = append(catalog, verb.Verbs()...)

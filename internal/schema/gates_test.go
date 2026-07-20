@@ -1346,7 +1346,7 @@ func TestGatesJournalRecovery(t *testing.T) {
 		marker := filepath.Join(dir, "child-committed")
 		// The child is this same test binary re-executed; os.Args[0] is not
 		// user input, and the env-var paths point into t.TempDir().
-		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run", "TestGatesJournalRecovery") //nolint:gosec
+		cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run", "TestGatesJournalRecovery")
 		cmd.Env = append(os.Environ(),
 			"GATES_CRASH_CHILD=1", "GATES_CRASH_DB="+path, "GATES_CRASH_MARKER="+marker)
 		if err := cmd.Start(); err != nil {
@@ -1456,7 +1456,7 @@ func crashChildMain() {
 	// the hot journal is on disk before the marker exists.
 	// The marker path is set by the parent test and points into its
 	// t.TempDir(); nothing here is user input.
-	if err := os.WriteFile(os.Getenv("GATES_CRASH_MARKER"), nil, 0o600); err != nil { //nolint:gosec
+	if err := os.WriteFile(os.Getenv("GATES_CRASH_MARKER"), nil, 0o600); err != nil {
 		os.Exit(1)
 	}
 	select {} // hold the transaction open until the kill

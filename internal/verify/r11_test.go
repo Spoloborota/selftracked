@@ -1,4 +1,3 @@
-//nolint:testpackage // white-box: the R11 variant table asserts the unexported hookReferences matcher directly
 package verify
 
 import "testing"

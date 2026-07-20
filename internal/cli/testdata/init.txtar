@@ -1,0 +1,38 @@
+# S8a init: the CLI contract — fresh init scaffolds a green tracker, the
+# gitignore covers the right files, no config file is created, and --force
+# gates re-initialization. Driven through the real binary.
+
+exec git init
+
+# A fresh init succeeds and immediately verifies green (INV-402/493). The
+# only findings are R11 advisories (hooks arrive at S8b), so exit stays 0.
+expectexit 0 selftracked init
+stdout 'initialized selftracked'
+expectexit 0 selftracked verify
+
+# Layout (§9): the tracked surface and the generated docs exist.
+exists .selftracked/dump.sql
+exists STATE.md
+exists PROMPT.md
+exists AGENTS.md
+exists docs/decisions/_template.md
+exists .claude/settings.json
+
+# .gitignore covers the local files and NOT the tracked dump (INV-397/398/417).
+grep '\.selftracked/db\.sqlite' .gitignore
+grep '\.selftracked/dump\.hash' .gitignore
+grep '\.selftracked/skip-pending' .gitignore
+! grep 'dump\.sql$' .gitignore
+
+# No config file exists — configuration lives in meta (INV-545).
+! exists selftracked.toml
+! exists selftracked.json
+! exists .selftracked/config
+
+# A seeded root exists so verify's R2 is green (INV-064).
+exists docs/research
+
+# Re-init without --force refuses (INV-188); with --force it succeeds.
+expectexit 1 selftracked init
+stderr 'already exists'
+expectexit 0 selftracked init --force

@@ -1,4 +1,3 @@
-//nolint:testpackage // white-box by necessity: the mutation guard must see the unexported tables declaration
 package dump
 
 import (

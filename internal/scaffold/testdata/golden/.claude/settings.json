@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'selftracked prime --json 2>/dev/null || { selftracked load >/dev/null 2>&1 && selftracked prime --json; } || echo \"{\\\"error\\\":\\\"selftracked state unavailable\\\",\\\"hint\\\":\\\"run selftracked load (if load refuses a newer dump, upgrade selftracked); see .selftracked/dump.sql\\\"}\"'"
+          }
+        ]
+      }
+    ]
+  }
+}

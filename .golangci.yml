@@ -51,6 +51,15 @@ linters:
           - gocyclo
           - goconst
           - maintidx
+          # White-box tests (S1b onward) live in the package under test to
+          # reach unexported helpers; golden/scaffold tests read and write
+          # files by computed path and cannot always be parallel. These are
+          # test idioms, not production risks — production keeps every linter.
+          - testpackage
+          - wrapcheck
+          - gosec
+          - noctx
+          - paralleltest
 
 formatters:
   enable:

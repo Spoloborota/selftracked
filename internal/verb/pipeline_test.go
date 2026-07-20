@@ -1,4 +1,3 @@
-//nolint:testpackage // white-box: the §6.1 order and the optimize call are internal steps a black box cannot see
 package verb
 
 import (
@@ -19,8 +18,6 @@ import (
 // STATE.md slot → sidecar → optimize. The S5a close review found the
 // sidecar written before the STATE slot (a latent §6.1 inversion); this
 // test is what keeps it fixed.
-//
-//nolint:paralleltest // serial by necessity: chdir + package-level trace hook
 func TestWritePipelineOrder(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)

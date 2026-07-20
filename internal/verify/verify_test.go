@@ -110,7 +110,6 @@ func (h *harness) verify(fast bool) verify.Report {
 
 func git(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	//nolint:gosec // test helper, fixed git binary
 	cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...)
 	// Isolate from the machine's global/system git config — a global
 	// core.hooksPath or includeIf would otherwise leak into R5/R11 tests.
@@ -530,7 +529,6 @@ func TestR11InSitu(t *testing.T) {
 
 	// Subtests are NOT parallel: t.Setenv above forbids it, and each mutates
 	// process-global git config state through its own repo anyway.
-	//nolint:paralleltest // parent uses t.Setenv; parallel subtests would panic
 	t.Run("hooksPath-points-at-ours-clears", func(t *testing.T) {
 		h := newHarness(t)
 		if err := os.MkdirAll(filepath.Join(h.dir, "hooks"), 0o750); err != nil {
@@ -542,7 +540,6 @@ func TestR11InSitu(t *testing.T) {
 		}
 	})
 
-	//nolint:paralleltest // parent uses t.Setenv; parallel subtests would panic
 	t.Run("chained-hook-content-clears", func(t *testing.T) {
 		h := newHarness(t)
 		for _, name := range []string{"pre-commit", "post-commit"} {
@@ -553,7 +550,6 @@ func TestR11InSitu(t *testing.T) {
 		}
 	})
 
-	//nolint:paralleltest // parent uses t.Setenv; parallel subtests would panic
 	t.Run("hook-exists-but-unchained-warns", func(t *testing.T) {
 		h := newHarness(t)
 		writeHook(t, h.root, "pre-commit", "#!/bin/sh\nexec ./some-other-linter\n")
