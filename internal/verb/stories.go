@@ -21,6 +21,7 @@ const (
 	storyBlocked    = "BLOCKED"
 	storyInProgress = "IN-PROGRESS"
 	storyDone       = "DONE"
+	storyDissolved  = "DISSOLVED"
 
 	evStory   = "story"
 	evWorklog = "worklog"

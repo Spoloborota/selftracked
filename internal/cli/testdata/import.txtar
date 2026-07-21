@@ -1,0 +1,55 @@
+# S9 import (INV-548/549 + the round-trip spine): a synthetic legacy corpus
+# citing a real sha created in-script round-trips through `import --legacy`,
+# `verify` is GREEN, and the two date bounds behave — a future-dated row is
+# refused, a pre-first-commit row is reported. A real git repo is set up so
+# the cited sha resolves (the pattern hooks-r11 / paths-move already use).
+
+exec git init
+exec git config user.email importer@test.invalid
+exec git config user.name importer
+expectexit 0 selftracked init
+
+# The imported path root must exist on disk (R2 checks non-ephemeral roots).
+exec mkdir -p web/src
+
+# Two real commits; the corpus template carries a SHATOKEN placeholder that
+# sed rewrites to the finish sha, so the DONE row is dated from git.
+exec sh -c 'echo one > f1 && git add f1 && git commit -q -m c1'
+exec sh -c 'echo two > f2 && git add f2 && git commit -q -m c2'
+exec sh -c 'sed "s/SHATOKEN/$(git rev-parse HEAD)/" corpus.tmpl > corpus.json'
+
+# Commit the corpus so the source-file bound (INV-549) has a first-commit
+# date to compare a pre-first-commit row against.
+exec git add corpus.json
+exec git commit -q -m corpus
+
+# The round trip: import succeeds, and the pre-first-commit row is REPORTED
+# (INV-549 — a report, not a failure), naming the row and the bound.
+expectexit 0 selftracked import --legacy --file corpus.json
+stderr 'demo/S1'
+stderr 'first commit'
+
+# The back door still reads the front door's rows out: verify is GREEN.
+expectexit 0 selftracked verify
+
+# INV-548: a future-dated row fails the whole import, naming the offending row.
+expectexit 1 selftracked import --legacy --file future.json
+stderr 'future'
+stderr 'tomorrow task'
+
+-- corpus.tmpl --
+{
+  "paths": [{"class":"src","scope":"web","root":"web/src"}],
+  "epics": [{"slug":"demo","goal":"demonstrate the backfill","status":"CLOSED","close_sweep":"2026-01-05",
+             "criteria":[{"criterion":"owner attests the migration","met":true,"evidence":"owner noted"}]}],
+  "stories": [{"epic":"demo","id":"S1","title":"first story","status":"DONE"},
+              {"epic":"demo","id":"S2","title":"second story","status":"DONE"}],
+  "tasks": [{"title":"a backfilled task","status":"DONE","note":"closed: shipped in the backfill","epic":"demo"}],
+  "worklog": [
+    {"epic":"demo","story":"S1","state":"IN-PROGRESS","date":"2000-01-01","note":"an old transcribed row"},
+    {"epic":"demo","story":"S1","state":"DONE","commits":"SHATOKEN","gate":"go test ./..."},
+    {"epic":"demo","story":"S2","state":"DONE","commits":"see prior work","legacy_reason":"imported without commit range"}
+  ]
+}
+-- future.json --
+{"tasks":[{"title":"tomorrow task","status":"OPEN","date":"2999-01-01"}]}

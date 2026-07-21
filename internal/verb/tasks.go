@@ -55,7 +55,7 @@ func Verbs() []cli.Verb {
 		},
 		RelationVerbs(), ArtifactVerbs(), DictVerbs(),
 		{StaleVerb(), GateVerb(), StateVerb(), PrimeVerb()},
-		EpicVerbs(), StoryVerbs(), CriteriaVerbs(),
+		EpicVerbs(), StoryVerbs(), CriteriaVerbs(), ImportVerbs(),
 	}
 	var n int
 	for _, g := range groups {

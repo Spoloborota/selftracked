@@ -1,0 +1,31 @@
+# S9/A4 (T1): a sha-shaped but unresolvable commits token — a transcription
+# typo — is stored VERBATIM so the commit rule can flag it (§6.2, INV-262),
+# not silently dropped or rewritten. The import succeeds; `verify` then reports
+# a red R5 on the unresolvable citation. This is the end-to-end R5 evidence for
+# the typo path: it cannot live white-box in internal/verb, where a verify
+# import would cycle verify -> load -> verb.
+
+exec git init
+exec git config user.email importer@test.invalid
+exec git config user.name importer
+expectexit 0 selftracked init
+
+# One real commit so the repo has history; the cited token is deliberately not it.
+exec sh -c 'echo x > f && git add f && git commit -q -m c'
+
+expectexit 0 selftracked import --legacy --file corpus.json
+
+# The typo is stored verbatim in the tracked dump (grep exits non-zero, and so
+# fails the step, if the token was dropped or rewritten).
+exec grep abcdef1 .selftracked/dump.sql
+
+# verify flags it: the citation does not resolve via git cat-file -> red R5.
+expectexit 1 selftracked verify
+stdout 'FAIL R5'
+
+-- corpus.json --
+{
+  "epics":[{"slug":"e","goal":"g"}],
+  "stories":[{"epic":"e","id":"S1","title":"t"}],
+  "worklog":[{"epic":"e","story":"S1","state":"IN-PROGRESS","commits":"abcdef1","date":"2026-01-02"}]
+}
