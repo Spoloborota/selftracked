@@ -12,9 +12,21 @@ log artifact proving the verification commands exited 0 (plan §5).
 
 Read this section first; the tables below carry the detail.
 
-**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6, S7, S8a, S8b, S8c.
+**Done:** G0, S0, S1a, S1b, S1c, S2, S3, S4, S5a, S5b, S6, S7, S8a, S8b, S8c, S9.
 The full v0 verb catalog, its integrity engine, `init`, and the self-enforcing
-gate are live — and S8c adds the tracker's **reader half**. `state`
+gate are live; S8c added the tracker's reader half; and **S9 adds `import
+--legacy`** — the one sanctioned backfill door. A batch reader (json + md-table)
+runs in front of the shared write pipeline in a single transaction, so every
+schema trigger binds as for a live write; a git-first date engine dates each
+worklog row from the newest cited commit's author date (else an explicit field,
+else — under `--legacy` — the import moment), warns on a calendar-day
+disagreement, and refuses a future date while reporting one older than the
+source file's first commit. A deterministic per-epic source map records which
+source dated each row; one `import` events row per terminal entity keeps R12
+green; `--legacy` gates exactly three relaxations (synthesized dates, `legacy:`
+commits, terminal INSERTs). It survived a five-lens critic round plus a
+verification re-critic (`docs/research/2026-07-21-s9-import-critic-round.md`).
+Back on the reader half: `state`
 regenerates STATE.md from the DB via the deterministic renderer, and the
 pipeline's `stateRender` slot is now wired to it, so every write verb refreshes
 STATE.md between the dump and the sidecar (§6.1 order intact). `prime` emits
@@ -32,21 +44,19 @@ stays visible to `verify` rather than being masked. The repository carries
 `internal/{schema,ref,cli,verb,dump,load,rules,verify,state,scaffold}`. All
 local, nothing pushed.
 
-**Next:** S9 is **open** (`docs/stage-openings/s9.md`, D-EP13) and in progress
-— `import` + `--legacy` (§6.2/§10): a synthetic legacy corpus round-trips →
-`verify` green → golden dump; the date-priority matrix (incl. the calendar-day
-warn) and a source-map determinism fixture. The open filed amendment
-`import-guide-reviews-ride-to-s12` (INV-449, INV-450 — two migration-guide
-`review:` rows — move S9 → S12 where the guide is authored; S9 30 → 28 rows) and
-carries INV-014 (the non-goals audit) as a watch-item, not a defect. No code
-yet.
+**Next:** S10 — the dogfood switchover (plan §4): this repo's inventory and
+ledger are imported into `.selftracked/` as the first epic, the bootstrap ledger
+is deleted, and self-host begins. S10 is the importer's first real rehearsal —
+S9 built the door it walks through. Most of S10 is plan-native (§3 rule 5), so
+it owns a single inventory row (INV-437 already sits at S12; S9's amendment
+moved INV-449/450 there too). Open per D-EP13.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
 
-**What is waiting on the owner:** nothing blocking S9. Post-review items,
-none blocking: (1) six amendments applied under D-EP14 —
+**What is waiting on the owner:** nothing blocking S10. Post-review items,
+none blocking: (1) seven amendments applied under D-EP14 —
 `r14-rides-its-renderer-at-s8c`; the two from the S8b open
 (`gate-skip-joins-the-r8-carve-out`, spec rev 3.17;
 `prime-divergence-rides-prime-at-s8c`, plan rev 15); the one from the S8c
@@ -65,7 +75,16 @@ single-writer axiom §1, read-transaction is the remedy if wanted). (3) The
 **poison-pill bug in the closed `set-status` verb** from the S7 close — out of
 scope, not blocking, but two legal verbs can build a tracker no fresh clone
 can `load` (open question below). (5) `pause` can orphan an IN-PROGRESS story
-into a non-active epic (S8c close; open question below).
+into a non-active epic (S8c close; open question below). (6) Three S9 close
+escalations (`docs/research/2026-07-21-s9-import-critic-round.md`): **E1** —
+does an explicit `date` field require `--legacy`? §6.2's relaxation list says no
+(only synthesized timestamps, `legacy:` commits, terminal INSERTs are `--legacy`
+features), so the shipped interim admits an explicit date without `--legacy`
+while events-marking every imported task; INV-056's wording could be read to
+require it. **E2** — a calendar-day date disagreement is recorded in the worklog
+`note`, not the machine-findable source map; sufficient for "both values
+recorded"? **E3** — md-table cannot express a bundled increment, so INV-444's
+split is exercised only through JSON; flag for the S10 ledger corpus.
 
 ## Stages
 
@@ -86,7 +105,7 @@ into a non-active epic (S8c close; open question below).
 | S8a — `init` scaffold + generated docs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `e15759f`, no CI has run (D-EP8) | All 39 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s8a.md`). Three close critics found two real data-loss bugs — init clobbering a clone's tracked dump, and `--force` wiping the DB — plus a §6.1 write-order inversion, an over-broad adoption claim, and durable-doc rule-2 content dropped by paraphrase; all fixed before the flip. Adjudications in the close entry |
 | S8b — hooks + sidecar matrix | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `dfe7daf`, no CI has run (D-EP8) | All 34 rows `verified-by-command` (35 at open − 1: INV-361 `prime` divergence → S8c via amendment `prime-divergence-rides-prime-at-s8c`, riding its verb). Opened per D-EP13 (`docs/stage-openings/s8b.md`); a second amendment widened the R8 carve-out to the S8b-born `gate-skip` event. Four close critics found six robustness defects — a non-executable-hook-on-refresh no-op, an asymmetric marker-clear window, subdir-blind activation, a post-commit false-positive, plus INV-425 uncovered and stale opening-record addresses — all fixed before the flip. Adjudications in the close entry; correction-at-close in the opening record |
 | S8c — `state`, `prime`, SessionStart | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `c0d75c4`, no CI has run (D-EP8) | All 29 rows `verified-by-command` (30 at open − 1: INV-464 `migrated` field → S11 via amendment `migrated-field-rides-migration-at-s11`, riding the migration engine). Opened per D-EP13 (`docs/stage-openings/s8c.md`); the S8b watch-item (STATE.md on `load`) dissolved to "no change to `load`" with a positive R1-check-3 fixture. Five close critics (spec/code/data/governance/security); accepted fixes: the INV-469 reflective prose-scan, an `atomicWrite` TOCTOU (chmod after rename), a fourth SessionStart branch (present-but-divergent DB → flag, not error), a not-a-git-repo `stale` test. Refuted (single-writer axiom, spec-conformance) and escalated (§11.1 `load` wording, the snapshot race) in the close appendix |
-| S9 — `import` | FULL | in progress | — | Opened 2026-07-21 per D-EP13 (`docs/stage-openings/s9.md`); 28 rows owned (30 at open − 2: INV-449/450 → S12 via amendment `import-guide-reviews-ride-to-s12`, riding the migration guide). INV-014 (non-goals audit) carried as a watch-item, scope "through S9". No code yet. |
+| S9 — `import` | FULL | done (interim evidence) | `make gates` · 2026-07-21 · all green · local run @ `ce68f30`, no CI has run (D-EP8) | All 28 rows `verified-by-command` (30 at open − 2: INV-449/450 → S12 via amendment `import-guide-reviews-ride-to-s12`). Opened per D-EP13 (`docs/stage-openings/s9.md`). Five fresh critics (spec/code/data/test/security) + a verification re-critic; confirmed clean on injection and privacy; accepted fixes: commit-cell classification (legacy-gate bypass + R5 pollution), DUPLICATE→R7 link, §8.1 gate over criteria, MIN first-commit bound, deterministic `epics.created_at`, clean re-import refusals, backfilled-task events marking, md-table loud refusals. Self-corrected an over-reaching A5 (RC-1) caught by the re-critic. Escalated E1–E3 (below). Adjudication: `docs/research/2026-07-21-s9-import-critic-round.md`. INV-014 closed review-only, scope "through S9" |
 | S10 — dogfood switchover | FULL | not started | — | — |
 | S11 — version gate + migration branches | FULL | not started | — | — |
 | S12 — pilot ladder + remaining deliverables | FULL | not started | — | — |
