@@ -1,6 +1,6 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 16.** Revision history: rev 1 →
+Status: **ACTIVE, revision 17.** Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →
@@ -20,7 +20,10 @@ S7 → S8c, where its renderer is built) → rev 14 → the S8b open filed two:
 S8b-born `gate-skip` event joins the R8 instance-scoped exemption) → rev 15 →
 the S8c open filed `migrated-field-rides-migration-at-s11` (INV-464's
 `migrated` field, whose positive verification needs the migration engine,
-moves S8c → S11; the contract slot is still built at S8c) → this revision.
+moves S8c → S11; the contract slot is still built at S8c) → rev 16 → the S9
+open filed `import-guide-reviews-ride-to-s12` (INV-449, INV-450 — two
+migration-guide `review:` rows whose verification reads a document authored at
+S12 — move S9 → S12; no plan DoD prose changes) → this revision.
 Governs the implementation of `docs/v0-spec.md`
 and the project's spec lifecycle beyond it. Derived from
 `docs/research/2026-07-18-spec-to-execution-planning.md`; tooling facts

@@ -32,21 +32,29 @@ stays visible to `verify` rather than being masked. The repository carries
 `internal/{schema,ref,cli,verb,dump,load,rules,verify,state,scaffold}`. All
 local, nothing pushed.
 
-**Next:** S9 — `import` + `--legacy` (§6.2/§10): a synthetic legacy corpus
-round-trips → `verify` green → golden dump; the date-priority matrix (incl.
-the calendar-day warn) and a source-map determinism fixture. Open per D-EP13.
+**Next:** S9 is **open** (`docs/stage-openings/s9.md`, D-EP13) and in progress
+— `import` + `--legacy` (§6.2/§10): a synthetic legacy corpus round-trips →
+`verify` green → golden dump; the date-priority matrix (incl. the calendar-day
+warn) and a source-map determinism fixture. The open filed amendment
+`import-guide-reviews-ride-to-s12` (INV-449, INV-450 — two migration-guide
+`review:` rows — move S9 → S12 where the guide is authored; S9 30 → 28 rows) and
+carries INV-014 (the non-goals audit) as a watch-item, not a defect. No code
+yet.
 
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
 
 **What is waiting on the owner:** nothing blocking S9. Post-review items,
-none blocking: (1) five amendments applied under D-EP14 —
+none blocking: (1) six amendments applied under D-EP14 —
 `r14-rides-its-renderer-at-s8c`; the two from the S8b open
 (`gate-skip-joins-the-r8-carve-out`, spec rev 3.17;
-`prime-divergence-rides-prime-at-s8c`, plan rev 15); and the one from the S8c
+`prime-divergence-rides-prime-at-s8c`, plan rev 15); the one from the S8c
 open (`migrated-field-rides-migration-at-s11`, plan rev 16 — the `migrated`
-field's value/verification rides to S11 with the migration engine). (2) Two
+field's value/verification rides to S11 with the migration engine); and the one
+from the S9 open (`import-guide-reviews-ride-to-s12`, plan rev 17 — INV-449/450,
+two migration-guide `review:` rows, move S9 → S12 where the guide is authored;
+plan DoD prose and spec both unchanged). (2) Two
 S8c spec/design notes from the close review: §11.1's "`load` fast-forwards a
 missing/behind DB" overstates `load` (it refuses ANY existing DB; the chain
 relies on `prime`'s `dump_divergence` flag for a behind DB, never on `load`) —
@@ -78,7 +86,7 @@ into a non-active epic (S8c close; open question below).
 | S8a — `init` scaffold + generated docs | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `e15759f`, no CI has run (D-EP8) | All 39 rows `verified-by-command`. Opened per D-EP13 (`docs/stage-openings/s8a.md`). Three close critics found two real data-loss bugs — init clobbering a clone's tracked dump, and `--force` wiping the DB — plus a §6.1 write-order inversion, an over-broad adoption claim, and durable-doc rule-2 content dropped by paraphrase; all fixed before the flip. Adjudications in the close entry |
 | S8b — hooks + sidecar matrix | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `dfe7daf`, no CI has run (D-EP8) | All 34 rows `verified-by-command` (35 at open − 1: INV-361 `prime` divergence → S8c via amendment `prime-divergence-rides-prime-at-s8c`, riding its verb). Opened per D-EP13 (`docs/stage-openings/s8b.md`); a second amendment widened the R8 carve-out to the S8b-born `gate-skip` event. Four close critics found six robustness defects — a non-executable-hook-on-refresh no-op, an asymmetric marker-clear window, subdir-blind activation, a post-commit false-positive, plus INV-425 uncovered and stale opening-record addresses — all fixed before the flip. Adjudications in the close entry; correction-at-close in the opening record |
 | S8c — `state`, `prime`, SessionStart | FULL | done (interim evidence) | `make gates` · 2026-07-20 · all green · local run @ `c0d75c4`, no CI has run (D-EP8) | All 29 rows `verified-by-command` (30 at open − 1: INV-464 `migrated` field → S11 via amendment `migrated-field-rides-migration-at-s11`, riding the migration engine). Opened per D-EP13 (`docs/stage-openings/s8c.md`); the S8b watch-item (STATE.md on `load`) dissolved to "no change to `load`" with a positive R1-check-3 fixture. Five close critics (spec/code/data/governance/security); accepted fixes: the INV-469 reflective prose-scan, an `atomicWrite` TOCTOU (chmod after rename), a fourth SessionStart branch (present-but-divergent DB → flag, not error), a not-a-git-repo `stale` test. Refuted (single-writer axiom, spec-conformance) and escalated (§11.1 `load` wording, the snapshot race) in the close appendix |
-| S9 — `import` | FULL | not started | — | — |
+| S9 — `import` | FULL | in progress | — | Opened 2026-07-21 per D-EP13 (`docs/stage-openings/s9.md`); 28 rows owned (30 at open − 2: INV-449/450 → S12 via amendment `import-guide-reviews-ride-to-s12`, riding the migration guide). INV-014 (non-goals audit) carried as a watch-item, scope "through S9". No code yet. |
 | S10 — dogfood switchover | FULL | not started | — | — |
 | S11 — version gate + migration branches | FULL | not started | — | — |
 | S12 — pilot ladder + remaining deliverables | FULL | not started | — | — |
@@ -107,6 +115,7 @@ into a non-active epic (S8c close; open question below).
 | `gate-skip-joins-the-r8-carve-out` | **spec** §7 R8 + §5.9; `internal/rules` r8; INV-302/137 | accepted 2026-07-20, D-EP14 | spec rev 3.17 |
 | `prime-divergence-rides-prime-at-s8c` | execution plan §4 (S8b/S8c); INV-361 → S8c | accepted 2026-07-20, D-EP14 | plan rev 15 |
 | `migrated-field-rides-migration-at-s11` | execution plan §4 (S8c/S11); INV-464 → S11 | accepted 2026-07-20, D-EP14 | plan rev 16 |
+| `import-guide-reviews-ride-to-s12` | execution plan §4 (S9/S12, prose unchanged); INV-449/450 → S12 | accepted 2026-07-21, D-EP14 | plan rev 17 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)

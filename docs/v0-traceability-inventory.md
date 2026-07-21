@@ -55,10 +55,10 @@ accounting check counts them so the proportion stays visible.
 | S8a | 39 |
 | S8b | 34 |
 | S8c | 29 |
-| S9 | 30 |
+| S9 | 28 |
 | S10 | 1 |
 | S11 | 26 |
-| S12 | 11 |
+| S12 | 13 |
 | deferred | 28 |
 
 | Kind | Rows |
@@ -534,8 +534,8 @@ understates its scope wherever that applies (today: S10 alone).
 | INV-446 | §10; R12 | Importer obligation: an `import` events row is written per terminal entity (each DONE/WONT-DO/DUPLICATE task, each CLOSED/DISSOLVED epic) — R12 matches per entity, so a single batch-summary events row would leave every imported terminal state red | verify-rule | S9 | test: import a batch of several terminal tasks/epics, assert one events row per terminal entity exists and R12 passes for each; assert a single summary row would fail R12 for the rest | planned |  |
 | INV-447 | §10; §6.2 | The per-epic import events row's detail carries a compact per-worklog-row date-source map (which of git/explicit/import-time dated each row), giving worklog rows date provenance without a per-row events row | format | S9 | test: import an epic's worklog with mixed date sources, assert the epic's import events row detail enumerates the source per worklog row | planned |  |
 | INV-448 | §10 | Importer obligation: rows described in the source as "slated as a future increment" map to epic homing, not to `park` | verb-contract | S9 | test: import a source row marked as a future increment, assert the importer homes it to the epic rather than invoking park | planned |  |
-| INV-449 | §10 | Importer obligation: source inconsistencies (e.g. a closed epic whose cards were never flipped) must be resolved before import — the close gates here are stricter than hand-kept files, by design | process | S9 | review: confirm the migration guide instructs pre-import reconciliation for such inconsistencies rather than importing them as-is | planned |  |
-| INV-450 | §10; §17 | What does not migrate: prose registries, narrative planning documents, and per-file status headers with their index-sync gates — these belong to the prose layer and its future lint core (§17) | process | S9 | review: confirm the migration guide states these are excluded from `import` | planned |  |
+| INV-449 | §10 | Importer obligation: source inconsistencies (e.g. a closed epic whose cards were never flipped) must be resolved before import — the close gates here are stricter than hand-kept files, by design | process | S12 | review: confirm the migration guide instructs pre-import reconciliation for such inconsistencies rather than importing them as-is | planned |  |
+| INV-450 | §10; §17 | What does not migrate: prose registries, narrative planning documents, and per-file status headers with their index-sync gates — these belong to the prose layer and its future lint core (§17) | process | S12 | review: confirm the migration guide states these are excluded from `import` | planned |  |
 | INV-451 | §10 | What does not migrate: pointers to non-file targets degrade to notes on import | process | S9 | test: import a source pointer referencing a non-file target, assert it lands as free-text note content, not a typed reference | planned |  |
 | INV-452 | §10 | What does not migrate: owner steers recorded only in campaign-level prose — where the unblocked work was never modeled as a BLOCKED story — import as task/epic notes, not as unblock events, since there is no block row to resolve | process | S9 | test: import a source campaign note describing an owner steer with no corresponding BLOCKED story, assert it lands as a note and no unblock event is synthesized | planned |  |
 | INV-453 | §10 | Migration is partial by design; the separate migration guide states exactly where the boundary is so nothing is lost by surprise | deliverable | S12 | review: confirm the migration guide contains an explicit boundary/scope section enumerating what does and does not migrate | planned |  |
