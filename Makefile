@@ -70,8 +70,11 @@ probe-gofix: ## Re-prove the undocumented `go fix -diff` exit-code behaviour
 # check-inventory retired at S10 with the traceability inventory it checked
 # (plan §9); scripts/check-inventory.py stays for the historical file in git.
 
+# binaries rides gates since the S10 self-host: the git gate and the
+# SessionStart hook run bin/selftracked off PATH, and a gates run is the
+# natural moment the working binary must match the code it just proved.
 .PHONY: gates
-gates: build vet test lint fix-check vuln check-pins ## Everything a stage close needs
+gates: build vet test lint fix-check vuln check-pins binaries ## Everything a stage close needs
 
 .PHONY: clean
 clean: ## Remove build output
