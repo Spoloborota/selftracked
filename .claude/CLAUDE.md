@@ -2,8 +2,9 @@
 
 selftracked is a local-first self-tracking system for small AI-agent crews:
 a SQLite database plus a Go CLI with a fixed verb set, a deterministic SQL
-dump tracked in git, and a path dictionary. Implementation is under way;
-`docs/v0-progress.md` says how far it has got.
+dump tracked in git, and a path dictionary. Since S10 the project is
+**self-hosted**: `.selftracked/` tracks it, and `selftracked prime` (or
+`STATE.md`) says how far it has got.
 
 Revision numbers are deliberately absent from this file: each document states
 its own, and a number copied here is a number that goes stale unnoticed.
@@ -13,9 +14,8 @@ its own, and a number copied here is a number that goes stale unnoticed.
 | Artifact | What it is |
 |---|---|
 | `docs/v0-spec.md` | The specification: the single authoritative description of v0. |
-| `docs/v0-execution-plan.md` | How v0 gets built, and how the spec is governed over its lifecycle. |
-| `docs/v0-traceability-inventory.md` | Every normative obligation of the spec as a numbered row with its closing stage and verification. |
-| `docs/v0-progress.md` | The living progress ledger — read it first in every session, update it last. |
+| `docs/v0-execution-plan.md` | How v0 got built and how the spec is governed; freezes at S10 close as the bootstrap's historical record — its §2 lifecycle contract stays live. |
+| `selftracked prime` / `STATE.md` + `PROMPT.md` | The living project state and the working contract — read them first in every session, update the tracker last (the bootstrap ledger and inventory retired at S10; git history keeps both). |
 | `docs/research/` | The evidence base. Every design decision in the spec cites a document here. |
 
 ## Non-negotiables
@@ -26,14 +26,17 @@ its own, and a number copied here is a number that goes stale unnoticed.
    merges — never as a code comment, a task note, or a silent choice. An
    approval given in conversation is not an amendment: the proposal exists
    first, the code lands after.
-2. **Every obligation is accounted for.** Work is organised by the stages in
-   the execution plan §4; each stage closes only the inventory rows it owns.
-   A change that adds scope needs an inventory row (and, if the spec did not
-   ask for it, an amendment). `python3 scripts/check-inventory.py` must exit 0.
-3. **Done means a command exited 0.** A stage closes when its verification
-   commands pass on a clean checkout or in CI, with the evidence link recorded
-   in the ledger, and a fresh-context reviewer has re-run them. An agent's
-   assertion that something works is not evidence.
+2. **Every obligation is accounted for.** The bootstrap inventory retired at
+   S10 (git history keeps its final state; its obligations live on as the
+   tracker's stories and criteria). A change that adds scope needs a tracker
+   record — a story, task, or criteria row — and, if the spec did not ask
+   for it, an amendment; the amendment's applier re-walks the affected
+   obligations as part of the same story's DoD (plan §9).
+3. **Done means a command exited 0.** Work closes when its verification
+   commands pass, with the evidence recorded in the tracker (worklog
+   `gate`/`review` fields, criteria `evidence`), and a fresh-context
+   reviewer has re-run them. An agent's assertion that something works is
+   not evidence.
 4. **The implementing agent never edits its own stage's scope or definition
    of done.** Those changes travel the amendment flow like any other.
 5. **Reviews report, they do not fix.** Review passes run read-only, enumerate
@@ -93,8 +96,8 @@ the owner's, or your own discovery — falls outside it:
 
 1. **Name the drift out loud.** "This is outside stage S<n>."
 2. **Route by size.** Under ~15 minutes *and* it unblocks the current work →
-   do it now. Otherwise → a line in `docs/v0-progress.md` under open
-   questions. Worth two stages or more → propose a stage of its own.
+   do it now. Otherwise → a task in the tracker (`selftracked create
+   --title … --note …`; `park` it if deferred). Worth an epic → propose one.
 3. **The decision is the owner's.** An explicit choice to switch is
    legitimate and is not argued with. On silence, park it and return.
 4. **Park by writing the line immediately** — not "at the end of the

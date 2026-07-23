@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -c 'test -f docs/v0-progress.md && { echo \"=== selftracked progress ledger (docs/v0-progress.md) — read before working, update before finishing ===\"; sed -n \"1,34p\" docs/v0-progress.md; } || true'"
+            "command": "sh -c 'selftracked prime --json 2>/dev/null || { selftracked load >/dev/null 2>&1 && selftracked prime --json; } || echo \"{\\\"error\\\":\\\"selftracked state unavailable\\\",\\\"hint\\\":\\\"install selftracked (go install ./cmd/selftracked) and run selftracked load; see .selftracked/dump.sql\\\"}\"'"
           }
         ]
       }

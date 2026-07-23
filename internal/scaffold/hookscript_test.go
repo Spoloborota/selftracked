@@ -70,7 +70,18 @@ func withStub(t *testing.T, install bool) string {
 			t.Fatal(err)
 		}
 	}
-	return bin + string(os.PathListSeparator) + os.Getenv("PATH")
+	// Drop any inherited PATH directory carrying a real selftracked: the
+	// binary-missing branch must hold on a machine where the tool is
+	// installed — exactly the state the S10 self-host switchover creates.
+	sep := string(os.PathListSeparator)
+	kept := []string{bin}
+	for dir := range strings.SplitSeq(os.Getenv("PATH"), sep) {
+		if fi, err := os.Stat(filepath.Join(dir, "selftracked")); err == nil && fi.Mode()&0o111 != 0 {
+			continue
+		}
+		kept = append(kept, dir)
+	}
+	return strings.Join(kept, sep)
 }
 
 // runScript runs a shell script file under /bin/sh in workdir with env
