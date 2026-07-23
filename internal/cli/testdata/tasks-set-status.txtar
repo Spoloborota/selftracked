@@ -31,6 +31,16 @@ stderr 'itself DUPLICATE'
 # The duplicates link was written by set-status (the single writer).
 grep '3, 2, .duplicates.' .selftracked/dump.sql
 
+# The reverse direction: task 2 is task 3's canonical, so marking task 2
+# DUPLICATE would leave 3.dup_of pointing at a DUPLICATE — the chain R7
+# flags and a fresh clone's load then refuses. Refused at the verb (§5.5).
+expectexit 1 selftracked set-status 2 DUPLICATE --dup-of 4 --note dup
+stderr 'would form a chain'
+
+# The sanctioned unwind: reopen the dependant, then the ex-canonical is free.
+expectexit 0 selftracked reopen 3 --why 'not a dup after all'
+expectexit 0 selftracked set-status 2 DUPLICATE --dup-of 4 --note dup
+
 # Auto-unpark on transition, events-logged.
 expectexit 0 selftracked create --title parked1 --status OPEN
 expectexit 0 selftracked park 5 --why 'waiting on PO'

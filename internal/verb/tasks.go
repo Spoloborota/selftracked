@@ -510,7 +510,7 @@ func setStatus(tx *sql.Tx, id int64, target, note string, dupOf int64, from *str
 			ref.TaskRef(id), cur.Status, id)
 	}
 
-	dupVal, err := duplicateTarget(ctx, tx, target, dupOf)
+	dupVal, err := duplicateTarget(ctx, tx, id, target, dupOf)
 	if err != nil {
 		return nil, err
 	}
@@ -538,8 +538,11 @@ func setStatus(tx *sql.Tx, id int64, target, note string, dupOf int64, from *str
 }
 
 // duplicateTarget validates the --dup-of pairing and the no-chains rule
-// (§5.5; re-checked by R7): the canonical must not itself be DUPLICATE.
-func duplicateTarget(ctx context.Context, tx *sql.Tx, target string, dupOf int64) (any, error) {
+// (§5.5; re-checked by R7), in both directions: the canonical must not
+// itself be DUPLICATE, and the task being marked must not already be
+// someone's canonical — either write would leave a dup_of pointing at a
+// DUPLICATE task, which R7 flags and a fresh clone's `load` then refuses.
+func duplicateTarget(ctx context.Context, tx *sql.Tx, id int64, target string, dupOf int64) (any, error) {
 	if target != statusDuplicate {
 		if dupOf != 0 {
 			return nil, refuse("usage", "--dup-of only accompanies DUPLICATE")
@@ -556,6 +559,19 @@ func duplicateTarget(ctx context.Context, tx *sql.Tx, target string, dupOf int64
 	if canon.Status == statusDuplicate {
 		return nil, refuse("dup-chain", "%s is itself DUPLICATE; point --dup-of at its canonical instead",
 			ref.TaskRef(dupOf))
+	}
+	var dep int64
+	err = tx.QueryRowContext(ctx,
+		`SELECT id FROM tasks WHERE dup_of = ? ORDER BY id LIMIT 1`, id).Scan(&dep)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Not a canonical; free to become DUPLICATE.
+	case err != nil:
+		return nil, err //nolint:wrapcheck // constraint codes ride to the mapper
+	default:
+		return nil, refuse("dup-chain",
+			"%s is %s's canonical; marking it DUPLICATE would form a chain — reopen %s first",
+			ref.TaskRef(id), ref.TaskRef(dep), ref.TaskRef(dep))
 	}
 	return dupOf, nil
 }
