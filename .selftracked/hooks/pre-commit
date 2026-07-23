@@ -1,0 +1,20 @@
+#!/bin/sh
+command -v selftracked >/dev/null 2>&1 || {
+  echo "selftracked: binary not installed — gate skipped (install to enable)" >&2; exit 0; }
+if [ "$SELFTRACKED_SKIP" = "1" ]; then
+  selftracked gate skip-mark >/dev/null 2>&1 \
+    || echo "selftracked: WARNING could not record skip marker" >&2
+  exit 0
+fi
+selftracked verify --fast --quiet; rc=$?
+if [ "$rc" = 1 ]; then
+  echo "selftracked: verify RED — 'selftracked verify' for details; SELFTRACKED_SKIP=1 bypasses ONCE (recorded)" >&2; exit 1
+elif [ "$rc" != 0 ]; then
+  echo "selftracked: verify did not complete (rc=$rc — interrupted or environment failure) — re-run; not bypassable as RED" >&2; exit 1
+fi
+selftracked dump  || { echo "selftracked: dump refresh FAILED — aborting commit" >&2; exit 1; }
+selftracked state || { echo "selftracked: STATE.md refresh FAILED — aborting commit" >&2; exit 1; }
+git add .selftracked/dump.sql STATE.md \
+  || { echo "selftracked: staging dump/STATE.md FAILED — aborting commit" >&2; exit 1; }
+echo "selftracked: staged refreshed dump.sql + STATE.md" >&2
+selftracked stale --since HEAD || true
