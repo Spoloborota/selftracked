@@ -57,6 +57,17 @@ S9 built the door it walks through. Most of S10 is plan-native (§3 rule 5), so
 it owns a single inventory row (INV-437 already sits at S12; S9's amendment
 moved INV-449/450 there too). Open per D-EP13.
 
+**FINAL ENTRY (2026-07-24).** The switchover executed: `init` scaffolded the
+instance, `import --legacy` landed `docs/v0-bootstrap-corpus.json` — one epic
+(`v0-bootstrap`), 19 stage-stories, 17 worklog rows dated from their cited
+commits, 5 live tasks — and full `verify` reports 0 violations @ 9a4ce32,
+with the gate active via `core.hooksPath`. INV-514 flipped on that evidence.
+This file and the traceability inventory retire in the next commit (plan §9;
+both stay in git history — this file @ this commit is the bootstrap's last
+ledger state). Project state now lives in `.selftracked/`: read it with
+`selftracked prime` / `STATE.md`; the S10 close review runs on tracker
+records.
+
 **How to verify anything:** `make gates` runs the whole chain. It must exit 0
 before a stage closes, and a fresh reviewer re-runs it rather than trusting
 the report.
