@@ -1,0 +1,65 @@
+{
+  "epics": [
+    {
+      "slug": "v0-bootstrap",
+      "goal": "Build selftracked v0 per docs/v0-spec.md and switch this repository to self-hosting",
+      "status": "ACTIVE",
+      "criteria": [
+        {"criterion": "Verb catalog, integrity engine (R1-R15), init, hooks, reader half, and import built; make gates green locally through S9", "met": true, "evidence": "git history: docs/v0-progress.md ledger @ 850b2f2; local gates run @ ce68f30 (interim, D-EP8)"},
+        {"criterion": "$ selftracked verify", "met": false},
+        {"criterion": "Schema version gate and migration branches ship (plan S11)", "met": false},
+        {"criterion": "Pilot ladder rungs 3-4: gitignored disposable-clone import rehearsal, then colocated live install (plan S12)", "met": false},
+        {"criterion": "README, CONTRIBUTING (DCO + AI clause), generic migration guide, docs link-check (plan S12)", "met": false},
+        {"criterion": "First push: gates re-run against the squashed tree, verified rows re-stamped, CI green (D-EP11)", "met": false},
+        {"criterion": "Spec governed proposal-first end to end: every deviation an archived amendment (26 amendments through spec rev 3.21 / plan rev 17)", "met": true, "evidence": "openspec/changes/ directory; amendments log in git history (docs/v0-progress.md @ 23cc8bf)"}
+      ]
+    }
+  ],
+  "stories": [
+    {"epic": "v0-bootstrap", "id": "S1", "title": "G0 - traceability inventory", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S2", "title": "S0 - repo bootstrap", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S3", "title": "S1a - schema as text", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S4", "title": "S1b - schema gates", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S5", "title": "S1c - driver behaviour", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S6", "title": "S2 - CLI dispatcher", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S7", "title": "S3 - serializer and dump", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S8", "title": "S4 - load and parser fuzzing", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S9", "title": "S5a - task-lifecycle verbs", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S10", "title": "S5b - relation, artifact and dictionary verbs", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S11", "title": "S6 - epic, story, worklog and criteria verbs", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S12", "title": "S7 - verify", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S13", "title": "S8a - init scaffold and generated docs", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S14", "title": "S8b - hooks and sidecar matrix", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S15", "title": "S8c - state, prime, SessionStart", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S16", "title": "S9 - import, the backfill door", "status": "DONE"},
+    {"epic": "v0-bootstrap", "id": "S17", "title": "S10 - dogfood switchover", "status": "IN-PROGRESS", "dod": "corpus imported through the S9 door; selftracked verify green on this repo's live tracker; bootstrap ledger deleted; inventory file retired (git history keeps both)"},
+    {"epic": "v0-bootstrap", "id": "S18", "title": "S11 - version gate and migration branches", "status": "PLANNED", "dod": "schema version gate + migration branches per plan section 4 S11; INV-464 migrated field rides here"},
+    {"epic": "v0-bootstrap", "id": "S19", "title": "S12 - pilot ladder and remaining deliverables", "status": "PLANNED", "dod": "pilot rungs 3-4; README; CONTRIBUTING (DCO + AI clause); generic migration guide (INV-449/450 ride here); docs link-check"}
+  ],
+  "tasks": [
+    {"title": "Align dump.sql file mode with the other tracked files (0600 from CreateTemp+rename vs 0644)", "status": "OPEN", "epic": "v0-bootstrap", "note": "Parked at the S8a close (code critic): more restrictive, not a leak; git tracks content, not mode. internal/dump owns it if it ever matters."},
+    {"title": "Read-transaction for prime/state snapshot consistency, if the owner ever wants it", "status": "OPEN", "epic": "v0-bootstrap", "note": "Refuted as a defect at the S8c close under the single-writer axiom (spec section 1); a momentary off-by-a-few in advisory totals that self-heals on the next prime. Remedy on record: wrap prime/state reads in one read transaction."},
+    {"title": "dump_divergence is a boolean and cannot distinguish a behind DB from a truly divergent one", "status": "OPEN", "epic": "v0-bootstrap", "note": "Post-v0 note from the 2026-07-24 open-questions round (fork analysis F2, architecture critic): both cases route to load --force + re-apply; the flag carries no distinguishing detail."},
+    {"title": "Revisit the OpenSpec proposal+delta+tasks.md convention once the tool is installed", "status": "OPEN", "epic": "v0-bootstrap", "note": "Parked at the first-commit review: change directories hold proposal.md only; the tool is adopted but not installed, so the convention has nothing to run against yet."},
+    {"title": "First push: re-run gates on the squashed tree and re-stamp every verified row (D-EP11)", "status": "OPEN", "epic": "v0-bootstrap", "note": "The publication boundary. Evidence recorded before the first push names commits a squash deletes; one re-run against the squashed tree re-stamps, and rows whose checks fail return to planned. The CI-half rows (INV-492/498/499/507/513) close there too."}
+  ],
+  "worklog": [
+    {"epic": "v0-bootstrap", "story": "S1", "state": "DONE", "commits": "7633f8f", "gate": "python3 scripts/check-inventory.py exit 0", "note": "545 obligations extracted from the spec and ratified as the control artifact (D-EP4); three review passes; governance amendments plan-accounting-scope and stage-open-plan-crosscheck filed at close (plan revs 5-6)."},
+    {"epic": "v0-bootstrap", "story": "S2", "state": "DONE", "commits": "e09204a", "gate": "make gates exit 0 (local, D-EP8)", "note": "Repo bootstrap: Makefile gates chain, check-inventory, probe scripts. Close review found two fail-open probes (reported success without go on PATH) - both refuse now. Amendments review-proportionality-tiers, local-commits-and-interim-evidence, s0-minimal-package, split-s1 (plan revs 7-10)."},
+    {"epic": "v0-bootstrap", "story": "S3", "state": "DONE", "commits": "6cf73a1", "gate": "make gates exit 0 (local, D-EP8)", "note": "Schema as text + connection posture. Close found the DSN setting the one journal mode the spec rules out, and proved the DDL tests could not fail by deleting a trigger. Amendment nullable-columns-preamble - the first to the specification (spec rev 3.10)."},
+    {"epic": "v0-bootstrap", "story": "S4", "state": "DONE", "commits": "ad8ef15", "gate": "make gates exit 0, 114 subtests, -race, fresh cache", "note": "Schema gates; first stage under the D-EP13 opening record. Five mutation probes shown red. Amendments worklog-story-guard-rule-pointer (spec rev 3.12) and epic-close-story-cardinality (3.13); the governance trio stage-open-record, evidence-across-a-squash, pre-authorized-amendment-cadence landed this window (plan revs 11-13)."},
+    {"epic": "v0-bootstrap", "story": "S5", "state": "DONE", "commits": "e5b2006", "gate": "make gates exit 0 (local, D-EP8)", "note": "Driver behaviour: Serialize byte-identity, pragma posture, the _dqs=0 probe. One accepted fix: an unchecked type assertion made uniform with its siblings."},
+    {"epic": "v0-bootstrap", "story": "S6", "state": "DONE", "commits": "739f8c9", "gate": "make gates exit 0 (local, D-EP8)", "note": "CLI dispatcher: closed verb set, section 3.2 flag posture. The bare word help - scope never granted - was deleted outright, dissolving the verb-shadowing it had silently created."},
+    {"epic": "v0-bootstrap", "story": "S7", "state": "DONE", "commits": "d20ecf1", "gate": "make gates exit 0 (local, D-EP8)", "note": "Deterministic serializer + dump. The mutation story: two probes struck as no-ops (green against an unmutated file proves nothing), an ORDER BY removal surviving black-box fixtures killed by a white-box guard, and the critic proved a second surviving mutant (duplicated DDL block) the same way."},
+    {"epic": "v0-bootstrap", "story": "S8", "state": "DONE", "commits": "4ee8f22", "gate": "make gates exit 0 (local, D-EP8)", "note": "load + whitelist-parser fuzzing - the security boundary. Adversarial close weighted parser bypass hardest and found none; the statement-boundary attack round-trips as one literal, hand-verified. Amendment import-date-bounds (spec rev 3.11) had already sharpened the import obligations this stage's parser serves."},
+    {"epic": "v0-bootstrap", "story": "S9", "state": "DONE", "commits": "0699fba", "gate": "make gates exit 0 (local, D-EP8)", "note": "Task-lifecycle verbs and the write pipeline. Close critic hand-drove the binary: five resolved-but-unfixtured rows and a latent section 6.1 order inversion (sidecar before STATE.md slot) - all fixed before any row flipped."},
+    {"epic": "v0-bootstrap", "story": "S10", "state": "DONE", "commits": "b051a2a", "gate": "make gates exit 0 (local, D-EP8)", "note": "Relation/artifact/dictionary verbs. Four blockers fixed pre-flip: symlink containment escape, root-move nesting corruption, --with-files zero coverage, untested epic-link path. Amendments link-tables-are-relations-not-history (spec rev 3.14) and instance-scoped-events-and-r8 (3.15) applied mid-stage."},
+    {"epic": "v0-bootstrap", "story": "S11", "state": "DONE", "commits": "551bb98", "gate": "make gates exit 0 (local, D-EP8)", "note": "Epic/story/worklog/criteria verbs - the largest verb stage. Real INV-119 blocker (terminal re-transition duplicating worklog episodes) fixed via a source-guarded helper; invented scope (ready-requires-DoD) removed. Amendment dod-shape-is-authoring-convention (spec rev 3.16)."},
+    {"epic": "v0-bootstrap", "story": "S12", "state": "DONE", "commits": "fed963f", "gate": "make gates exit 0 (local, D-EP8)", "note": "verify: R1-R15 with per-rule red fixtures and the mechanized coverage audit. R1 check 2 double-count fixed; R9/R10 tightened to the literal rules. The semantics critic found the set-status DUPLICATE poison pill (fixed 2026-07-23, pre-S10). Amendment r14-rides-its-renderer-at-s8c (plan rev 14)."},
+    {"epic": "v0-bootstrap", "story": "S13", "state": "DONE", "commits": "e15759f", "gate": "make gates exit 0 (local, D-EP8)", "note": "init scaffold + generated docs. Two data-loss bugs caught by critics before the flip: init clobbering a clone's tracked dump, and --force wiping the DB (now a refresh). The section 6.1 order inversion recreated via old WriteFiles - fixed the pipeline way."},
+    {"epic": "v0-bootstrap", "story": "S14", "state": "DONE", "commits": "dfe7daf", "gate": "make gates exit 0 (local, D-EP8)", "note": "Git hooks + the section 8.4 sidecar matrix. Six robustness defects fixed pre-flip, sharpest: os.WriteFile setting mode only on creation left a refreshed hook non-executable - git skips it silently. Amendments gate-skip-joins-the-r8-carve-out (spec rev 3.17) and prime-divergence-rides-prime-at-s8c (plan rev 15)."},
+    {"epic": "v0-bootstrap", "story": "S15", "state": "DONE", "commits": "c0d75c4", "gate": "make gates exit 0 (local, D-EP8)", "note": "state, prime, SessionStart, R1 check 3. load must NOT regenerate STATE.md (would mask committed drift). Accepted fixes: reflective prose-scan, atomicWrite TOCTOU, fourth SessionStart branch, non-git stale degradation. Amendment migrated-field-rides-migration-at-s11 (plan rev 16)."},
+    {"epic": "v0-bootstrap", "story": "S16", "state": "DONE", "commits": "ce68f30", "gate": "make gates exit 0 (local, D-EP8)", "review": "five fresh critics + verification re-critic; adjudication: docs/research/2026-07-21-s9-import-critic-round.md", "note": "import --legacy - the one sanctioned backfill door. Batch reader before the shared write pipeline in one transaction; git-first date engine (author dates, newest cited commit); deterministic per-epic source map; three relaxations gated exactly. Amendment import-guide-reviews-ride-to-s12 (plan rev 17)."},
+    {"epic": "v0-bootstrap", "story": "S17", "state": "IN-PROGRESS", "commits": "850b2f2", "note": "Opened per D-EP13 (docs/stage-openings/s10.md). Pre-stage: the dup-chain poison pill fixed (b3cadcf); the 2026-07-24 open-questions round ran five critics on the fork analysis and the owner ratified four amendments (spec revs 3.18-3.21), applied and verified. This import is the switchover itself."}
+  ]
+}
