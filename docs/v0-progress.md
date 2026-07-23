@@ -70,26 +70,26 @@ open (`migrated-field-rides-migration-at-s11`, plan rev 16 — the `migrated`
 field's value/verification rides to S11 with the migration engine); and the one
 from the S9 open (`import-guide-reviews-ride-to-s12`, plan rev 17 — INV-449/450,
 two migration-guide `review:` rows, move S9 → S12 where the guide is authored;
-plan DoD prose and spec both unchanged). (2) Two
-S8c spec/design notes from the close review: §11.1's "`load` fast-forwards a
-missing/behind DB" overstates `load` (it refuses ANY existing DB; the chain
-relies on `prime`'s `dump_divergence` flag for a behind DB, never on `load`) —
-a wording question like S8b's rc-triage note; and the cross-statement snapshot
-race in `prime`/`state` under concurrent processes (refuted under the
-single-writer axiom §1, read-transaction is the remedy if wanted). (3) The
-§9 pre-commit's rc-triage signal-death spec-wording note (S8b). (4) ~~The
+plan DoD prose and spec both unchanged). (2) ~~The §11.1 `load` wording
+note~~ — **resolved 2026-07-24** by amendment `load-prose-matches-load`
+(spec rev 3.19); the snapshot-race half of that S8c note stands as refuted
+(single-writer axiom §1; a read-transaction is the remedy if ever wanted).
+(3) ~~The §9 rc-triage signal-death note~~ — **resolved 2026-07-24** by
+amendment `rc-triage-verify-did-not-complete` (spec rev 3.20). (4) ~~The
 poison-pill bug in the closed `set-status` verb~~ — **fixed 2026-07-23** in
-the pre-S10 bugfix batch (open question 1 below, now resolved). (5) `pause` can orphan an IN-PROGRESS story
-into a non-active epic (S8c close; open question below). (6) Three S9 close
-escalations (`docs/research/2026-07-21-s9-import-critic-round.md`): **E1** —
-does an explicit `date` field require `--legacy`? §6.2's relaxation list says no
-(only synthesized timestamps, `legacy:` commits, terminal INSERTs are `--legacy`
-features), so the shipped interim admits an explicit date without `--legacy`
-while events-marking every imported task; INV-056's wording could be read to
-require it. **E2** — a calendar-day date disagreement is recorded in the worklog
-`note`, not the machine-findable source map; sufficient for "both values
-recorded"? **E3** — md-table cannot express a bundled increment, so INV-444's
-split is exercised only through JSON; flag for the S10 ledger corpus.
+the pre-S10 bugfix batch (open question 1 below, now resolved). (5) ~~The
+`pause` orphan~~ — **resolved 2026-07-24** as intended behavior by amendment
+`paused-epic-sprint-goal-is-intended` (spec rev 3.18; open question 2 below).
+(6) ~~Three S9 close escalations~~ — **all dispositioned 2026-07-24** on the
+adjudicated fork analysis
+(`docs/research/2026-07-24-open-questions-fork-analysis.md`): **E1** resolved
+by amendment `backfill-parenthetical-names-its-relaxation` (spec rev 3.21 —
+an explicit date never needs `--legacy`; the ambiguous parenthetical lived in
+the §5 preamble itself and is fixed there); **E2** accepted as shipped (both
+values recorded, the note format is stable and greppable); **E3** stands as
+the S10 corpus authoring rule (split per increment, or author in JSON).
+The four 2026-07-24 amendments were each ratified by the owner per-item on
+the critic-reviewed fork analysis before application.
 
 ## Stages
 
@@ -140,6 +140,10 @@ split is exercised only through JSON; flag for the S10 ledger corpus.
 | `prime-divergence-rides-prime-at-s8c` | execution plan §4 (S8b/S8c); INV-361 → S8c | accepted 2026-07-20, D-EP14 | plan rev 15 |
 | `migrated-field-rides-migration-at-s11` | execution plan §4 (S8c/S11); INV-464 → S11 | accepted 2026-07-20, D-EP14 | plan rev 16 |
 | `import-guide-reviews-ride-to-s12` | execution plan §4 (S9/S12, prose unchanged); INV-449/450 → S12 | accepted 2026-07-21, D-EP14 | plan rev 17 |
+| `paused-epic-sprint-goal-is-intended` | **spec** §11.1 (`sprint_goals[]` includes a paused epic's story, deliberately) | ratified by the owner 2026-07-24 (fork analysis F1 → β), D-EP14 | spec rev 3.18 |
+| `load-prose-matches-load` | **spec** §8.4 + §11.1; `internal/verb/pipeline.go` refusal message; `internal/load/verb.go` comment; INV-456 | ratified by the owner 2026-07-24 (F2 → α expanded), D-EP14 | spec rev 3.19 |
+| `rc-triage-verify-did-not-complete` | **spec** §9 script; scaffold template + golden + test; INV-428/429 | ratified by the owner 2026-07-24 (F3 → β, honest-message form), D-EP14 | spec rev 3.20 |
+| `backfill-parenthetical-names-its-relaxation` | **spec** §5 preamble; INV-056 | ratified by the owner 2026-07-24 (D2/E1), D-EP14 | spec rev 3.21 |
 
 The first amendment came out of G0 itself: fidelity had been verified by
 sampling rather than exhaustively, and one stage's definition of done (S10)
@@ -522,7 +526,19 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
    accepted finding was this ledger entry itself). Commits b3cadcf +
    9569d55, `make gates` green on a cleared cache.
 
-2. **`pause` can orphan an IN-PROGRESS story into a non-active epic**
+2. **RESOLVED 2026-07-24 — the paused epic's sprint goal is intended**
+   (amendment `paused-epic-sprint-goal-is-intended`, spec rev 3.18, ratified
+   on the adjudicated fork analysis
+   `docs/research/2026-07-24-open-questions-fork-analysis.md`). The
+   pause-time guard option died under the critic round: the state has other
+   legal creation paths (epic-status-blind story verbs, the deliberately
+   open import INSERT path), no verify rule watches it by design, and the
+   sprint-goal entry is the one `prime` window into a paused epic's
+   in-flight work — suppressing it would hide that work (§2). §11.1 now
+   says the entry is deliberate. Original question kept below for the
+   record.
+
+   **`pause` can orphan an IN-PROGRESS story into a non-active epic**
    (raised at the S8c close by the data/semantics critic, confirmed by hand,
    2026-07-20). *What happens:* `epicTransition` (`internal/verb/epics.go`,
    used by `epic pause` and `epic activate`) runs a bare status `UPDATE`
@@ -539,7 +555,12 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
    (an S6-surface change via amendment), or an explicit spec note that the
    orphan is intended.
 
-3. **Amendment `link-tables-are-relations-not-history`** (raised at S5a
+3. **STALE ENTRY, closed 2026-07-24** — the amendment below was accepted
+   2026-07-19 (spec rev 3.14) and applied at S5b; this entry was simply
+   never marked resolved (found by the 2026-07-24 fork-analysis round, D1).
+   Original text kept for the record.
+
+   **Amendment `link-tables-are-relations-not-history`** (raised at S5a
    implementation, 2026-07-19): §5 puts no-delete triggers on
    `task_links`/`task_artifacts`/`epic_artifacts`, but `reopen` must clear
    the duplicates link, `rel rm` and `unlink` must delete link rows, and
