@@ -5,14 +5,13 @@ belongs to a machine.
 
 ## Tracked (this directory, committed)
 
-- `settings.json` — a `SessionStart` hook that prints the head of
-  `docs/v0-progress.md`. It is read-only: it prints a file and exits, runs no
-  build, touches no state. Its job is to make "read the ledger first" a
-  property of the environment rather than a rule an agent has to remember —
-  the mechanical carrier the execution plan §6 requires for the bootstrap
-  window. To silence it locally, override the hook in
-  `settings.local.json`; to remove it for everyone, that is a plan
-  amendment (§2.1), because the plan names it as a carrier.
+- `settings.json` — a `SessionStart` hook that emits the tracker's session
+  context: `selftracked prime --json`, falling back to `load` + retry on a
+  fresh clone and to a static error JSON when the binary is absent (spec
+  §11.1 — the scaffold's chain; the bootstrap-era ledger print retired with
+  the ledger at S10). Its job is unchanged: make "read the state first" a
+  property of the environment rather than a rule an agent has to remember.
+  To silence it locally, override the hook in `settings.local.json`.
 - `CLAUDE.md` — the project's working rules, read automatically at session
   start. It lives here rather than at the repository root: both locations
   are first-class project-memory paths, and keeping it beside the settings

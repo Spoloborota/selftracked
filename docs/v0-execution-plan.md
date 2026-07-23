@@ -1,6 +1,10 @@
 # selftracked v0 — Execution governance & staged implementation plan
 
-Status: **ACTIVE, revision 17.** Revision history: rev 1 →
+Status: **FROZEN at the S10 close (2026-07-24), revision 17** — the
+bootstrap's historical record, per its own §9: the stage table and artifact
+sections describe retired artifacts and are not maintained further; only
+§2's lifecycle contract remains live, amendable through its own flow. Work
+tracking lives in `.selftracked/` since S10. Revision history: rev 1 →
 five-lens adversarial critic round (methodology fidelity, spec
 applicability, tooling comparison, process soundness,
 fidelity/publication) → rev 2 → three-lens control round on the fixes →

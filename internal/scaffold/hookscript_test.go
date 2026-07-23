@@ -76,6 +76,11 @@ func withStub(t *testing.T, install bool) string {
 	sep := string(os.PathListSeparator)
 	kept := []string{bin}
 	for dir := range strings.SplitSeq(os.Getenv("PATH"), sep) {
+		// Empty and relative entries would be stat-checked against the
+		// test process's cwd, not the hook's workdir — drop them outright.
+		if dir == "" || !filepath.IsAbs(dir) {
+			continue
+		}
 		if fi, err := os.Stat(filepath.Join(dir, "selftracked")); err == nil && fi.Mode()&0o111 != 0 {
 			continue
 		}
