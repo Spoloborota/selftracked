@@ -44,6 +44,12 @@ stays visible to `verify` rather than being masked. The repository carries
 `internal/{schema,ref,cli,verb,dump,load,rules,verify,state,scaffold}`. All
 local, nothing pushed.
 
+Between S9 and S10 a pre-S10 bugfix batch (owner-ordered, 2026-07-23) closed
+the S7-era `set-status DUPLICATE` poison pill: the verb now refuses both
+chain-forming directions, so two legal verbs can no longer build a tracker a
+fresh clone refuses to `load` — resolved open question 1 below (commits
+b3cadcf + 9569d55; one-critic review round, findings adjudicated and applied).
+
 **Next:** S10 — the dogfood switchover (plan §4): this repo's inventory and
 ledger are imported into `.selftracked/` as the first epic, the bootstrap ledger
 is deleted, and self-host begins. S10 is the importer's first real rehearsal —
@@ -71,10 +77,9 @@ relies on `prime`'s `dump_divergence` flag for a behind DB, never on `load`) —
 a wording question like S8b's rc-triage note; and the cross-statement snapshot
 race in `prime`/`state` under concurrent processes (refuted under the
 single-writer axiom §1, read-transaction is the remedy if wanted). (3) The
-§9 pre-commit's rc-triage signal-death spec-wording note (S8b). (4) The
-**poison-pill bug in the closed `set-status` verb** from the S7 close — out of
-scope, not blocking, but two legal verbs can build a tracker no fresh clone
-can `load` (open question below). (5) `pause` can orphan an IN-PROGRESS story
+§9 pre-commit's rc-triage signal-death spec-wording note (S8b). (4) ~~The
+poison-pill bug in the closed `set-status` verb~~ — **fixed 2026-07-23** in
+the pre-S10 bugfix batch (open question 1 below, now resolved). (5) `pause` can orphan an IN-PROGRESS story
 into a non-active epic (S8c close; open question below). (6) Three S9 close
 escalations (`docs/research/2026-07-21-s9-import-critic-round.md`): **E1** —
 does an explicit `date` field require `--legacy`? §6.2's relaxation list says no
@@ -499,25 +504,23 @@ discipline). Nothing here blocks anything; it exists so it is not rediscovered.
 
 ## Open questions for the owner
 
-1. **`set-status DUPLICATE` can build an unloadable tracker** (raised at
-   the S7 close by the semantics critic, confirmed by hand, 2026-07-20).
-   *What breaks:* mark task A `DUPLICATE --dup-of B` while B is OPEN
-   (allowed), then mark B `DUPLICATE --dup-of C` while C is OPEN (also
-   allowed). Now A.dup_of = B and B.status = DUPLICATE — a chain. R7
-   ("no dup_of target is itself DUPLICATE") correctly flags it, and R7 runs
-   inside `load`'s pre-rename checks (§8.5), so a fresh clone of that
-   tracker **refuses to load**. *Why it arises:* `duplicateTarget`
-   (`internal/verb/tasks.go:554`) checks that the *target's* status isn't
-   DUPLICATE, but never checks whether the task being marked DUPLICATE is
-   already someone else's `dup_of` target. §5.5 intends the verb to enforce
-   no-chains "re-checked by R7"; the verb enforces one direction only.
-   *Scope:* the defect is in `set-status` (a closed stage), not in `verify`
-   — R7 is correct — so it did not block S7. *What it needs:* a reverse
-   guard in the verb (refuse marking a task DUPLICATE while it is a dup
-   target, or re-point the dependant), plus a fixture; likely a small
-   bugfix batch of its own. Recommendation: schedule it before S10
-   (dogfood switchover), since self-hosting makes an unloadable tracker a
-   live hazard rather than a hypothetical.
+1. **RESOLVED 2026-07-23 — `set-status DUPLICATE` can no longer build an
+   unloadable tracker** (raised at the S7 close by the semantics critic,
+   confirmed by hand, 2026-07-20; fixed in the pre-S10 bugfix batch the
+   owner ordered). The poison: A `DUPLICATE --dup-of B`, then B `DUPLICATE
+   --dup-of C` left A.dup_of pointing at a DUPLICATE — R7 flags it inside
+   `load`'s pre-rename checks, so a fresh clone refused to load.
+   `duplicateTarget` enforced §5.5's no-chains rule in one direction only
+   (the canonical must not be DUPLICATE); it now also refuses marking a
+   task DUPLICATE while some task's dup_of points at it, naming the
+   dependant and the reopen-first unwind. Spec-conformant (§5.5: "refused
+   by set-status" — the invariant, not one direction), so no amendment;
+   INV-087's verification cell now carries both directions. Fixture: the
+   exact hand-confirmed scenario, shown red without the guard by a
+   mutation probe, plus the unwind and a `verify --fast` R7-clean end
+   state (the latter from the one-critic review of the fix; its other
+   accepted finding was this ledger entry itself). Commits b3cadcf +
+   9569d55, `make gates` green on a cleared cache.
 
 2. **`pause` can orphan an IN-PROGRESS story into a non-active epic**
    (raised at the S8c close by the data/semantics critic, confirmed by hand,
