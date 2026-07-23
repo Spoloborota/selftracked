@@ -53,8 +53,9 @@ func run(e *cli.Env, force bool) error {
 	_, statErr := os.Stat(dbPath)
 	if statErr == nil {
 		// §8.3: load --force is the ONLY operation that discards local DB
-		// state, and it says what it is about to discard first. The full
-		// §8.4 divergence matrix arrives at S8b; this is the safety floor.
+		// state, and it says what it is about to discard first. The §8.4
+		// divergence matrix lives in the write pipeline; this is only the
+		// §8.3 discard floor.
 		if !force {
 			const refusal = 1
 			return &cli.CodedError{

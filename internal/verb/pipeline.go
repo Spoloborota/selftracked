@@ -280,8 +280,8 @@ func divergenceCore(ctx context.Context, dbPath string) error {
 	// would clobber it with stale-DB content. Refuse, naming the fix.
 	return &cli.CodedError{
 		Code: codeDiverged,
-		Message: "the tracked dump changed under this database; run selftracked load " +
-			"(fast-forward to the pulled dump), then re-apply unsynced local writes through verbs",
+		Message: "the tracked dump changed under this database; run selftracked load --force " +
+			"(replace the local DB with the tracked dump), then re-apply unsynced local writes through verbs",
 		Status: refusal,
 	}
 }

@@ -129,7 +129,12 @@ func TestGeneratedPreCommitBranches(t *testing.T) {
 			map[string]string{"SELFTRACKED_SKIP": "1", "STUB_SKIP_FAIL": "1"},
 			true, false, 0, "could not record skip marker",
 		},
-		{"verify rc=2 (INV-428)", map[string]string{"STUB_VERIFY_RC": "2"}, true, false, 1, "not bypassable as RED"},
+		{"verify rc=2 (INV-428)", map[string]string{"STUB_VERIFY_RC": "2"}, true, false, 1, "did not complete"},
+		{
+			"verify signal death rc=130 (INV-428)",
+			map[string]string{"STUB_VERIFY_RC": "130"},
+			true, false, 1, "not bypassable as RED",
+		},
 		{"verify RED (INV-429)", map[string]string{"STUB_VERIFY_RC": "1"}, true, false, 1, "bypasses ONCE"},
 		{"dump fails (INV-430)", map[string]string{"STUB_DUMP_RC": "1"}, true, false, 1, "dump refresh FAILED"},
 		{"state fails (INV-431)", map[string]string{"STUB_STATE_RC": "1"}, true, false, 1, "STATE.md refresh FAILED"},

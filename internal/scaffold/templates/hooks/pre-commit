@@ -7,10 +7,10 @@ if [ "$SELFTRACKED_SKIP" = "1" ]; then
   exit 0
 fi
 selftracked verify --fast --quiet; rc=$?
-if [ "$rc" = 2 ]; then
-  echo "selftracked: verify could not run (busy/corrupt/env) — fix the environment; not bypassable as RED" >&2; exit 1
-elif [ "$rc" != 0 ]; then
+if [ "$rc" = 1 ]; then
   echo "selftracked: verify RED — 'selftracked verify' for details; SELFTRACKED_SKIP=1 bypasses ONCE (recorded)" >&2; exit 1
+elif [ "$rc" != 0 ]; then
+  echo "selftracked: verify did not complete (rc=$rc — interrupted or environment failure) — re-run; not bypassable as RED" >&2; exit 1
 fi
 selftracked dump  || { echo "selftracked: dump refresh FAILED — aborting commit" >&2; exit 1; }
 selftracked state || { echo "selftracked: STATE.md refresh FAILED — aborting commit" >&2; exit 1; }
