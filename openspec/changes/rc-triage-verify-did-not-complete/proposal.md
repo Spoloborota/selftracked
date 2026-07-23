@@ -42,3 +42,14 @@ the safe failure mode; landing in a bypassable RED is not.
   not bypassable as RED.
 - **INV-429** — re-worded: rc=1 (RED) exits 1 with the bypass-hint
   message. Both rows re-verified (`make gates`) at the applying commit.
+
+## Applied note (2026-07-24, recorded at the verification round)
+
+The applied test assertions deviate from the mapping promised above, on
+purpose and for the stronger: the OLD rc=2 message already contained "not
+bypassable as RED", so asserting that phrase on the rc=2 case (as promised)
+would have been green against the old script — vacuous. As applied, each
+case pins a phrase the old script did NOT emit for that rc: rc=2 asserts
+"did not complete", rc=130 asserts "not bypassable as RED" (absent from the
+old RED branch it used to fall into). The verification critic proved both
+red against the pre-amendment script by direct execution.

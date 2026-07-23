@@ -17,7 +17,7 @@ exec sed 's/fine/tampered-from-outside/' good.sql
 cp stdout .selftracked/dump.sql
 expectexit 1 selftracked create --title blocked
 stderr '"code":"diverged"'
-stderr 'selftracked load'
+stderr 'selftracked load --force'
 
 # missing sidecar: divergent by safe default.
 exec cp good.sql .selftracked/dump.sql
