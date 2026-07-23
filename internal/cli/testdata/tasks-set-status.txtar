@@ -41,6 +41,10 @@ stderr 'would form a chain'
 expectexit 0 selftracked reopen 3 --why 'not a dup after all'
 expectexit 0 selftracked set-status 2 DUPLICATE --dup-of 4 --note dup
 
+# End state is R7-clean: the guarded verbs never built a chain (--fast
+# runs the pure-SQL battery incl. R7; full verify needs git, absent here).
+expectexit 0 selftracked verify --fast
+
 # Auto-unpark on transition, events-logged.
 expectexit 0 selftracked create --title parked1 --status OPEN
 expectexit 0 selftracked park 5 --why 'waiting on PO'
