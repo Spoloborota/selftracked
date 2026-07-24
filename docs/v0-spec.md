@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.24 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.25 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -59,7 +59,11 @@ sidecar-anchored snapshot (amendment `migration-gate-mechanics`, rev
 3.23) → the pilot-preparation review routed task #10: the chaining
 recipe's printed lines gain existence guards, so abandonment of a
 colocated install cannot block the host repository's commits (amendment
-`chaining-recipe-guards-abandonment`) → this revision.
+`chaining-recipe-guards-abandonment`, rev 3.24) → the same review found
+R3's on-disk guarantee had no reader — no verb printed an entity's linked
+artifacts, leaving a linked ADR invisible; `show` and `epic show` gain the
+forward lookup (amendment `show-verbs-print-linked-artifacts`) → this
+revision.
 Implementation has started; §5's schema and §3.1's connection posture are
 built.
 
@@ -694,7 +698,7 @@ prefixed) — stated as an invariant the grammar must preserve.
 |---|---|---|
 | `init` | `init [--force]` | §9 |
 | `create` | `create --title T [--status OPEN\|IN-REVIEW\|NEEDS-TRIAGE] [--note N] [--epic SLUG] [--label]` | Prints `#NN` (RETURNING). Terminal statuses at creation exist only via `import`. `--label` creates the LABEL marker row. |
-| `show` | `show <ref>` | Any §4 ref; artifacts list their linked tasks/epics (reverse lookup); stories show episodes. |
+| `show` | `show <ref>` | Any §4 ref; artifacts list their linked tasks/epics (reverse lookup); tasks and epics list their linked artifacts (forward lookup — also in `epic show`, text and `--json`): `class[@scope]:relpath (role)`, archived marked `(role, archived)`, ordered class → scope → relpath; stories show episodes (amendment `show-verbs-print-linked-artifacts`). |
 | `list` | `list [--status S] [--epic SLUG] [--parked] [--labels]` | |
 | `ready` | `ready [--epic SLUG]` | `v_ready` (OPEN, unparked, deps terminal, id order). |
 | `set-status` | `set-status <id> <STATUS> [--note] [--dup-of <id>]` | Matrix-checked. Refuses terminal→OPEN (that is `reopen`'s job). `DUPLICATE --dup-of` also writes the duplicates link. Any transition **out of IN-REVIEW** requires `--note` carrying the owner's verdict — the ratification record for the question the task existed to ask; non-emptiness is trigger-backed (`tasks_inreview_exit_note`), and when the exit goes straight to DONE/WONT-DO the one note serves both duties (verdict + closure reason) — write it as both. An IN-REVIEW flagged in error exits with a note SAYING that («flagged in error — no question was pending»): the note explains the exit, it never fabricates a verdict. The column holds the latest note; superseded verdicts survive verbatim in the events trail (§5.9). Story-side counterpart: `story unblock --resolution`. |

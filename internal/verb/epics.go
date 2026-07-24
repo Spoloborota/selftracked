@@ -233,6 +233,12 @@ func epicShowFull(e *cli.Env, slug string) error {
 			{"stories", `SELECT id || ' [' || status || '] ' || title FROM stories WHERE epic = ? ORDER BY id`},
 			{"criteria", `SELECT seq || ' [' || CASE met WHEN 1 THEN 'met' ELSE 'open' END || '] ' || criterion
 			              FROM epic_criteria WHERE epic = ? ORDER BY seq`},
+			// The forward artifact lookup (amendment
+			// `show-verbs-print-linked-artifacts`): R3's on-disk guarantee
+			// needs a reader, or a linked ADR is invisible.
+			{"artifacts", `SELECT ` + artifactLineSQL + `
+			               FROM epic_artifacts l JOIN artifacts a ON a.id = l.artifact
+			               WHERE l.epic = ? ORDER BY a.class, a.scope, a.relpath`},
 			{"worklog", `SELECT seq || ' ' || story || ' ' || state || ' ' || commits || ' ' || note
 			             FROM worklog WHERE epic = ? ORDER BY seq`},
 		}

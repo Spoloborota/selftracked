@@ -64,3 +64,22 @@ expectexit 0 selftracked unlink 1 research:note.md
 stdout 'unlinked'
 grep 'unlink., .research:note.md' .selftracked/dump.sql
 ! grep 'task_artifacts .task, artifact, role, note. VALUES .1, 1,' .selftracked/dump.sql
+
+# The forward reader (amendment show-verbs-print-linked-artifacts): tasks
+# and epics list their linked artifacts, text and --json; archived links
+# are marked; an entity with no links gets [] in JSON.
+expectexit 0 selftracked epic show e --json
+stdout '"artifacts":\[\]'
+expectexit 0 selftracked show 1
+stdout 'artifacts: research:other.md \(home\)'
+stdout 'artifacts: scratch:anything/at/all \(workdir\)'
+expectexit 0 selftracked show 1 --json
+stdout '"artifacts":\["research:other.md \(home\)","scratch:anything/at/all \(workdir\)"\]'
+expectexit 0 selftracked link archive research:other.md --force
+expectexit 0 selftracked show 1
+stdout 'artifacts: research:other.md \(home, archived\)'
+expectexit 0 selftracked link epic:e research:note.md --role evidence
+expectexit 0 selftracked epic show e
+stdout 'artifacts: research:note.md \(evidence\)'
+expectexit 0 selftracked epic show e --json
+stdout '"artifacts":\["research:note.md \(evidence\)"\]'

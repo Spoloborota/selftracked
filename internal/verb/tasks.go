@@ -216,8 +216,23 @@ func showVerb() cli.Verb {
 	}}}
 }
 
+// artifactLineSQL renders one linked artifact as the spec's
+// `class[@scope]:relpath (role)` line, `(role, archived)` when archived
+// (§6.2, amendment `show-verbs-print-linked-artifacts`). The joined link
+// table is aliased l in both callers.
+const artifactLineSQL = `a.class || CASE WHEN a.scope <> '' THEN '@' || a.scope ELSE '' END
+	|| ':' || a.relpath || ' (' || l.role
+	|| CASE WHEN a.archived = 1 THEN ', archived' ELSE '' END || ')'`
+
 func showTask(ctx context.Context, e *cli.Env, db *sql.DB, id int64) error {
 	t, err := scanTask(ctx, db, id)
+	if err != nil {
+		return err
+	}
+	// The forward artifact lookup (amendment
+	// `show-verbs-print-linked-artifacts`): R3's on-disk guarantee needs a
+	// reader, or a linked ADR is invisible.
+	arts, err := taskArtifactLines(ctx, db, id)
 	if err != nil {
 		return err
 	}
@@ -225,6 +240,7 @@ func showTask(ctx context.Context, e *cli.Env, db *sql.DB, id int64) error {
 		return printJSON(e, map[string]any{
 			jsonRefKey: t.renderID, jsonTitleKey: t.Title,
 			jsonStatusKey: t.Status, "note": t.Note, "parked": t.Parked, jsonEpicKey: t.Epic,
+			"artifacts": arts,
 		})
 	}
 	_, _ = fmt.Fprintf(e.Stdout, "%s %s [%s]", t.renderID, t.Title, t.Status)
@@ -238,7 +254,27 @@ func showTask(ctx context.Context, e *cli.Env, db *sql.DB, id int64) error {
 		_, _ = fmt.Fprintf(e.Stdout, "\n  note: %s", t.Note)
 	}
 	_, _ = fmt.Fprintln(e.Stdout)
+	for _, a := range arts {
+		_, _ = fmt.Fprintf(e.Stdout, "  artifacts: %s\n", a)
+	}
 	return nil
+}
+
+// taskArtifactLines drains a task's linked artifacts, ordered class →
+// scope → relpath (deterministic); empty slice, never nil, so --json
+// marshals [] (the §6.1 posture of epic show's sections).
+func taskArtifactLines(ctx context.Context, db *sql.DB, id int64) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+artifactLineSQL+`
+		FROM task_artifacts l JOIN artifacts a ON a.id = l.artifact
+		WHERE l.task = ? ORDER BY a.class, a.scope, a.relpath`, id)
+	if err != nil {
+		return nil, fmt.Errorf("artifacts: %w", err)
+	}
+	lines, err := drainStrings(rows, []string{}, "%s")
+	if err != nil {
+		return nil, err
+	}
+	return lines, nil
 }
 
 func showEpic(ctx context.Context, e *cli.Env, db *sql.DB, slug string) error {
