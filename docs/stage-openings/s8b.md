@@ -154,7 +154,7 @@ legible (D-EP13's close-review obligation):
 
 ## Accepted critic fixes and refutations
 
-Applied at close (commit dfe7daf): the hook executable-bit chmod on refresh
+Applied at close (commit 1239eb9): the hook executable-bit chmod on refresh
 (+ test); the ConvertSkipMarker marker-clear moved before the derived-file
 tail (symmetry with the write pipeline); activation's incumbent-hooks-dir
 resolved via git (subdir-safe, + test); the post-commit sidecar check gated

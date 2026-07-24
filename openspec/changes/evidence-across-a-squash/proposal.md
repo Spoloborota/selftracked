@@ -6,9 +6,9 @@ Status: **accepted** · raised 2026-07-19 · applied same day
 ## Why
 
 Every closed row currently records evidence as a command and a commit —
-`local: make check-pins @ 6cf73a1`. The owner intends to squash the pre-push
+`local: make check-pins @ 3ae73e3`. The owner intends to squash the pre-push
 history into a single commit before publishing. That destroys every SHA those
-records point at: after the squash, `6cf73a1` does not exist, and the
+records point at: after the squash, `3ae73e3` does not exist, and the
 inventory's evidence column becomes a column of dangling references.
 
 Rewriting the SHAs mechanically at squash time would not help. A squash is

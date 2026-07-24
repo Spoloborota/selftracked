@@ -217,7 +217,7 @@ silently rewritten (D-EP13's close obligation):
 
 ## Accepted critic fixes and refutations
 
-Applied at close (commit c0d75c4, `make gates` exit 0):
+Applied at close (commit 9247018, `make gates` exit 0):
 
 - The INV-469 reflective type-graph scan (above).
 - `atomicWrite` chmod moved after the rename (a security-lens TOCTOU: the temp
