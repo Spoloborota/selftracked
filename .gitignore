@@ -4,6 +4,10 @@
 /.claude/agents/
 /work/local/
 
+# Local security tooling — hardening scripts/hooks that map THIS repo's own
+# attack surface stay local, never published (see the security-posture memo).
+/.claude/hooks/local/
+
 # Build artifacts
 /bin/
 /dist/
