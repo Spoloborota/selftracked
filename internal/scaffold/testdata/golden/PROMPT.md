@@ -52,8 +52,8 @@ signature. The catalog:
 - **Relations & artifacts:** `rel`, `link`, `unlink`.
 - **Epics & stories:** `epic`, `story`, `worklog`, `criteria`.
 - **Paths & config:** `paths`, `config`.
-- **Maintenance & state:** `log`, `stale`, `dump`, `load`, `verify`,
-  `state`, `prime`, `init`.
+- **Maintenance & state:** `log`, `stale`, `gate`, `dump`, `load`, `import`,
+  `verify`, `state`, `prime`, `init`.
 
 Configuration lives in `meta` rows edited only through `config`; there is
 no config file.
