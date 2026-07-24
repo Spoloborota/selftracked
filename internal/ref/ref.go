@@ -30,7 +30,7 @@ type Ref struct {
 	Epic  string // Epic, Story
 	Story string // Story
 	Class string // Artifact
-	Scope string // Artifact; ” is the default scope
+	Scope string // Artifact; "" is the default scope
 	Rel   string // Artifact
 }
 
