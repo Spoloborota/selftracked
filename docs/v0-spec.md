@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.22 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.23 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -52,8 +52,11 @@ verify honestly — RED is exactly rc=1 (amendment
 parenthetical names what `--legacy` alone relaxes (amendment
 `backfill-parenthetical-names-its-relaxation`, rev 3.21); the migration's
 pre-rename battery is §8.5's load battery — R1 cannot pass before the
-re-dump exists (amendment `migration-verify-battery-is-the-load-battery`)
-→ this revision.
+re-dump exists (amendment `migration-verify-battery-is-the-load-battery`,
+rev 3.22); the migration gate's mechanics — the §3.1 lock-posture
+carve-out, the sentinel protocol, the DB-ahead refusal, the
+sidecar-anchored snapshot (amendment `migration-gate-mechanics`) → this
+revision.
 Implementation has started; §5's schema and §3.1's connection posture are
 built.
 
@@ -190,6 +193,16 @@ prose documents.
   concurrent read verb can receive `SQLITE_BUSY` for the duration of a write
   verb (including its dump-regeneration tail) — both sides retry within
   `busy_timeout`, and a final BUSY is exit 2 `{"error":{"code":"busy"}}`.
+  One carve-out: the §8.6 **migration-lock connection** uses the base
+  pragmas with fail-fast lock acquisition (`busy_timeout=0`, jittered
+  retries at the gate level, the same 5000 ms budget and BUSY-exits-2
+  contract) — SQLite's busy handler holds the SHARED lock it already
+  acquired while waiting, and under `locking_mode(EXCLUSIVE)` even a
+  FAILED `BEGIN` keeps that lock until close, so two racing gates
+  deadlock or starve permanently (observed empirically at S11);
+  `synchronous` stays at the driver default because the connection's one
+  durable write is the sentinel mark, whose loss on crash is safe — the
+  next verb re-migrates (amendment `migration-gate-mechanics`).
 - Journal: default rollback journal + FULL sync; **WAL explicitly not used**
   (persistent mode flag, `-wal`/`-shm` litter, no network-FS support). Crash
   recovery = SQLite hot-journal rollback + §8.3/§8.4.
@@ -983,19 +996,35 @@ wrapping conflicts with `foreign_keys=OFF` exactly where rebuilds need it.
   the single-writer axiom, an intruding writer surfaces as §8.4 divergence →
   then, **only if the §8.4 check finds no external change**, re-serialize
   with the current serializer → sidecar update (in the externally-changed
-  state the migration stays DB-side only — §8.4). Automatic, no user-facing
+  state the migration stays DB-side only — §8.4). That check is the
+  sidecar arm alone, snapshotted **before** the swap: the second arm's
+  regenerate-and-compare needs the OLD version's serializer, which the
+  binary does not carry — so a crash-residue mismatch also stays DB-side
+  (safe; it reconciles through `load --force` plus the next migration's
+  re-dump). Automatic, no user-facing
   `migrate` command; the notice line always goes to stderr (no
   output-limiting flag suppresses it), and `prime` additionally reports
   `"migrated": "vK→vN"` in its JSON. Two same-machine read verbs may race
-  the escalation: the loser blocks on the lock, re-checks `user_version`
-  after the wait (the winner migrated) and proceeds read-only; a BUSY that
-  survives `busy_timeout` exits 2 with a hint that another process may be
-  migrating — retry. A welcome simplification: fresh-rebuild sidesteps
-  SQLite's 12-step ALTER recipe entirely.
+  the escalation: the winner marks the superseded file with a negative
+  `user_version` (`-K`) inside its transaction before releasing the lock
+  and renaming, so the loser that blocked re-checks `user_version` on its
+  own handle after the wait, sees the outcome, and proceeds read-only; a
+  BUSY that survives the `busy_timeout` budget exits 2 with a hint that
+  another process may be migrating — retry. A persisting mark (a crash
+  between commit and rename, or a swap in flight) makes every verb refuse
+  exit 2 with a retryable message naming `load --force` as the last-resort
+  rebuild; a FAILED rename restores the mark to `K`, so the next verb
+  simply re-migrates — never a forced discard (amendment
+  `migration-gate-mechanics`). A welcome simplification: fresh-rebuild
+  sidesteps SQLite's 12-step ALTER recipe entirely.
 - **Forward-only, permanently** (the pg_dump contract): a dump whose
   `schema_version` is newer than the binary is a hard exit-2 refusal naming
   the required upgrade (git's repository-format rule: an unknown version
-  means the tool "MUST NOT operate on that repository"). `prime` surfaces
+  means the tool "MUST NOT operate on that repository"). A **database**
+  ahead of the binary (`user_version` above N — a crashed newer-binary
+  migration plus a downgrade) fails closed with the same refusal rather
+  than operate a schema this binary has never seen (amendment
+  `migration-gate-mechanics`). `prime` surfaces
   the same condition non-fatally at session start: its divergence check also
   reads the tracked dump's header `schema_version`, and a newer-than-binary
   value is reported as `"dump_requires_newer_binary": true` in healthy JSON

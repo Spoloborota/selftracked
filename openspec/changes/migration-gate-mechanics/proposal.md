@@ -2,9 +2,9 @@
 
 Target: `docs/v0-spec.md` §3.1 (one carve-out sentence), §8.6 (three
 mechanics clauses)
-Status: **proposed** · raised by the S11 close review (three-critic round,
-2026-07-24) · awaiting owner ratification; the spec delta is applied only
-after acceptance
+Status: **accepted** · raised by the S11 close review (three-critic round,
+2026-07-24) · ratified by the owner 2026-07-24 · applied under D-EP14
+(spec revision 3.22 → 3.23)
 
 ## Why
 
