@@ -1,6 +1,7 @@
 # Local agent handoff/context files — never commit
 /HANDOFF.md
 /.claude/settings.local.json
+/.claude/agents/
 /work/local/
 
 # Build artifacts
