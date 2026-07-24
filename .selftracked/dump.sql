@@ -1,4 +1,4 @@
--- selftracked dump schema_version=1 tasks=10 artifacts=0
+-- selftracked dump schema_version=1 tasks=11 artifacts=0
 -- selftracked schema, version 1.
 --
 -- Verbatim from the specification's §5. This file is the single compiled-in
@@ -349,6 +349,7 @@ INSERT INTO tasks (id, title, status, status_note, parked, dup_of, epic, created
 INSERT INTO tasks (id, title, status, status_note, parked, dup_of, epic, created_at, updated_at) VALUES (8, 'import: DUPLICATE with a later-positioned canonical refuses (forward dup_of)', 'OPEN', '', '', NULL, NULL, '2026-07-24T01:27:12Z', '2026-07-24T01:52:32Z');
 INSERT INTO tasks (id, title, status, status_note, parked, dup_of, epic, created_at, updated_at) VALUES (9, 'import --legacy: an unresolvable cited commit is accepted silently; only R5 catches it', 'OPEN', '', '', NULL, NULL, '2026-07-24T01:28:05Z', '2026-07-24T01:52:32Z');
 INSERT INTO tasks (id, title, status, status_note, parked, dup_of, epic, created_at, updated_at) VALUES (10, 'chaining recipe: a guarded chained line would survive directory-deletion abandonment', 'OPEN', '', '', NULL, NULL, '2026-07-24T01:49:31Z', '2026-07-24T01:52:32Z');
+INSERT INTO tasks (id, title, status, status_note, parked, dup_of, epic, created_at, updated_at) VALUES (11, 'Go-public audit gate: run the two-layer pre-publication audit before any public push', 'NEEDS-TRIAGE', 'Publication is separate from criterion 6''s first push (which a private repo satisfies). Before the repo ever goes public: layer 1 mechanical sweep (secret scanner over full history, metadata/timezone/trailer inventory, ever-existed-files diff, full-patch-stream greps) and layer 2 semantic critic round (fresh-context read-only critics over docs/code/history/meta surfaces; lenses: discrediting tone, AI self-talk, hallucinated claims, personal info, private-context references). If any history rewrite is chosen, publish a freshly created repo from the audited tree, never flip the private one. Protocol recorded in the private research archive, 2026-07-24.', 'Beyond v0 scope; becomes active when the owner decides to take the repo public', NULL, NULL, '2026-07-24T12:56:09Z', '2026-07-24T12:56:26Z');
 INSERT INTO stories (epic, id, title, status, dod, consumes, produces, blocked) VALUES ('v0-bootstrap', 'S1', 'G0 - traceability inventory', 'DONE', '', '', '', '');
 INSERT INTO stories (epic, id, title, status, dod, consumes, produces, blocked) VALUES ('v0-bootstrap', 'S10', 'S5b - relation, artifact and dictionary verbs', 'DONE', '', '', '', '');
 INSERT INTO stories (epic, id, title, status, dod, consumes, produces, blocked) VALUES ('v0-bootstrap', 'S11', 'S6 - epic, story, worklog and criteria verbs', 'DONE', '', '', '', '');
@@ -420,3 +421,5 @@ INSERT INTO events (seq, at, entity, event, detail) VALUES (27, '2026-07-24T01:5
 INSERT INTO events (seq, at, entity, event, detail) VALUES (28, '2026-07-24T01:57:31Z', '#6', 'set-status', 'epic show --json emits one JSON document; fixture in epic.txtar; spec-conformant fix (6.1 --json contract)');
 INSERT INTO events (seq, at, entity, event, detail) VALUES (29, '2026-07-24T01:57:31Z', '#7', 'set-status', 'standalone criteria check exits 1 only for failed runnables; close still blocks on unmet attested (condition 3); fixture in criteria.txtar');
 INSERT INTO events (seq, at, entity, event, detail) VALUES (30, '2026-07-24T02:03:51Z', '#5', 'edit', 'note: The publication boundary. Evidence recor…→The publication boundary. Prepared 2026-…');
+INSERT INTO events (seq, at, entity, event, detail) VALUES (31, '2026-07-24T12:56:09Z', '#11', 'create', 'Go-public audit gate: run the two-layer pre-publication audit before any public push');
+INSERT INTO events (seq, at, entity, event, detail) VALUES (32, '2026-07-24T12:56:26Z', '#11', 'park', 'Beyond v0 scope; becomes active when the owner decides to take the repo public');
