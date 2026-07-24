@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/schema"
@@ -105,6 +106,19 @@ func WriteDumpFile(dir string, text []byte) error {
 		return fmt.Errorf("dump: rename: %w", err)
 	}
 	return nil
+}
+
+// SidecarMatches reports whether the sidecar records exactly these dump
+// bytes — §8.4's first arm, shared so the version gate and the pipeline
+// hash the same way. A missing or unreadable sidecar does not match (the
+// divergent-by-default posture).
+func SidecarMatches(dir string, text []byte) bool {
+	recorded, err := os.ReadFile(filepath.Join(dir, hashFile)) //nolint:gosec // fixed .selftracked path
+	if err != nil {
+		return false
+	}
+	sum := sha256.Sum256(text)
+	return hex.EncodeToString(sum[:]) == strings.TrimSpace(string(recorded))
 }
 
 // WriteSidecar records the SHA-256 of the dump these bytes came from —

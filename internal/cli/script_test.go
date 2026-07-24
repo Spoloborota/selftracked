@@ -16,6 +16,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/load"
+	"github.com/Spoloborota/selftracked/internal/migrate"
 	"github.com/Spoloborota/selftracked/internal/scaffold"
 	"github.com/Spoloborota/selftracked/internal/schema"
 	"github.com/Spoloborota/selftracked/internal/state"
@@ -31,7 +32,10 @@ import (
 func TestMain(m *testing.M) {
 	entry := func() {
 		// Fixture verbs for the dispatcher scenarios, plus the real catalog
-		// verbs as their stages land them — same wiring main.go uses.
+		// verbs as their stages land them — same wiring main.go uses,
+		// version gate included (a script must meet the gate exactly as a
+		// shipped binary's caller would).
+		cli.VersionGate = migrate.CLIGate
 		r := fixtureRegistry()
 		base := []cli.Verb{dump.Verb(), load.Verb(), verify.Verb(), scaffold.Verb()}
 		catalog := make([]cli.Verb, 0, len(base)+len(verb.Verbs()))

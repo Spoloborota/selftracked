@@ -1,13 +1,18 @@
 package cli
 
-// versionGate is the §8.6 gate every verb begins with (§6.1). At S2 it is
-// deliberately a stub with the final call shape: the dispatcher already
-// routes every verb through it, so when S11 implements the real gate —
-// compare the database's schema version to the binary's, refuse or
-// escalate into a migration — no verb's control flow changes, only this
-// function's body does. A stub that exists and is called is a different
-// thing from a gate that is absent: the pipeline order is already load-
-// bearing and testable.
-func versionGate() error {
-	return nil
+// VersionGate is the §8.6 gate every verb begins with (§6.1). The
+// dispatcher routes every verb through it before Run; main wires it to
+// the migrate package's CLIGate — the machinery sits above cli in the
+// import graph (migrate → load → verb → cli), so the dispatcher holds
+// the call site and main supplies the body. A nil hook gates nothing:
+// that is the wiring-less test registry's state, never the shipped
+// binary's (cmd/selftracked assigns it before the first dispatch, and
+// TestRunWiresTheVersionGate holds that claim).
+var VersionGate func(e *Env, verbName string) error
+
+func versionGate(e *Env, verbName string) error {
+	if VersionGate == nil {
+		return nil
+	}
+	return VersionGate(e, verbName)
 }

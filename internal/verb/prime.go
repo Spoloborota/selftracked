@@ -40,9 +40,10 @@ type primeOutput struct {
 
 	DumpDivergence          bool `json:"dump_divergence"`
 	DumpRequiresNewerBinary bool `json:"dump_requires_newer_binary"`
-	// Migrated is present only when this invocation migrated (§8.6). At v0
-	// nothing migrates; the field's value and its verification ride to S11
-	// with the migration engine (amendment migrated-field-rides-migration-at-s11).
+	// Migrated is present only when this invocation migrated (§8.6): the
+	// dispatcher's gate hands the outcome in through Env (the slot was
+	// built at S8c, its value landed at S11 with the migration engine —
+	// amendment migrated-field-rides-migration-at-s11).
 	Migrated string `json:"migrated,omitempty"`
 }
 
@@ -101,6 +102,10 @@ func PrimeVerb() cli.Verb {
 func primeRun(e *cli.Env) error {
 	ctx := context.Background()
 	var out primeOutput
+	// The dispatcher's version gate ran before this verb (§6.1); when it
+	// migrated, this invocation reports it (§11.1) — the field's value
+	// arrives here, its contract slot was built at S8c.
+	out.Migrated = e.Migrated
 	err := Read(ctx, func(ctx context.Context, db *sql.DB) error {
 		return buildPrime(ctx, db, &out)
 	})

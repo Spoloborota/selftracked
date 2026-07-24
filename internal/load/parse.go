@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
 // Literal is one whitelisted value token: nil, int64, or string. There is
@@ -60,6 +58,7 @@ func Parse(text []byte) (*Dump, error) {
 	if err != nil {
 		return nil, err
 	}
+	g, _ := grammarFor(version) // parsePreamble already refused an unknown version
 
 	d := &Dump{Version: version}
 	lines := strings.Split(body, "\n")
@@ -75,7 +74,7 @@ func Parse(text []byte) (*Dump, error) {
 			}
 			return nil, fmt.Errorf("%w: blank data line %d", ErrRefused, i+1)
 		}
-		ins, err := parseInsert(line)
+		ins, err := parseInsert(line, g.columns)
 		if err != nil {
 			return nil, fmt.Errorf("data line %d: %w", i+1, err)
 		}
@@ -86,7 +85,10 @@ func Parse(text []byte) (*Dump, error) {
 
 // parsePreamble validates the header line and the byte-equal DDL block,
 // returning the resolved schema version and the data body that follows.
-// The header's version selects the parser BEFORE any data is read (§8.1).
+// The header's version selects the parser BEFORE any data is read (§8.1):
+// the current grammar for version N, a registered historical grammar for
+// an older version (§8.6 — the dump-side hydration source), a refusal for
+// anything newer or unknown.
 func parsePreamble(s string) (int, string, error) {
 	header, rest, ok := strings.Cut(s, "\n")
 	if !ok || !strings.HasPrefix(header, headerPrefix) {
@@ -97,21 +99,34 @@ func parsePreamble(s string) (int, string, error) {
 	if err != nil {
 		return 0, "", err
 	}
-	if version > schema.Version {
+	if version > current {
 		return 0, "", fmt.Errorf("%w: dump schema_version=%d requires a newer binary (this one compiles v%d)",
-			ErrRefused, version, schema.Version)
+			ErrRefused, version, current)
 	}
-	// v1 is the first version there is; anything lower never existed.
-	if version != schema.Version {
+	g, known := grammarFor(version)
+	if !known {
 		return 0, "", fmt.Errorf("%w: unknown schema_version=%d", ErrRefused, version)
 	}
 	// Step 1 (§8.5): the DDL block must byte-equal the compiled-in
 	// canonical DDL for that version — not "look valid", byte-equal.
-	ddl := schema.DDL()
-	if !strings.HasPrefix(rest, ddl) {
+	if !strings.HasPrefix(rest, g.ddl) {
 		return 0, "", fmt.Errorf("%w: DDL block does not byte-equal the canonical DDL for v%d", ErrRefused, version)
 	}
-	return version, rest[len(ddl):], nil
+	return version, rest[len(g.ddl):], nil
+}
+
+// HeaderVersion extracts the schema version from a dump's header line —
+// the §8.6 gate's comparison (i) reads it without parsing the dump.
+// Reports false for anything that is not a well-formed header.
+func HeaderVersion(header string) (int, bool) {
+	if !strings.HasPrefix(header, headerPrefix) {
+		return 0, false
+	}
+	v, err := headerVersion(strings.Fields(strings.TrimPrefix(header, "-- selftracked dump ")))
+	if err != nil {
+		return 0, false
+	}
+	return v, true
 }
 
 func headerVersion(fields []string) (int, error) {
@@ -132,7 +147,7 @@ func headerVersion(fields []string) (int, error) {
 //	INSERT INTO <known-table> (<exact column list>) VALUES (<literals>);
 //
 // Literal tokens only — integers, quoted strings with ” doubling, NULL.
-func parseInsert(line string) (Insert, error) {
+func parseInsert(line string, columns map[string]string) (Insert, error) {
 	rest, ok := strings.CutPrefix(line, "INSERT INTO ")
 	if !ok {
 		return Insert{}, errNotWhitelisted(line)
@@ -141,7 +156,7 @@ func parseInsert(line string) (Insert, error) {
 	if !ok {
 		return Insert{}, errNotWhitelisted(line)
 	}
-	wantCols, known := expectedColumns[table]
+	wantCols, known := columns[table]
 	if !known {
 		return Insert{}, fmt.Errorf("%w: unknown table %q", ErrRefused, table)
 	}

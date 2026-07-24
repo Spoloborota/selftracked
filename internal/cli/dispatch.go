@@ -58,9 +58,10 @@ func dispatch(r *Registry, e *Env, args []string) error {
 		return err
 	}
 
-	// §6.1: every verb begins with the version gate. At S2 it is a stub
-	// with the final shape (S11 fills in §8.6's migration escalation).
-	if err := versionGate(); err != nil {
+	// §6.1: every verb begins with the version gate — refusal, migration
+	// escalation, or pass — before any verb code and before the §8.4
+	// divergence check that write verbs run next (§8.6).
+	if err := versionGate(e, verb.Name); err != nil {
 		return err
 	}
 

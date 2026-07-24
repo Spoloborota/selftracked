@@ -24,6 +24,10 @@ type Env struct {
 	// every verb (§6.1: "--json on every verb") and dispatch fills this in
 	// before the verb runs.
 	JSON bool
+	// Migrated carries the version gate's §8.6 outcome ("vK→vN") into the
+	// one verb that reports it in JSON — prime (§11.1). Empty on every
+	// invocation that did not migrate.
+	Migrated string
 }
 
 // Sub is one runnable (verb, subverb) pair. A verb without subverbs

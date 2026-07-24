@@ -1,0 +1,47 @@
+# S11: the §8.6 version gate at the dispatcher — forward-only, every verb.
+# The binary compiles schema version 1; a tracked dump whose header claims
+# a newer version must refuse EVERY verb with exit 2 before any verb code
+# runs. prime alone surfaces the condition non-fatally in healthy JSON
+# (§11.1), and load's own parser owns the same refusal.
+
+seeddb
+
+# A healthy instance passes the gate silently.
+expectexit 0 selftracked list
+
+# Forge a newer header onto the tracked dump.
+exec cp .selftracked/dump.sql v1.sql
+exec sed '1s/schema_version=1/schema_version=99/' v1.sql
+cp stdout .selftracked/dump.sql
+
+# A read verb refuses at the gate.
+expectexit 2 selftracked list
+stderr '"code":"needs-newer-binary"'
+stderr 'upgrade selftracked'
+
+# A write verb refuses at the gate — before the §8.4 divergence check
+# (the forged dump ALSO diverges from the sidecar; the gate must win).
+expectexit 2 selftracked create --title never
+stderr '"code":"needs-newer-binary"'
+
+# init refuses too: no verb operates on a repository from the future.
+expectexit 2 selftracked init
+stderr '"code":"needs-newer-binary"'
+
+# prime exits 0 and reports the condition as a typed field (§8.6/§11.1).
+expectexit 0 selftracked prime --json
+stdout '"dump_requires_newer_binary":true'
+
+# load refuses too — the gate's comparison (i) runs before the rebuild
+# ("(i), then rebuild", §8.6), so the refusal is the gate's; the parser
+# behind it owns the same refusal for any dump that reaches it.
+expectexit 2 selftracked load --force
+stderr '"code":"needs-newer-binary"'
+
+# Restore the real dump: the gate opens and the verbs work again.
+exec cp v1.sql .selftracked/dump.sql
+expectexit 0 selftracked list
+
+# The database never migrated or changed under any of the refusals: the
+# tracker still verifies clean.
+expectexit 0 selftracked verify --fast

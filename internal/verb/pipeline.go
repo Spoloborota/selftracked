@@ -60,10 +60,44 @@ func now() string {
 	return time.Now().UTC().Format("2006-01-02T15:04:05Z")
 }
 
-// versionGate is §8.6's gate. Every verb — read verbs included — begins
-// with it, BEFORE the divergence check. At S5a it is still the S2-shaped
-// stub; S11 fills in the migration escalation.
-func versionGate() error { return nil }
+// GateVersion is the schema version the pipeline's re-check expects.
+// schema.Version always — except under the migration tests' synthetic
+// bump, the one way to exercise §8.6 while a single real version exists.
+var GateVersion = schema.Version
+
+// versionGate is §8.6's comparison (ii) restated at the pipeline mouth,
+// refusal-only: a CLI invocation was already gated — and migrated if
+// needed — by the dispatcher before its verb ran (§6.1), so this re-check
+// exists for every other path into Write/Read, which fails closed rather
+// than operate across schema versions. Comparison (i) is not restated
+// here: the danger a newer tracked dump poses to a write is clobbering
+// it, and the §8.4 divergence check refuses that on its own.
+func versionGate(ctx context.Context) error {
+	dbPath := filepath.Join(instanceDir, dbFile)
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil // requireInstance owns the missing-database refusal
+	}
+	db, err := schema.OpenRead(dbPath)
+	if err != nil {
+		return fmt.Errorf("version gate: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	var v int
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
+		return fmt.Errorf("version gate: %w", err)
+	}
+	if v != GateVersion {
+		return &cli.CodedError{
+			Code: "version-gate",
+			Message: fmt.Sprintf(
+				"the database is schema v%d and this binary compiles v%d — "+
+					"run selftracked through its CLI, whose gate migrates or refuses (§8.6)",
+				v, GateVersion),
+			Status: infra,
+		}
+	}
+	return nil
+}
 
 // requireInstance says whether a database exists here.
 func requireInstance() (string, error) {
@@ -83,7 +117,7 @@ func requireInstance() (string, error) {
 // the commit is derived-file regeneration.
 func Write(ctx context.Context, mutate func(tx *sql.Tx) ([]Event, error)) error {
 	step("gate")
-	if err := versionGate(); err != nil {
+	if err := versionGate(ctx); err != nil {
 		return err
 	}
 	dbPath, err := requireInstance()
@@ -208,7 +242,7 @@ func regenerateDerived(ctx context.Context, db *sql.DB) error {
 // Read runs one read verb: the same gate first (§6.1), then the body on a
 // query_only connection — no side effects on tracker state.
 func Read(ctx context.Context, body func(ctx context.Context, db *sql.DB) error) error {
-	if err := versionGate(); err != nil {
+	if err := versionGate(ctx); err != nil {
 		return err
 	}
 	dbPath, err := requireInstance()

@@ -89,6 +89,18 @@ var tables = []table{
 	},
 }
 
+// TableOrder returns the serializer's emission order — parents before
+// children, events last. The §8.6 migration engine flattens its rebuilt
+// corpus in this order so the load path replays it exactly as it replays
+// a dump: one FK-safe order, declared once.
+func TableOrder() []string {
+	names := make([]string, len(tables))
+	for i, t := range tables {
+		names[i] = t.name
+	}
+	return names
+}
+
 // Serialize renders the whole database as canonical dump text.
 func Serialize(ctx context.Context, db *sql.DB) ([]byte, error) {
 	var b strings.Builder

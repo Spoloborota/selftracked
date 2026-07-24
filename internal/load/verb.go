@@ -69,9 +69,9 @@ func run(e *cli.Env, force bool) error {
 		}
 	}
 
-	parsed, err := Parse(text)
+	parsed, err := parseAndMigrate(e, text)
 	if err != nil {
-		return classifyRefusal(err)
+		return err
 	}
 	built, err := Build(ctx, dir, parsed)
 	if err != nil {
@@ -99,6 +99,30 @@ func run(e *cli.Env, force bool) error {
 	}
 	_, _ = fmt.Fprintln(e.Stdout, "loaded", dbPath, "from", dumpPath)
 	return nil
+}
+
+// parseAndMigrate parses the tracked dump and, for an old version, runs
+// §8.6's dump-side hydration source: the dump parsed with its own grammar
+// migrates through the same transform chain the live-DB path runs, and
+// builds at the current version. The tracked dump file is deliberately
+// NOT rewritten here — load's sidecar records the bytes it loaded, which
+// leaves exactly the §8.4 branch-(5) state, and the next gated verb
+// re-dumps.
+func parseAndMigrate(e *cli.Env, text []byte) (*Dump, error) {
+	parsed, err := Parse(text)
+	if err != nil {
+		return nil, classifyRefusal(err)
+	}
+	if parsed.Version >= current {
+		return parsed, nil
+	}
+	from := parsed.Version
+	parsed, err = MigrateCorpus(CorpusFromDump(parsed), from, current, dump.TableOrder())
+	if err != nil {
+		return nil, classifyRefusal(err)
+	}
+	_, _ = fmt.Fprintf(e.Stderr, "selftracked: schema migrated v%d→v%d\n", from, current)
+	return parsed, nil
 }
 
 // classifyRefusal maps parser/build refusals to the §6.1 contract: a

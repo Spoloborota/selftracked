@@ -10,6 +10,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/load"
+	"github.com/Spoloborota/selftracked/internal/migrate"
 	"github.com/Spoloborota/selftracked/internal/scaffold"
 	"github.com/Spoloborota/selftracked/internal/verb"
 	"github.com/Spoloborota/selftracked/internal/verify"
@@ -22,6 +23,11 @@ func main() {
 // run exists so the testscript harness can execute the real entrypoint
 // in-process; os.Exit lives one frame up.
 func run() int {
+	// §8.6: the version gate the dispatcher runs before every verb. Wired
+	// here because the gate's machinery (migrate → load) sits above cli
+	// in the import graph.
+	cli.VersionGate = migrate.CLIGate
+
 	reg := &cli.Registry{}
 	// The catalog's verbs register here as their stages build them; a verb
 	// absent from this list does not exist — which is the §1 contract, not
