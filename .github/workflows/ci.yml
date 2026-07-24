@@ -1,8 +1,11 @@
 name: gates
 
-# Authored at stage S0; the three-platform matrix is a precondition of the
-# first push rather than of S0's closure, so this file is written and
-# reviewed before it has ever run (execution plan, D-EP8).
+# Authored at stage S0 (execution plan, D-EP8); first exercised at the first
+# push. v0 targets POSIX (docs/v0-spec.md §16): the full gate suite runs on
+# ubuntu + macos, and Windows verifies only what the spec asks of it — dump
+# byte-determinism (the serializer emits identical LF bytes across OS). Hook
+# scripts and CLI behaviour are POSIX-only by design and are exercised on the
+# POSIX runners; full Windows support is out of v0 scope (tracked separately).
 
 on:
   push:
@@ -24,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +66,24 @@ jobs:
 
       - name: vulnerabilities
         run: go tool govulncheck ./...
+
+  windows-dump-determinism:
+    # v0 targets POSIX; on Windows the spec asks only that the serializer emit
+    # the same LF bytes it does elsewhere (docs/v0-spec.md §16). Just the dump
+    # package, cgo-free, no race detector — the POSIX-only hook/CLI tests are
+    # deliberately not run here.
+    name: dump determinism (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: dump byte-determinism
+        run: go test ./internal/dump/...
 
   policy:
     name: policy gates

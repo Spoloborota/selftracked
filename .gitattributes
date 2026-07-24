@@ -1,0 +1,6 @@
+# Byte-determinism across OS. The tracked dump, all go:embed content
+# (internal/schema/ddl.sql, internal/scaffold/templates/*), and every text
+# file check out as LF on every platform, Windows included — so a CRLF
+# checkout can never leak a carriage return into the embedded schema or the
+# deterministic dump. See docs/v0-spec.md §16 (dump byte-equality across OS).
+* text=auto eol=lf
