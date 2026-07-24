@@ -229,9 +229,6 @@ func drainStrings(rows *sql.Rows, out []string, format string) ([]string, error)
 
 func epicShowFull(e *cli.Env, slug string) error {
 	return Read(context.Background(), func(ctx context.Context, db *sql.DB) error {
-		if err := showEpic(ctx, e, db, slug); err != nil {
-			return err
-		}
 		sections := []struct{ header, q string }{
 			{"stories", `SELECT id || ' [' || status || '] ' || title FROM stories WHERE epic = ? ORDER BY id`},
 			{"criteria", `SELECT seq || ' [' || CASE met WHEN 1 THEN 'met' ELSE 'open' END || '] ' || criterion
@@ -239,12 +236,34 @@ func epicShowFull(e *cli.Env, slug string) error {
 			{"worklog", `SELECT seq || ' ' || story || ' ' || state || ' ' || commits || ' ' || note
 			             FROM worklog WHERE epic = ? ORDER BY seq`},
 		}
-		for _, sec := range sections {
-			rows, err := db.QueryContext(ctx, sec.q, slug)
-			if err != nil {
-				return fmt.Errorf("epic show: %w", err)
+		if e.JSON {
+			// One JSON document (§6.1: --json on every verb means machine-
+			// readable output, not a JSON line followed by plain text —
+			// found by the S10 dogfood as task #6).
+			var goal, status string
+			err := db.QueryRowContext(ctx,
+				`SELECT goal, status FROM epics WHERE slug = ?`, slug).Scan(&goal, &status)
+			if errors.Is(err, sql.ErrNoRows) {
+				return refuse("not-found", "no epic %q", slug)
 			}
-			lines, err := drainStrings(rows, nil, "%s")
+			if err != nil {
+				return fmt.Errorf("read epic: %w", err)
+			}
+			doc := map[string]any{jsonEpicKey: slug, jsonGoalKey: goal, jsonStatusKey: status}
+			for _, sec := range sections {
+				lines, err := sectionLines(ctx, db, sec.q, slug)
+				if err != nil {
+					return err
+				}
+				doc[sec.header] = lines
+			}
+			return printJSON(e, doc)
+		}
+		if err := showEpic(ctx, e, db, slug); err != nil {
+			return err
+		}
+		for _, sec := range sections {
+			lines, err := sectionLines(ctx, db, sec.q, slug)
 			if err != nil {
 				return err
 			}
@@ -254,6 +273,23 @@ func epicShowFull(e *cli.Env, slug string) error {
 		}
 		return nil
 	})
+}
+
+// sectionLines drains one epic-show section; an empty section marshals
+// as [] in JSON, never null.
+func sectionLines(ctx context.Context, db *sql.DB, q, slug string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, q, slug)
+	if err != nil {
+		return nil, fmt.Errorf("epic show: %w", err)
+	}
+	lines, err := drainStrings(rows, nil, "%s")
+	if err != nil {
+		return nil, err
+	}
+	if lines == nil {
+		lines = []string{}
+	}
+	return lines, nil
 }
 
 func epicList(e *cli.Env, activeOnly bool) error {

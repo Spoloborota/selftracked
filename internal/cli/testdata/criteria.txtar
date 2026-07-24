@@ -31,3 +31,13 @@ expectexit 1 selftracked criteria check flip
 grep 'FAIL test -f probe.flag' .selftracked/dump.sql
 # The dump carries met=0 for that criterion now (the flip landed).
 grep 'flip., 1, .. test -f probe.flag., 0,' .selftracked/dump.sql
+
+# The standalone check exits 1 only for a FAILED RUNNABLE criterion: an
+# unmet owner-attested criterion is close condition (3)'s business, not a
+# check failure (task #7 - the shared blocker list used to make this
+# case claim 'a runnable criterion failed' with every runnable green).
+expectexit 0 selftracked epic create attested --goal g
+expectexit 0 selftracked criteria add attested --text '$ true'
+expectexit 0 selftracked criteria add attested --text 'the owner still has homework'
+expectexit 0 selftracked criteria check attested
+stdout 'criterion 1: PASS'

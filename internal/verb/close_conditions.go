@@ -32,7 +32,10 @@ func closeBlockers(ctx context.Context, tx *sql.Tx, slug string) ([]string, []st
 	}
 
 	// (3) criteria: runnables re-executed now, non-runnables met=1.
-	checkBlockers, output, err := runCriteria(ctx, tx, slug)
+	attested, failedRuns, output, err := runCriteria(ctx, tx, slug)
+	checkBlockers := make([]string, 0, len(attested)+len(failedRuns))
+	checkBlockers = append(checkBlockers, attested...)
+	checkBlockers = append(checkBlockers, failedRuns...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,20 +104,26 @@ func storyConditions(ctx context.Context, tx *sql.Tx, slug string) ([]string, er
 // runCriteria is condition (3)'s engine, shared with the standalone
 // `criteria check`: every `$ `-prefixed criterion executes (repo root,
 // inherited env, per-command timeout, stop at first failure), pass/fail
-// plus timestamp lands as evidence, a failing re-run flips met 1→0 so
-// regressions cannot stay green, and any failure is a blocker.
-func runCriteria(ctx context.Context, tx *sql.Tx, slug string) ([]string, []string, error) {
-	var blockers, output []string
+// plus timestamp lands as evidence, and a failing re-run flips met 1→0
+// so regressions cannot stay green. The two blocker classes return
+// SEPARATELY because the two callers weigh them differently: the epic
+// close blocks on both, the standalone check exits 1 only for a failed
+// RUNNABLE criterion — an unmet owner-attested criterion is close
+// condition (3)'s business, not a check failure (§6.2; found by the S10
+// dogfood as task #7, where the shared list made the standalone verb
+// report "a runnable criterion failed" with every runnable green).
+func runCriteria(ctx context.Context, tx *sql.Tx, slug string) ([]string, []string, []string, error) {
+	var attested, failedRuns, output []string
 	crits, err := loadCriteria(ctx, tx, slug)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	stopped := false
 	for _, c := range crits {
-		cmd, runnable := runnableCommand(c.criterion)
-		if !runnable {
+		cmd, isRunnable := runnableCommand(c.criterion)
+		if !isRunnable {
 			if c.met != 1 {
-				blockers = append(blockers,
+				attested = append(attested,
 					fmt.Sprintf("(3) criterion %d is owner-attested and not met", c.seq))
 			}
 			continue
@@ -124,15 +133,15 @@ func runCriteria(ctx context.Context, tx *sql.Tx, slug string) ([]string, []stri
 		}
 		line, blocker, err := runOne(ctx, tx, slug, c.seq, cmd)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		output = append(output, line)
 		if blocker != "" {
-			blockers = append(blockers, blocker)
+			failedRuns = append(failedRuns, blocker)
 			stopped = true
 		}
 	}
-	return blockers, output, nil
+	return attested, failedRuns, output, nil
 }
 
 type crit struct {

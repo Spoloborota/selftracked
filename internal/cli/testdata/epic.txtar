@@ -82,3 +82,11 @@ expectexit 0 selftracked edit 3 --detach
 expectexit 0 selftracked epic dissolve doomed --why 'pivoted'
 stdout 'DISSOLVED'
 grep 'DISSOLVED., .., .., .., NULL, .auto-dissolved with the epic: pivoted' .selftracked/dump.sql
+
+# epic show --json is ONE JSON document (task #6): the sections ride
+# inside the object, never as plain-text lines after a JSON header.
+expectexit 0 selftracked epic show demo-run --json
+stdout '"stories":\['
+stdout '"criteria":\['
+stdout '"worklog":\['
+! stdout '  stories: '

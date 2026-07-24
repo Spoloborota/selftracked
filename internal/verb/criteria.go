@@ -153,12 +153,15 @@ func criteriaCheck(e *cli.Env, slug string) error {
 	var failed bool
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
-		blockers, out, err := runCriteria(ctx, tx, slug)
+		// Standalone check: only a failed RUNNABLE criterion is a
+		// failure; unmet owner-attested criteria belong to the epic
+		// close's condition (3), not to this verb (§6.2, task #7).
+		_, failedRuns, out, err := runCriteria(ctx, tx, slug)
 		if err != nil {
 			return nil, err
 		}
 		output = out
-		failed = len(blockers) > 0
+		failed = len(failedRuns) > 0
 		return []Event{{
 			Entity: epicPrefix + slug, Event: evCriteria,
 			Detail: fmt.Sprintf("check: %d line(s), failed=%v", len(out), failed),

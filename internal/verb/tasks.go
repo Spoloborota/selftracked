@@ -26,6 +26,7 @@ const (
 
 	jsonRefKey    = "ref"
 	jsonEpicKey   = "epic"
+	jsonGoalKey   = "goal"
 	jsonStatusKey = "status"
 	jsonTitleKey  = "title"
 	jsonStoryKey  = "story"
@@ -250,7 +251,7 @@ func showEpic(ctx context.Context, e *cli.Env, db *sql.DB, slug string) error {
 		return fmt.Errorf("read epic: %w", err)
 	}
 	if e.JSON {
-		return printJSON(e, map[string]string{jsonEpicKey: slug, "goal": goal, jsonStatusKey: status})
+		return printJSON(e, map[string]string{jsonEpicKey: slug, jsonGoalKey: goal, jsonStatusKey: status})
 	}
 	_, _ = fmt.Fprintf(e.Stdout, "epic:%s [%s] %s\n", slug, status, goal)
 	return nil
