@@ -17,6 +17,7 @@ its own, and a number copied here is a number that goes stale unnoticed.
 | `docs/v0-execution-plan.md` | How v0 got built and how the spec is governed; freezes at S10 close as the bootstrap's historical record — its §2 lifecycle contract stays live. |
 | `selftracked prime` / `STATE.md` + `PROMPT.md` | The living project state and the working contract — read them first in every session, update the tracker last (the bootstrap ledger and inventory retired at S10; git history keeps both). |
 | `docs/research/` | The evidence base. Every design decision in the spec cites a document here. |
+| `docs/decisions/` | Accepted ADRs — the decisions already taken, including the ones that say a thing is deliberately *not* done. Read them before proposing work in an area: a finding that contradicts an accepted ADR is a proposal to supersede it, which travels the amendment flow, not the fix flow. |
 
 ## Non-negotiables
 
