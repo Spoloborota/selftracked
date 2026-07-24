@@ -20,7 +20,10 @@ overwrites a file that already exists**. If your repository already runs
 git hooks — a set `core.hooksPath` or a live pre/post-commit — `init`
 detects that and prints a chaining recipe instead of the takeover
 command: your gates stay authoritative, selftracked's hook runs as a
-subprocess call added to yours. Abandonment is deleting a directory.
+subprocess call added to yours. Abandonment is deleting the
+`.selftracked/` directory — plus, if you chained, removing the one line
+you added to your own hook (a call to a deleted script would otherwise
+fail your hook loudly).
 
 ## 2. What migrates, and what does not
 
@@ -32,7 +35,10 @@ subprocess call added to yours. Abandonment is deleting a directory.
   consumes/produces.
 - Tasks: title, status (including `DONE`, `WONT-DO`, `DUPLICATE` with
   its canonical, `IN-REVIEW`, `NEEDS-TRIAGE`), a free-text note, an
-  optional owning epic, an optional explicit date.
+  optional owning epic, an optional explicit date. A task slated as a
+  future increment sets `future_increment: true` and MUST name its
+  epic — the importer maps "planned for later inside this epic" to epic
+  homing, never to `park`.
 - Worklog episodes: per-epic rows with state, cited commits, gate and
   review evidence, notes.
 - Path-dictionary rows (class/scope/root).
@@ -62,8 +68,11 @@ reconciling first is cheaper.
 
 Two authoring constraints found in real rehearsals:
 
-- A `DUPLICATE` task's canonical must precede it in the corpus (dup_of
-  is resolved against already-inserted tasks).
+- A `DUPLICATE` task's canonical must precede it in the corpus: `dup_of`
+  is the canonical's assigned integer id, and on a fresh instance ids are
+  assigned in corpus order (the canonical's 1-based position). It is
+  resolved against already-inserted tasks, so a forward reference
+  refuses.
 - The md-table format cannot express a bundled increment; split such
   rows per increment, or author in JSON.
 
@@ -113,9 +122,11 @@ ones. `--legacy` relaxes exactly three things, nothing else:
    marked in the events trail).
 2. Done work without a recoverable commit range is recorded as
    `commits="legacy: <why>"` — visible and accepted rather than blocking
-   closure forever.
-3. Terminal states (`CLOSED`, `DISSOLVED`, `DONE`, `WONT-DO`) may be
-   inserted directly; the transition matrices gate only the UPDATE path.
+   closure forever. A worklog row's `legacy_reason` field supplies the
+   why; without it the row records "imported without commit range".
+3. Terminal states (epics: `CLOSED`, `DISSOLVED`; tasks: `DONE`,
+   `WONT-DO`, `DUPLICATE`) may be inserted directly; the transition
+   matrices gate only the UPDATE path.
 
 Every imported entity still gets its events row, so the audit trail
 stays whole. Synthesized timestamps carry the import's wall clock:

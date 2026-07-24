@@ -24,10 +24,12 @@ external pilot has run its import ladder. Nothing is published yet.
 - **An integrity engine, not good intentions.** `verify` runs fifteen
   rules — dump/DB byte-agreement, commit citations that must resolve in
   git, audit-trail completeness, schema-version gates — and the
-  generated pre-commit hook makes RED unignorable.
+  generated pre-commit hook makes RED loud: the only bypass is explicit,
+  one-shot, and recorded in the audit trail.
 - **Colocation posture.** On a repository with existing hooks, `init`
   detects them and chains rather than replaces; your gates stay
-  authoritative. Adopting is a directory; abandoning is deleting it.
+  authoritative. Adopting is a directory; abandoning is deleting it
+  (plus dropping the one chained line from your hook).
 - **A real migration door.** `import` backfills an existing project's
   history — terminal states, legacy commit ranges, git-first dates —
   behind explicit relaxations, never silently.

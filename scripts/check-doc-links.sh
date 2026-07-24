@@ -1,7 +1,9 @@
 #!/bin/sh
 # Docs link-check (plan S12): every relative markdown link in the tracked
 # documentation must resolve to an existing file. External URLs are out of
-# scope (no network in gates); anchors are stripped.
+# scope (no network in gates); anchors are stripped. Inline links only:
+# reference-style links ([text][ref]) are not matched — none exist in this
+# repository's docs, and adding one silently escapes this check.
 set -eu
 cd "$(dirname "$0")/.."
 fail=0
