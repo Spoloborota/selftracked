@@ -28,6 +28,10 @@ binaries: ## Build bin/selftracked and its strk alias from the one main
 	$(GO) build -trimpath -o bin/selftracked ./cmd/selftracked
 	$(GO) build -trimpath -o bin/strk ./cmd/selftracked
 
+.PHONY: install
+install: ## Install selftracked into GOBIN — the hooks and SessionStart resolve it via PATH
+	$(GO) install ./cmd/selftracked
+
 .PHONY: test
 test: ## Run the tests (race detector needs cgo; repo is otherwise cgo-free)
 	CGO_ENABLED=1 $(GO) test -race $(PKGS)
