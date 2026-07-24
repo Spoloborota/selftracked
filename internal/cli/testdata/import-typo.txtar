@@ -14,6 +14,8 @@ expectexit 0 selftracked init
 exec sh -c 'echo x > f && git add f && git commit -q -m c'
 
 expectexit 0 selftracked import --legacy --file corpus.json
+# The typo is named as it is imported, not only later by verify.
+stderr 'abcdef1, which resolves to no commit'
 
 # The typo is stored verbatim in the tracked dump (grep exits non-zero, and so
 # fails the step, if the token was dropped or rewritten).

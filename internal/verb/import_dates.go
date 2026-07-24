@@ -89,21 +89,31 @@ func isCitationToken(tok string) bool {
 // dates the increment by its finish. author date, never committer, so a
 // rebase does not rewrite worklog chronology. A legacy/placeholder/empty cell
 // resolves no date.
-func (im *importer) gitDate(ctx context.Context, cell string, kind commitClass) string {
+// It also reports the sha-shaped endpoints that resolved to nothing. Those
+// are stored verbatim by design (§6.2: rewriting a typo to `legacy:` would
+// mask it), and R5 flags them in full verify — but a corpus of a hundred rows
+// makes "run verify afterwards" a weak promise, so the importer names them as
+// it goes.
+func (im *importer) gitDate(ctx context.Context, cell string, kind commitClass) (string, []string) {
 	if kind != ccCitation {
-		return ""
+		return "", nil
 	}
 	var date string
+	var unresolved []string
 	for _, tok := range commitTokens(cell) {
 		endpoint := tok
 		if _, after, isRange := strings.Cut(tok, ".."); isRange {
 			endpoint = strings.Trim(after, ".")
 		}
-		if d, ok := im.authorDate(ctx, endpoint); ok && d > date {
+		d, ok := im.authorDate(ctx, endpoint)
+		switch {
+		case !ok:
+			unresolved = append(unresolved, endpoint)
+		case d > date:
 			date = d
 		}
 	}
-	return date
+	return date, unresolved
 }
 
 // commitTokens splits a commits cell on whitespace and commas; a `a..b`
@@ -269,7 +279,11 @@ func splitIncrements(r worklogRow) []resolvedEpisode {
 // placeholder) under the legacy switch.
 func (im *importer) resolveEpisode(ctx context.Context, ep resolvedEpisode) (resolvedEpisode, error) {
 	kind := classifyCommits(ep.commits)
-	gitDate := im.gitDate(ctx, ep.commits, kind)
+	gitDate, unresolved := im.gitDate(ctx, ep.commits, kind)
+	for _, tok := range unresolved {
+		im.warnf("warning: worklog %s/%s cites %s, which resolves to no commit; stored verbatim (verify reports it as R5)",
+			ep.epic, ep.story, tok)
+	}
 
 	commits, err := im.storedCommits(ep.commits, ep.state, kind, ep.legacyReason)
 	if err != nil {
