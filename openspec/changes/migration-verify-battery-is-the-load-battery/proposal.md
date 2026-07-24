@@ -1,9 +1,10 @@
 # Change: the migration's pre-rename battery is the §8.5 load battery
 
 Target: `docs/v0-spec.md` §8.6 (one clause in the migration sequence)
-Status: **proposed** · raised at the S11 open (2026-07-24, recorded as a
-watch-item in `docs/stage-openings/s11.md`) · awaiting owner ratification;
-the spec delta is applied only after acceptance
+Status: **accepted** · raised at the S11 open (2026-07-24, recorded as a
+watch-item in `docs/stage-openings/s11.md`) · filed before the deviating
+code landed · ratified by the owner 2026-07-24 · applied under D-EP14
+(spec revision 3.21 → 3.22)
 
 ## Why
 

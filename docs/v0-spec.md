@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.21 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.22 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -50,7 +50,10 @@ exists, `prime`'s flag owns the behind-DB case (amendment
 verify honestly — RED is exactly rc=1 (amendment
 `rc-triage-verify-did-not-complete`, rev 3.20); the §5 backfill
 parenthetical names what `--legacy` alone relaxes (amendment
-`backfill-parenthetical-names-its-relaxation`) → this revision.
+`backfill-parenthetical-names-its-relaxation`, rev 3.21); the migration's
+pre-rename battery is §8.5's load battery — R1 cannot pass before the
+re-dump exists (amendment `migration-verify-battery-is-the-load-battery`)
+→ this revision.
 Implementation has started; §5's schema and §3.1's connection posture are
 built.
 
@@ -971,7 +974,10 @@ wrapping conflicts with `foreign_keys=OFF` exactly where rebuilds need it.
   contiguously, or the rebuild aborts on `worklog_seq_contiguous` — today
   `worklog` carries the schema's only INSERT-firing gate; the obligation is
   stated table-generally so future INSERT gates inherit it) →
-  Stage-0 + full verify → atomic rename → the verb reopens the renamed file
+  Stage-0 + the §8.5 load battery (the DB-only rule set — R1/R14 compare
+  derived files the re-serialize step below has not rewritten yet; full
+  verify covers the migrated instance at its next invocation) →
+  atomic rename → the verb reopens the renamed file
   on a fresh connection appropriate to itself (write verbs: EXCLUSIVE;
   escalated read verbs: back to `query_only`) — the swap gap is benign under
   the single-writer axiom, an intruding writer surfaces as §8.4 divergence →
