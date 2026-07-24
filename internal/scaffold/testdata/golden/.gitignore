@@ -1,4 +1,6 @@
-# selftracked — local, per-machine files (the tracked surface is dump.sql)
-.selftracked/db.sqlite*
-.selftracked/dump.hash
-.selftracked/skip-pending
+# selftracked — local, per-machine files (the tracked surface is dump.sql).
+# Anchored to the repo root: unanchored patterns would also match nested
+# copies (a test fixture, a vendored tree).
+/.selftracked/db.sqlite*
+/.selftracked/dump.hash
+/.selftracked/skip-pending

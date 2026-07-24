@@ -15,7 +15,11 @@ __pycache__/
 *.sqlite-journal
 .DS_Store
 
-# selftracked dogfooding: local per-machine artifacts (the tool's own design)
-.selftracked/db.sqlite*
-.selftracked/dump.hash
-.selftracked/skip-pending
+# selftracked dogfooding: local per-machine artifacts (the tool's own design).
+# Anchored: the unanchored form also matched the scaffold test's golden
+# tree, silently untracking a golden (caught by the first-push clean-
+# checkout gates run). The golden .gitignore is itself a live ignore file
+# for git, so its ignored siblings are additionally tracked via add -f.
+/.selftracked/db.sqlite*
+/.selftracked/dump.hash
+/.selftracked/skip-pending
