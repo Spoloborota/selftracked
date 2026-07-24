@@ -177,6 +177,9 @@ func pathsMove(e *cli.Env, pos []string, withFiles bool) error {
 		return err
 	}
 	newRoot := filepath.ToSlash(filepath.Clean(pos[1]))
+	if err := validateText("ROOT", newRoot); err != nil {
+		return err
+	}
 	var oldRoot string
 	err = Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
@@ -234,7 +237,10 @@ func moveFiles(ctx context.Context, oldRoot, newRoot string) error {
 	}
 	if inGitRepo(ctx) {
 		// The roots come from the path dictionary, not user-typed shell text.
-		out, err := exec.CommandContext(ctx, "git", "mv", oldRoot, newRoot).CombinedOutput() //nolint:gosec
+		// `--` ends option parsing: the roots come from the path dictionary,
+		// which a loaded dump supplies, so a leading-dash root must reach git
+		// as a path and never as a flag.
+		out, err := exec.CommandContext(ctx, "git", "mv", "--", oldRoot, newRoot).CombinedOutput() //nolint:gosec
 		if err != nil {
 			return refuse("git", "git mv failed: %s", strings.TrimSpace(string(out)))
 		}

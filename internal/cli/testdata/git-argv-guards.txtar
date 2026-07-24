@@ -1,0 +1,13 @@
+# The tokens this tool hands to a git subprocess must reach it as data, never
+# as options. A dictionary root is dump-supplied and `--since` is operator-
+# supplied, and git reads a leading-dash argv as a flag (`git diff
+# --output=PATH` writes a file), so both are refused at the sink. Nothing
+# legitimate has this shape: git itself refuses a branch or tag starting
+# with '-'.
+
+seeddb
+
+# --since is a revision, not a flag.
+expectexit 2 selftracked stale --since --output=leaked.txt
+stderr 'is not a revision'
+! exists leaked.txt

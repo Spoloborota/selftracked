@@ -233,6 +233,17 @@ func r5(ctx context.Context, db *sql.DB, dir string) ([]rules.Violation, error) 
 			return nil, fmt.Errorf("R5: %w", err)
 		}
 		for _, ref := range commitRefs(commits) {
+			if strings.HasPrefix(ref, "-") {
+				// git reads a leading-dash argv as an option, not a revision,
+				// so such a token would reach cat-file as a flag. Nothing
+				// legitimate has this shape — git itself refuses a branch or
+				// tag starting with '-' — so the cell is malformed or planted.
+				out = append(out, rules.Violation{
+					Rule:    "R5",
+					Message: fmt.Sprintf("worklog %s/%d cites %q, which is not a revision", epic, seq, ref),
+				})
+				continue
+			}
 			if !commitResolves(ctx, base, ref) {
 				out = append(out, rules.Violation{
 					Rule:    "R5",

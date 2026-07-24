@@ -74,6 +74,12 @@ func staleRun(e *cli.Env, since string, quiet bool) error {
 
 func gitChanged(ctx context.Context, since string) (map[string]bool, error) {
 	args := []string{"diff", "--name-only"}
+	if strings.HasPrefix(since, "-") {
+		// A leading-dash --since would reach git diff as an option rather
+		// than a revision (`--output=PATH` writes a file). No revision has
+		// this shape: git refuses a branch or tag starting with '-'.
+		return nil, cli.Usage("--since %q is not a revision", since)
+	}
 	if since != "" {
 		args = append(args, since)
 	} else {
