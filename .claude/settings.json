@@ -1,7 +1,9 @@
 {
   "permissions": {
     "deny": [
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(git push:*)",
+      "Bash(git push)"
     ]
   },
   "hooks": {
