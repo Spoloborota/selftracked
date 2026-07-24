@@ -29,8 +29,8 @@ binaries: ## Build bin/selftracked and its strk alias from the one main
 	$(GO) build -trimpath -o bin/strk ./cmd/selftracked
 
 .PHONY: test
-test: ## Run the tests
-	$(GO) test -race $(PKGS)
+test: ## Run the tests (race detector needs cgo; repo is otherwise cgo-free)
+	CGO_ENABLED=1 $(GO) test -race $(PKGS)
 
 .PHONY: vet
 vet: ## Run go vet

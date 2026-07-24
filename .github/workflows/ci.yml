@@ -40,6 +40,12 @@ jobs:
         run: go vet ./...
 
       - name: test
+        # The race detector requires cgo; the repo is otherwise cgo-free
+        # (modernc.org/sqlite is pure Go, and the shipped build is verified
+        # cgo-free by the build step above). Enable cgo for this step only,
+        # or `-race` fails on Linux/Windows with CGO_ENABLED=0.
+        env:
+          CGO_ENABLED: "1"
         run: go test -race ./...
 
       - name: lint
