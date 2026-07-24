@@ -529,3 +529,144 @@ func TestGateRefusesADatabaseAheadOfTheBinary(t *testing.T) {
 		t.Fatalf("code=%s status=%d, want %s/2", code, status, codeNeedsNewer)
 	}
 }
+
+// TestMigrationCommutesAcrossSources is §8.6's commutativity claim run
+// against the synthetic chain: migrating via the live DB (the gate) and
+// via the dump (the load door's engine) must produce byte-identical
+// serializations, asserted at events_archived_through = 0 — the only v0
+// state.
+func TestMigrationCommutesAcrossSources(t *testing.T) {
+	inst := newInstance(t)
+	dumpText, err := os.ReadFile(filepath.Join(inst, dumpFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	syntheticBump(t)
+	ctx := context.Background()
+
+	// Source A: the live database, through the gate.
+	if _, err := Gate(ctx, inst, Mode{}); err != nil {
+		t.Fatal(err)
+	}
+	viaDB := serializeDB(t, filepath.Join(inst, dbFile))
+
+	// Source B: the same state's dump, through the parse→chain→build
+	// engine the load door runs.
+	parsed, err := load.Parse(dumpText)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := load.MigrateCorpus(load.CorpusFromDump(parsed), 1, 2, dump.TableOrder())
+	if err != nil {
+		t.Fatal(err)
+	}
+	built, err := load.Build(ctx, t.TempDir(), d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaDump := serializeDB(t, built)
+
+	if viaDB != viaDump {
+		t.Fatalf("migration does not commute:\nvia live DB:\n%s\nvia dump:\n%s", viaDB, viaDump)
+	}
+}
+
+func serializeDB(t *testing.T, dbPath string) string {
+	t.Helper()
+	db, err := schema.OpenRead(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	text, err := dump.Serialize(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(text)
+}
+
+// TestCLIGateHealsThroughPrime drives §8.4 branch (5) through the full
+// session-start chain: a crashed migration's residue is healed by the
+// gate in front of prime, the notice reaches stderr, and prime's JSON
+// carries no migrated field (nothing migrated on THIS invocation).
+func TestCLIGateHealsThroughPrime(t *testing.T) {
+	inst := newInstance(t)
+	syntheticBump(t)
+	execOnDB(t, inst, `UPDATE meta SET value = '2' WHERE key = 'schema_version'`)
+	execOnDB(t, inst, `PRAGMA user_version = 2`)
+	t.Chdir(filepath.Dir(inst))
+
+	reg := &cli.Registry{}
+	if err := reg.Register(verb.PrimeVerb()); err != nil {
+		t.Fatal(err)
+	}
+	old := cli.VersionGate
+	cli.VersionGate = CLIGate
+	t.Cleanup(func() { cli.VersionGate = old })
+
+	var stdout, stderr strings.Builder
+	env := &cli.Env{Stdout: &stdout, Stderr: &stderr}
+	if code := cli.Run(reg, env, []string{primeVerbName, "--json"}); code != 0 {
+		t.Fatalf("prime exited %d, stderr: %s", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "re-dump completed") {
+		t.Fatalf("stderr lacks the heal notice: %q", stderr.String())
+	}
+	if strings.Contains(stdout.String(), `"migrated"`) {
+		t.Fatalf("a heal is not a migration; prime reported: %s", stdout.String())
+	}
+	if got := firstLine(t, filepath.Join(inst, dumpFile)); !strings.Contains(got, "schema_version=2") {
+		t.Fatalf("dump header after the heal: %q, want schema_version=2", got)
+	}
+	if !sidecarMatchesTracked(inst) {
+		t.Fatal("sidecar does not match the healed dump")
+	}
+}
+
+// TestSwapFailureRestoresTheMark proves the non-destructive recovery: if
+// the rename cannot land, the old database — still intact at its path —
+// is un-marked back to its pre-migration version, so the next verb
+// simply re-migrates instead of refusing forever toward a
+// data-discarding load --force (an S11 close-review finding).
+func TestSwapFailureRestoresTheMark(t *testing.T) {
+	inst := newInstance(t)
+	syntheticBump(t)
+	ctx := context.Background()
+	dbPath := filepath.Join(inst, dbFile)
+
+	db, err := schema.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := acquireExclusive(ctx, conn); err != nil {
+		t.Fatal(err)
+	}
+
+	// A built file that vanished makes the rename fail while the old
+	// database stays intact at dbPath — the exact recovery scenario.
+	missingBuilt := filepath.Join(inst, "db.sqlite.load-gone")
+	err = swapAndRelease(ctx, conn, db, missingBuilt, dbPath, 1)
+	if err == nil {
+		t.Fatal("swapAndRelease with a missing built file must fail")
+	}
+	if !strings.Contains(err.Error(), "left unchanged") {
+		t.Fatalf("err = %v, want the state-restored message", err)
+	}
+	uv, err := readUserVersion(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uv != 1 {
+		t.Fatalf("user_version = %d, want 1 (the mark restored)", uv)
+	}
+	// And the instance is fully operational again: the gate simply
+	// migrates on the next invocation.
+	res, err := Gate(ctx, inst, Mode{})
+	if err != nil || !res.Migrated {
+		t.Fatalf("gate after restore: res=%+v err=%v, want a clean migration", res, err)
+	}
+}

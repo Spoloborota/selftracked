@@ -59,16 +59,17 @@ type grammar struct {
 	columns map[string]string
 }
 
-// grammarFor resolves the parsing grammar for a header version: a
-// registered historical Step first (so a registry entry for the current
-// version — a test installing a synthetic chain — is honored), then the
-// compiled-in current grammar, then unknown.
+// grammarFor resolves the parsing grammar for a header version: the
+// compiled-in grammar for the current version FIRST — structurally, so a
+// registry entry keyed by the current version (a future off-by-one in a
+// hand-written Step) can never shadow the byte-equal DDL gate the §8.5
+// boundary rests on — then the registered historical Steps, then unknown.
 func grammarFor(version int) (grammar, bool) {
-	if st, ok := Steps[version]; ok {
-		return grammar{ddl: st.DDL, columns: st.columnsMap()}, true
-	}
 	if version == current {
 		return grammar{ddl: schema.DDL(), columns: expectedColumns}, true
+	}
+	if st, ok := Steps[version]; ok {
+		return grammar{ddl: st.DDL, columns: st.columnsMap()}, true
 	}
 	return grammar{}, false
 }

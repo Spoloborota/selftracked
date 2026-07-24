@@ -11,6 +11,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/schema"
@@ -87,6 +91,56 @@ var tables = []table{
 		name: "events", columns: "seq at entity event detail",
 		orderBy: "seq", where: "seq > ?",
 	},
+}
+
+// HeaderVersion extracts the schema version from a dump's header line —
+// the §8.1 format this package itself writes, parsed strictly: the exact
+// prefix, a schema_version field, an integer ≥ 1. One implementation for
+// every reader (the §8.6 gate, prime's report, the load preamble), so no
+// two surfaces can disagree about what counts as a header.
+func HeaderVersion(header string) (int, bool) {
+	rest, ok := strings.CutPrefix(header, "-- selftracked dump ")
+	if !ok {
+		return 0, false
+	}
+	for f := range strings.FieldsSeq(rest) {
+		raw, found := strings.CutPrefix(f, "schema_version=")
+		if !found {
+			continue
+		}
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			return 0, false
+		}
+		return v, true
+	}
+	return 0, false
+}
+
+// TrackedHeaderVersion reads the tracked dump's header version from an
+// instance directory. The read is bounded: a legitimate header line is a
+// few hundred bytes, so anything without a newline in the first 4 KiB is
+// not a selftracked dump and reports (0, false) — explicitly, not as an
+// ignored scanner error. A missing version is not a refusal here: the
+// caller's other guards (comparison (ii), the §8.4 matrix, the §8.5
+// parser) own every state a headerless file can produce.
+func TrackedHeaderVersion(dir string) (int, bool) {
+	f, err := os.Open(filepath.Join(dir, dumpFile)) //nolint:gosec // fixed .selftracked path
+	if err != nil {
+		return 0, false
+	}
+	defer func() { _ = f.Close() }()
+	const headerCap = 4096
+	buf := make([]byte, headerCap)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return 0, false
+	}
+	line, _, found := strings.Cut(string(buf[:n]), "\n")
+	if !found && n == headerCap {
+		return 0, false // no newline in the first 4 KiB: not a header
+	}
+	return HeaderVersion(line)
 }
 
 // TableOrder returns the serializer's emission order — parents before

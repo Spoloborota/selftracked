@@ -7,7 +7,6 @@
 package migrate
 
 import (
-	"bufio"
 	"context"
 	"database/sql"
 	"errors"
@@ -82,7 +81,7 @@ func Gate(ctx context.Context, dir string, mode Mode) (Result, error) {
 	// Comparison (i): the tracked dump's header schema_version vs the
 	// binary. Newer is the forward-only refusal (git's repository-format
 	// rule); a missing or headerless dump is not "newer".
-	headerV, headerOK := dumpHeaderVersion(dir)
+	headerV, headerOK := dump.TrackedHeaderVersion(dir)
 	if headerOK && headerV > currentVersion && !mode.SkipNewerRefusal {
 		return Result{}, refuse(codeNeedsNewer,
 			"the tracked dump is schema_version=%d but this binary compiles v%d — upgrade selftracked (§8.6 forward-only)",
@@ -185,10 +184,22 @@ func runMigration(ctx context.Context, dir, dbPath string, from int) (Result, er
 	}
 	rollback := func() { _, _ = conn.ExecContext(ctx, "ROLLBACK") }
 
-	won, err := wonTheEscalation(ctx, conn, dbPath, from)
-	if err != nil || !won {
+	// Re-check on THIS handle after the wait (§8.6): the winner marked
+	// the old inode before releasing, so a loser that blocked sees the
+	// mark here even though its handle predates the rename. The ROLLBACK
+	// comes BEFORE the outcome is interpreted: loserOutcome opens a fresh
+	// connection by path, and a loser still inside its own EXCLUSIVE
+	// transaction would block that read against itself for the whole
+	// busy_timeout (found by the S11 close review, reproduced at the
+	// driver level).
+	cur, err := connUserVersion(ctx, conn)
+	if err != nil {
 		rollback()
 		return Result{}, err
+	}
+	if cur != from {
+		rollback()
+		return Result{}, loserOutcome(ctx, dbPath, cur)
 	}
 
 	built, err := rebuildCurrent(ctx, dir, conn, st, from)
@@ -258,7 +269,29 @@ func swapAndRelease(ctx context.Context, conn *sql.Conn, db *sql.DB, built, dbPa
 	}
 	if err := os.Rename(built, dbPath); err != nil {
 		_ = os.Remove(built)
-		return fmt.Errorf("migrate: swap: %w", err)
+		// Non-destructive recovery: the old database is intact, only
+		// marked. Un-mark it so the next verb simply re-migrates instead
+		// of refusing forever toward a load --force that could discard
+		// diverged-state data (found by the S11 close review).
+		if restoreErr := restoreMark(ctx, dbPath, from); restoreErr != nil {
+			return fmt.Errorf("migrate: swap failed (%w) and the mark could not be restored (%w) — %s",
+				err, restoreErr, interruptedMessage)
+		}
+		return fmt.Errorf("migrate: swap: %w — the database was left unchanged; re-run", err)
+	}
+	return nil
+}
+
+// restoreMark puts the pre-migration user_version back after a failed
+// swap, returning the database to the plain "behind" state.
+func restoreMark(ctx context.Context, dbPath string, from int) error {
+	db, err := schema.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("restore mark: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", from)); err != nil {
+		return fmt.Errorf("restore mark: %w", err)
 	}
 	return nil
 }
@@ -301,22 +334,6 @@ func acquireExclusive(ctx context.Context, conn *sql.Conn) error {
 		//nolint:gosec // lock-retry jitter, not security material
 		time.Sleep(time.Duration(retryFloorMS+rand.IntN(retryJitterMS)) * time.Millisecond)
 	}
-}
-
-// wonTheEscalation re-checks user_version on THIS handle after the wait
-// (§8.6): the winner marked the old inode before releasing, so a loser
-// that blocked sees the mark here even though its handle predates the
-// rename. True means this gate holds the lock on an un-migrated database
-// and proceeds as the winner.
-func wonTheEscalation(ctx context.Context, conn *sql.Conn, dbPath string, from int) (bool, error) {
-	cur, err := connUserVersion(ctx, conn)
-	if err != nil {
-		return false, err
-	}
-	if cur == from {
-		return true, nil
-	}
-	return false, loserOutcome(ctx, dbPath, cur)
 }
 
 // loserOutcome interprets what the lock's previous holder left behind.
@@ -392,22 +409,6 @@ func connUserVersion(ctx context.Context, conn *sql.Conn) (int, error) {
 		return 0, fmt.Errorf("migrate: user_version: %w", err)
 	}
 	return v, nil
-}
-
-// dumpHeaderVersion reads the tracked dump's header schema_version; a
-// missing or headerless dump reports (0, false) — that state belongs to
-// load and the §8.4 matrix, not the gate.
-func dumpHeaderVersion(dir string) (int, bool) {
-	f, err := os.Open(filepath.Join(dir, dumpFile)) //nolint:gosec // fixed .selftracked path
-	if err != nil {
-		return 0, false
-	}
-	defer func() { _ = f.Close() }()
-	sc := bufio.NewScanner(f)
-	if !sc.Scan() {
-		return 0, false
-	}
-	return load.HeaderVersion(sc.Text())
 }
 
 // sidecarMatchesTracked is §8.4's first arm: the tracked dump hashes to

@@ -16,6 +16,6 @@ __pycache__/
 .DS_Store
 
 # selftracked dogfooding: local per-machine artifacts (the tool's own design)
-.selftracked/db.sqlite
+.selftracked/db.sqlite*
 .selftracked/dump.hash
 .selftracked/skip-pending

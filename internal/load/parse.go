@@ -115,20 +115,6 @@ func parsePreamble(s string) (int, string, error) {
 	return version, rest[len(g.ddl):], nil
 }
 
-// HeaderVersion extracts the schema version from a dump's header line —
-// the §8.6 gate's comparison (i) reads it without parsing the dump.
-// Reports false for anything that is not a well-formed header.
-func HeaderVersion(header string) (int, bool) {
-	if !strings.HasPrefix(header, headerPrefix) {
-		return 0, false
-	}
-	v, err := headerVersion(strings.Fields(strings.TrimPrefix(header, "-- selftracked dump ")))
-	if err != nil {
-		return 0, false
-	}
-	return v, true
-}
-
 func headerVersion(fields []string) (int, error) {
 	for _, f := range fields {
 		if raw, found := strings.CutPrefix(f, "schema_version="); found {

@@ -86,6 +86,17 @@ func versionGate(ctx context.Context) error {
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		return fmt.Errorf("version gate: %w", err)
 	}
+	if v < 0 {
+		// The §8.6 migration sentinel: a migration was interrupted (or is
+		// completing in another process). Same message the dispatcher's
+		// gate gives, so a non-CLI caller sees the same recovery.
+		return &cli.CodedError{
+			Code: "migration-interrupted",
+			Message: "a schema migration here was interrupted or is completing in another process — " +
+				"re-run; if this persists, selftracked load --force rebuilds from the tracked dump",
+			Status: infra,
+		}
+	}
 	if v != GateVersion {
 		return &cli.CodedError{
 			Code: "version-gate",

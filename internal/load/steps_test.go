@@ -184,10 +184,12 @@ func TestHydrateCorpusReadsInOrderAndFilters(t *testing.T) {
 	}
 }
 
-func TestParseSelectsAHistoricalGrammarFirst(t *testing.T) {
+func TestParseSelectsAHistoricalGrammar(t *testing.T) {
 	// A v1 dialect whose DDL deliberately differs from the canonical
 	// text: parse succeeds only if the registry's grammar — not the
-	// compiled-in current one — judged the block.
+	// compiled-in current one — judged the block. (The current version's
+	// grammar is resolved compiled-in-first by design; the registry is
+	// consulted only for genuinely historical versions.)
 	oldDDL := schema.DDL() + "-- v1 historical tail\n"
 	bumpTo2(t, metaOnlyStep(oldDDL))
 
@@ -252,5 +254,34 @@ func TestLoadDoorMigratesAnOldDump(t *testing.T) {
 	// sidecar — the §8.4 branch-(5) state the next gated verb re-dumps.
 	if !dump.SidecarMatches(inst, text) {
 		t.Fatal("sidecar does not record the loaded (old) dump bytes")
+	}
+}
+
+// TestBuildAbortsOnNonContiguousWorklog proves §8.6's hydration
+// obligation end to end: the INSERT-firing gates bind transform output,
+// so a corpus whose worklog seq is not contiguous per epic aborts the
+// rebuild on the schema's own worklog_seq_contiguous trigger.
+func TestBuildAbortsOnNonContiguousWorklog(t *testing.T) {
+	bumpTo2(t, metaOnlyStep(schema.DDL()))
+	c := &Corpus{Tables: map[string][][]Literal{
+		metaTable: {
+			{metaSchemaVersionKey, "1"},
+			{"events_archived_through", "0"},
+		},
+		"epics": {
+			{"e1", "a goal", "BACKLOG", "", "", "2026-07-24T00:00:00Z"},
+		},
+		// seq 2 with no seq 1: a renumbering transform's mistake.
+		"worklog": {
+			{"e1", int64(2), "S1", "2026-07-24", "DONE", "", "", "", nil, ""},
+		},
+	}}
+	d, err := MigrateCorpus(c, 1, 2, dump.TableOrder())
+	if err != nil {
+		t.Fatalf("chain: %v", err)
+	}
+	_, err = Build(context.Background(), t.TempDir(), d)
+	if !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "contiguous") {
+		t.Fatalf("err = %v, want the worklog_seq_contiguous abort as a refusal", err)
 	}
 }

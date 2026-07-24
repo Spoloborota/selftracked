@@ -1,7 +1,6 @@
 package verb
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -87,8 +86,11 @@ type primeTotals struct {
 }
 
 // PrimeVerb returns §6.2/§11.1's `prime`: the session-start read that reports
-// the whole active surface as one stable JSON object. Read-only — it never
-// touches the DB or the dump file, including its divergence report (INV-361).
+// the whole active surface as one stable JSON object. prime's own body is
+// read-only — its divergence report never writes the DB or the dump
+// (INV-361) — but the dispatcher's §8.6 gate runs before every verb, and
+// for prime it may migrate or heal (the spec-sanctioned escalation: the
+// first post-upgrade prime is exactly the invocation that migrates).
 func PrimeVerb() cli.Verb {
 	return cli.Verb{Name: "prime", Subs: []cli.Sub{{
 		Arity: 0,
@@ -394,11 +396,7 @@ func fillDivergence(ctx context.Context, db *sql.DB, out *primeOutput, _ int) er
 	}
 	out.DumpDivergence = diverged
 
-	newer, err := dumpNeedsNewerBinary(instanceDir)
-	if err != nil {
-		return err
-	}
-	out.DumpRequiresNewerBinary = newer
+	out.DumpRequiresNewerBinary = dumpNeedsNewerBinary(instanceDir)
 	return nil
 }
 
@@ -433,43 +431,16 @@ func divergenceReport(ctx context.Context, db *sql.DB, dir string) (bool, error)
 	return true, nil // the tracked dump changed under this DB
 }
 
-// dumpNeedsNewerBinary reads the tracked dump's header schema_version and
-// reports whether it is ahead of this binary's compiled-in version (§8.6
-// forward-only, surfaced non-fatally at session start). A missing/unreadable
-// header is not "ahead": false.
-func dumpNeedsNewerBinary(dir string) (bool, error) {
-	f, err := os.Open(filepath.Join(dir, dumpFile)) //nolint:gosec // fixed .selftracked path
-	if err != nil {
-		return false, nil
-	}
-	defer func() { _ = f.Close() }()
-	sc := bufio.NewScanner(f)
-	if !sc.Scan() {
-		return false, nil
-	}
-	v, ok := parseDumpHeaderVersion(sc.Text())
-	if !ok {
-		return false, nil
-	}
-	return v > schema.Version, nil
-}
-
-// parseDumpHeaderVersion extracts N from the header line
-// "-- selftracked dump schema_version=N tasks=… artifacts=…" (§8.1).
-func parseDumpHeaderVersion(line string) (int, bool) {
-	const key = "schema_version="
-	_, rest, ok := strings.Cut(line, key)
-	if !ok {
-		return 0, false
-	}
-	if before, _, found := strings.Cut(rest, " "); found {
-		rest = before
-	}
-	n, err := strconv.Atoi(rest)
-	if err != nil {
-		return 0, false
-	}
-	return n, true
+// dumpNeedsNewerBinary reports whether the tracked dump's header is
+// ahead of this binary's compiled-in version (§8.6 forward-only,
+// surfaced non-fatally at session start). One parser for every reader —
+// dump.TrackedHeaderVersion — so prime can never disagree with the gate
+// about what counts as a header (an S11 close-review finding: the
+// previous local copy skipped the prefix check and the v ≥ 1 guard).
+// A missing/unreadable header is not "ahead": false.
+func dumpNeedsNewerBinary(dir string) bool {
+	v, ok := dump.TrackedHeaderVersion(dir)
+	return ok && v > schema.Version
 }
 
 // ensureEmpty replaces nil contract slices with empty ones so they marshal as

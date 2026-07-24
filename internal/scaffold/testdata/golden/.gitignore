@@ -1,4 +1,4 @@
 # selftracked — local, per-machine files (the tracked surface is dump.sql)
-.selftracked/db.sqlite
+.selftracked/db.sqlite*
 .selftracked/dump.hash
 .selftracked/skip-pending
