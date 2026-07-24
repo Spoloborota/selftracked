@@ -1,4 +1,9 @@
 {
+  "permissions": {
+    "deny": [
+      "Bash(sqlite3:*)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

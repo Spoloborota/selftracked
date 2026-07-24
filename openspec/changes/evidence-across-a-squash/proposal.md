@@ -60,7 +60,8 @@ deferred, and the honest statement is that neither binds until publication.
 
 ## Ratification
 
-Owner, 2026-07-19: D-EP9 ratified ("d-ep9 ratified"); the squash's effect
+Owner, 2026-07-19: D-EP9 ratified (the ruling is recorded in English by
+meaning); the squash's effect
 on evidence raised as a thing to solve before it bites ("we will very likely
 squash these commits before the push, so we need to work out what to do
 meanwhile"); and the anchor question delegated to be decided ("take the

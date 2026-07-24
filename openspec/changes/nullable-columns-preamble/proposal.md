@@ -74,7 +74,7 @@ NULL and no other does, with `tasks.id` excluded by name and reason.
 ## Ratification
 
 Owner, 2026-07-19, choosing between a minimal name-addition, a name-addition
-with a rowid caveat, and the stored-values rewording: **"apply the third"** — the
-third. The reasoning offered and accepted was that a claim needing an
+with a rowid caveat, and the stored-values rewording: ruled to apply the
+third (the ruling is recorded in English by meaning). The reasoning offered and accepted was that a claim needing an
 exception list in its fixture is a claim that will be weakened later by
 someone who does not know why the exception is there.
