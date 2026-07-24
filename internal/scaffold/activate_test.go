@@ -53,11 +53,15 @@ func TestActivationHooksPathSetSuppressesTakeover(t *testing.T) {
 		t.Errorf("INV-420: takeover command must be suppressed when hooksPath is set:\n%s", out)
 	}
 	for _, want := range []string{
-		".selftracked/hooks/pre-commit || exit $?", // INV-422 exit propagation
-		"at the TOP of",                  // INV-423 top placement
-		".selftracked/hooks/post-commit", // INV-421 both hooks
-		"never `source`",                 // INV-424 subprocess mandate
-		"execute on your machine",        // trust note
+		// INV-422 exit propagation + the abandonment guard (amendment
+		// `chaining-recipe-guards-abandonment`): the line lives in the
+		// host's hook, so a deleted .selftracked/ must not exit 127.
+		"[ ! -x .selftracked/hooks/pre-commit ] || .selftracked/hooks/pre-commit || exit $?",
+		"at the TOP of", // INV-423 top placement
+		// INV-421 both hooks, post-commit guarded the same way.
+		"[ ! -x .selftracked/hooks/post-commit ] || .selftracked/hooks/post-commit",
+		"never `source`",          // INV-424 subprocess mandate
+		"execute on your machine", // trust note
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("chaining recipe missing %q:\n%s", want, out)

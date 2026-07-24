@@ -66,7 +66,12 @@ func takeoverAdvice() string {
 // at its TOP (INV-423 — warn-only, safe first; appended at the bottom an
 // early `exit` in the incumbent could skip it). Both must run as
 // subprocesses, never `source`d (INV-424 — the scripts `exit` internally and
-// would terminate the incumbent hook).
+// would terminate the incumbent hook). Both lines are existence-guarded:
+// they live in the HOST's hook and outlive the installation, and after
+// abandonment (`.selftracked/` deleted) an unguarded line fails with 127
+// and blocks every host commit (amendment
+// `chaining-recipe-guards-abandonment`; a non-executable hook counts as
+// absent, the semantics git itself applies).
 func chainingRecipe(incumbent string) string {
 	pre := filepath.Join(incumbent, "pre-commit")
 	post := filepath.Join(incumbent, "post-commit")
@@ -74,9 +79,9 @@ func chainingRecipe(incumbent string) string {
 		"Chain selftracked instead — add each line as a SUBPROCESS call (never `source`;\n" +
 		"the scripts exit internally and would abort your hook):\n" +
 		"    in " + pre + " :\n" +
-		"        .selftracked/hooks/pre-commit || exit $?\n" +
+		"        [ ! -x .selftracked/hooks/pre-commit ] || .selftracked/hooks/pre-commit || exit $?\n" +
 		"    at the TOP of " + post + " :\n" +
-		"        .selftracked/hooks/post-commit\n" +
+		"        [ ! -x .selftracked/hooks/post-commit ] || .selftracked/hooks/post-commit\n" +
 		trustNote
 }
 

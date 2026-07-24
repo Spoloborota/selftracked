@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.23 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.24 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -55,8 +55,11 @@ pre-rename battery is §8.5's load battery — R1 cannot pass before the
 re-dump exists (amendment `migration-verify-battery-is-the-load-battery`,
 rev 3.22); the migration gate's mechanics — the §3.1 lock-posture
 carve-out, the sentinel protocol, the DB-ahead refusal, the
-sidecar-anchored snapshot (amendment `migration-gate-mechanics`) → this
-revision.
+sidecar-anchored snapshot (amendment `migration-gate-mechanics`, rev
+3.23) → the pilot-preparation review routed task #10: the chaining
+recipe's printed lines gain existence guards, so abandonment of a
+colocated install cannot block the host repository's commits (amendment
+`chaining-recipe-guards-abandonment`) → this revision.
 Implementation has started; §5's schema and §3.1's connection posture are
 built.
 
@@ -1118,11 +1121,20 @@ repo-tracked hooks execute on your machine — enable only on repos you trust.
 non-empty, `init` does not print the takeover command** — it prints a
 chaining recipe instead, covering **both hooks**: one line in the incumbent
 pre-commit invoking `.selftracked/hooks/pre-commit` **with the exit status
-propagated** (the printed line is `.selftracked/hooks/pre-commit || exit $?`
+propagated** (the printed line is
+`[ ! -x .selftracked/hooks/pre-commit ] || .selftracked/hooks/pre-commit || exit $?`
 — without propagation a RED verify degrades to advisory), and one line **at
 the top of** the incumbent post-commit invoking
 `.selftracked/hooks/post-commit` (warn-only, safe to run first — appended at
-the bottom it can be skipped by the incumbent's own early `exit` paths). The
+the bottom it can be skipped by the incumbent's own early `exit` paths; the
+printed line is
+`[ ! -x .selftracked/hooks/post-commit ] || .selftracked/hooks/post-commit`).
+**Both lines are existence-guarded** because they live in the host's hook
+and outlive the installation: after abandonment (`.selftracked/` deleted)
+an unguarded line fails with 127 and blocks every commit in the host
+repository until a human edits its hook. The guard treats a
+present-but-non-executable hook as absent — the semantics git itself
+applies to hooks (amendment `chaining-recipe-guards-abandonment`). The
 recipe mandates
 **subprocess execution, never `source`** — the generated scripts contain
 internal `exit` statements that would otherwise terminate the incumbent hook
