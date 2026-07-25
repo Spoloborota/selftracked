@@ -182,8 +182,8 @@ makes the adoption repeatable is not a script but a **handoff
 instruction** the agent executes. Rehearsed handoffs share a shape:
 
 - **One fresh copy per attempt.** Each rehearsal starts from a pristine
-  copy of the host (on APFS, `cp -a -c` clones the whole tree, uncommitted
-  prose included, at near-zero cost) and is thrown away, never repaired.
+  copy of the host (a copy-on-write clone takes the whole tree, uncommitted
+  prose included, at near-zero cost where the filesystem supports it) and is thrown away, never repaired.
 - **Exact chaining lines with their positions and the why.** The host's
   own gates keep running first in pre-commit (they own the repo);
   selftracked's post-commit line goes at the top because a host
