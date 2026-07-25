@@ -65,7 +65,9 @@ use, so a single `grep PO:` always finds every owner ruling.
 ## Verbs
 
 Every verb accepts `--json` for machine-readable output; `--help` prints
-its signature. The catalog, with signatures:
+its signature. Wherever a signature says `<ref>`, the grammar is: `NN` or
+`#NN` for a task, `epic:SLUG` for an epic, `epic:SLUG/SID` for a story.
+The catalog, with signatures:
 
 - **Tasks:**
   - `create --title T [--status OPEN|IN-REVIEW|NEEDS-TRIAGE] [--note N]
