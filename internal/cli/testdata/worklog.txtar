@@ -9,13 +9,23 @@ expectexit 0 selftracked story add wl --title b
 expectexit 0 selftracked edit epic:wl/S1 --dod '$ true'
 expectexit 0 selftracked edit epic:wl/S2 --dod '$ true'
 
-# An episode row is the story verbs' job, nothing else's.
+# An episode row is the story verbs' job, nothing else's. Both refusals
+# name the routes that apply in the epic's CURRENT state (amendment
+# worklog-refusals-name-the-routes): here, the PLANNED story S1.
+#
+# Every identifier in the clause is %q-quoted, and the JSON error envelope
+# escapes those quotes again, so a slug reaches stderr as the seven bytes
+# \"wl\". The regexes below match that backslash-quote pair exactly rather
+# than wildcarding it: a wildcard asserts only that two characters exist
+# beside the slug, which a mutant dropping the quoting would satisfy.
+# Each is one contiguous literal spanning the head AND the route, so a
+# reordering or an interpolation between them fails the match.
 expectexit 1 selftracked worklog add wl --story S1 --state IN-PROGRESS
-stderr 'belong to the story verbs'
+stderr 'episode rows belong to the story verbs; story \\"S1\\" of epic \\"wl\\" is PLANNED — story ready \\"wl\\" \\"S1\\", then story start \\"wl\\" \\"S1\\"'
 
-# V-rows demand a CLOSED epic.
+# V-rows demand a CLOSED epic — and the same state clause.
 expectexit 1 selftracked worklog add wl --story V-1 --state DONE
-stderr 'post-close'
+stderr 'V-rows are post-close validation; epic \\"wl\\" is ACTIVE; story \\"S1\\" of epic \\"wl\\" is PLANNED — story ready \\"wl\\" \\"S1\\", then story start \\"wl\\" \\"S1\\"'
 
 # Corrections: target must exist, be original, same story, same state.
 expectexit 0 selftracked story ready wl S1
@@ -47,3 +57,97 @@ expectexit 0 selftracked story done wl S2 --commits def --gate g
 expectexit 0 selftracked epic close wl
 expectexit 0 selftracked worklog add wl --story V-1 --state DONE --note 'post-close validation run'
 grep 'V-1' .selftracked/dump.sql
+
+# --- The route clause is derived from state, not appended unconditionally.
+# One epic walked through every state both refusals distinguish. Each
+# assertion is a single contiguous literal: the head and the route must be
+# adjacent, in that order, with nothing between them.
+expectexit 0 selftracked epic create rt --goal g
+expectexit 0 selftracked epic activate rt
+expectexit 0 selftracked story add rt --title one
+
+# READY: story start is the whole route.
+expectexit 0 selftracked story ready rt S1
+expectexit 1 selftracked worklog add rt --story S1 --state IN-PROGRESS
+stderr 'episode rows belong to the story verbs; story \\"S1\\" of epic \\"rt\\" is READY — story start \\"rt\\" \\"S1\\"'
+
+# IN-PROGRESS: the story already holds the WIP slot, so story done writes
+# the episode and the clause must NOT name another story start.
+expectexit 0 selftracked story start rt S1
+expectexit 1 selftracked worklog add rt --story S1 --state IN-PROGRESS
+stderr 'story \\"S1\\" of epic \\"rt\\" is IN-PROGRESS and already holds the WIP slot — story done \\"rt\\" \\"S1\\" --commits RANGE --gate G writes the episode'
+! stderr 'story start'
+
+# A story is offered by status PRIORITY, never by lowest id. In epic wip,
+# S1 is PLANNED and the higher-id S2 holds the WIP slot: offering the
+# lower id would send the agent through a story ready that mutates S1 for
+# nothing and then into the wip refusal S2 owns. The clause must name S2.
+expectexit 0 selftracked epic create wip --goal g
+expectexit 0 selftracked epic activate wip
+expectexit 0 selftracked story add wip --title lower
+expectexit 0 selftracked story add wip --title higher
+expectexit 0 selftracked story ready wip S2
+expectexit 0 selftracked story start wip S2
+expectexit 1 selftracked worklog add wip --story S1 --state IN-PROGRESS
+stderr 'story \\"S2\\" of epic \\"wip\\" is IN-PROGRESS and already holds the WIP slot — story done \\"wip\\" \\"S2\\" --commits RANGE --gate G writes the episode'
+! stderr 'is PLANNED'
+! stderr 'story ready'
+! stderr 'story start'
+
+# BLOCKED: the state where an unconditional dead-zone sentence would have
+# been wrong — story unblock is the agent's own remedy, no owner needed.
+expectexit 0 selftracked story block rt S1 --reason waiting
+expectexit 1 selftracked worklog add rt --story S1 --state IN-PROGRESS
+stderr 'episode rows belong to the story verbs; story \\"S1\\" of epic \\"rt\\" is BLOCKED — story unblock \\"rt\\" \\"S1\\" --resolution TEXT, then story start \\"rt\\" \\"S1\\"'
+! stderr 'non-terminal status'
+expectexit 1 selftracked worklog add rt --story V-1 --state DONE
+stderr 'V-rows are post-close validation; epic \\"rt\\" is ACTIVE; story \\"S1\\" of epic \\"rt\\" is BLOCKED — story unblock \\"rt\\" \\"S1\\" --resolution TEXT, then story start \\"rt\\" \\"S1\\"'
+! stderr 'non-terminal status'
+
+# The dead zone: every story terminal, so no story route exists. Both
+# sanctioned routes are named, and the story one is marked the owner's.
+expectexit 0 selftracked story dissolve rt S1 --why 'not needed'
+expectexit 1 selftracked worklog add rt --story S1 --state IN-PROGRESS
+stderr 'episode rows belong to the story verbs; epic \\"rt\\" has no story in a non-terminal status — a new story \(story add \\"rt\\" --title T, then story ready and story start\) is a scope change and the owner''s call; work that does not advance this epic''s goal is a standalone task \(create --title T\)'
+! stderr 'story unblock'
+expectexit 1 selftracked worklog add rt --story V-1 --state DONE
+stderr 'V-rows are post-close validation; epic \\"rt\\" is ACTIVE; epic \\"rt\\" has no story in a non-terminal status — a new story \(story add \\"rt\\" --title T, then story ready and story start\) is a scope change and the owner''s call; work that does not advance this epic''s goal is a standalone task \(create --title T\)'
+! stderr 'story unblock'
+
+# An epic that does not exist has no state to derive a route from: the
+# usage refusal stays exactly what it was, and the V-form still refuses
+# not-found rather than inventing a route the agent could not take.
+expectexit 1 selftracked worklog add ghost --story S1 --state IN-PROGRESS
+stderr 'episode rows belong to the story verbs"}}'
+! stderr 'non-terminal status'
+! stderr 'story ready'
+! stderr 'owner'
+expectexit 1 selftracked worklog add ghost --story V-1 --state DONE
+stderr '"code":"not-found"'
+stderr 'no epic \\"ghost\\"'
+! stderr 'non-terminal status'
+! stderr 'story ready'
+
+# --- Composing the clause needs a database handle, so the usage refusal
+# now sits INSIDE the write pipeline instead of ahead of it. Two errors
+# consequently reach the agent before it: both name the real problem, and
+# both are pinned here so the ordering is asserted rather than incidental.
+
+# No tracker in this directory at all: not-found, naming init.
+mkdir bare
+cd bare
+expectexit 1 selftracked worklog add wl --story S1 --state IN-PROGRESS
+stderr '"code":"not-found"'
+stderr 'no \.selftracked/db\.sqlite here; run selftracked init first'
+! stderr 'belong to the story verbs'
+cd ..
+
+# A tracked dump edited outside the verbs: diverged, naming load --force.
+# This tampers with the instance, so it runs last.
+exec cp .selftracked/dump.sql good.sql
+exec sed 's/post-close validation run/tampered-from-outside/' good.sql
+cp stdout .selftracked/dump.sql
+expectexit 1 selftracked worklog add wl --story S1 --state IN-PROGRESS
+stderr '"code":"diverged"'
+stderr 'selftracked load --force'
+! stderr 'belong to the story verbs'

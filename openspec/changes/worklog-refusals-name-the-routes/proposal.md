@@ -100,6 +100,41 @@ must stop and put the choice to the owner; nothing in v0 forces it to.
 The change makes the state *legible*, not impossible — that limit is
 stated rather than papered over.
 
-Refusal text is not a stable contract: no consumer parses it, and the
-codes `not-closed` and `usage` are unchanged. The refusal surface's split
-between domain messages and raw SQLite text (task #28) is untouched.
+Refusal text is not a stable contract: no consumer parses it, and neither
+`not-closed` nor `usage` is renamed. **But the `usage` code is no longer
+what two input classes produce**, and the first draft of this section
+claimed otherwise. Because the branch moved inside the write pipeline, the
+instance and divergence checks now run first, established by differential
+testing of both builds during the implementation critic round:
+
+- no tracker present — was `usage` with the story-verbs message, is now
+  `not-found` ("no `.selftracked/db.sqlite` here; run `selftracked init`
+  first");
+- a diverged dump — was `usage`, is now `diverged` ("run `selftracked
+  load --force`").
+
+Both are accepted as improvements: each names the problem the caller
+actually has, where the form complaint named a problem they could not act
+on until the real one was fixed. Both are pinned by script tests so the
+reordering is asserted behaviour rather than an accident. Recorded here
+because an amendment that says "the codes are unchanged" and then changes
+which code fires is exactly the drift class this flow exists to catch.
+
+A second, smaller consequence of the same move: every non-`V`,
+non-`--corrects` call now opens a write transaction and issues one or two
+extra SELECTs before being refused. Under a fully locked database this is
+not observable (the dispatcher's own gate already touches the DB in both
+builds); on a healthy tracker it is real additional work for an input that
+was always going to be refused.
+
+The refusal surface's split between domain messages and raw SQLite text
+(task #28) is untouched.
+
+## Implementation note (2026-07-25)
+
+The shared non-terminal-story predicate landed in `internal/rules` with
+**this** story, S2 — the first one to need it — not with the sibling
+amendments, whose Target lines say they introduce it. The division of
+labour was an ordering guess made before implementation; the definition is
+still single and still shared, which is the part that mattered. Recorded
+rather than back-dated into the sibling proposals.

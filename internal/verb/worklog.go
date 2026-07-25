@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
+	"github.com/Spoloborota/selftracked/internal/rules"
 )
 
 // worklogVerb is manual `worklog add`, restricted to exactly two forms
@@ -45,13 +46,6 @@ func worklogAdd(e *cli.Env, slug, story, state, commits, gate, review, note stri
 		return err
 	}
 	isV := strings.HasPrefix(story, "V-")
-	if !isV && corrects == 0 {
-		// The two sanctioned forms are the WHOLE surface (§5.7): the
-		// self-seeding episode rows belong to the story verbs.
-		return refuse("usage",
-			"worklog add writes only V-N rows (CLOSED epics) or corrections (--corrects N);"+
-				" episode rows belong to the story verbs")
-	}
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
 		correctsVal, err := validateForm(ctx, tx, slug, story, state, corrects, isV)
@@ -94,13 +88,29 @@ func validateWorklogText(story, state, commits, gate, review, note string) error
 	return nil
 }
 
-// validateForm checks whichever sanctioned form this add is.
+// validateForm checks whichever sanctioned form this add is. The
+// non-correction, non-V refusal lives HERE rather than ahead of the write
+// (where it sat until the `worklog-refusals-name-the-routes` amendment)
+// because its second clause is computed from the epic's story state, which
+// needs a handle. Refusing inside the transaction costs nothing: no row
+// has been written and the rollback is the caller's normal error path.
 func validateForm(ctx context.Context, tx *sql.Tx, slug, story, state string, corrects int64, isV bool) (any, error) {
 	if isV {
 		if corrects != 0 {
 			return nil, refuse("usage", "a V-row is not a correction; drop --corrects")
 		}
 		return nil, requireClosedEpic(ctx, tx, slug)
+	}
+	if corrects == 0 {
+		// The two sanctioned forms are the WHOLE surface (§5.7): the
+		// self-seeding episode rows belong to the story verbs.
+		routes, err := routeClause(ctx, tx, slug)
+		if err != nil {
+			return nil, err
+		}
+		return nil, refuse("usage",
+			"worklog add writes only V-N rows (CLOSED epics) or corrections (--corrects N);"+
+				" episode rows belong to the story verbs%s", routes)
 	}
 	if err := validateCorrection(ctx, tx, slug, story, state, corrects); err != nil {
 		return nil, err
@@ -118,9 +128,105 @@ func requireClosedEpic(ctx context.Context, tx *sql.Tx, slug string) error {
 		return fmt.Errorf("worklog add: %w", err)
 	}
 	if status != epicClosed {
-		return refuse("not-closed", "V-rows are post-close validation; epic %q is %s", slug, status)
+		// The epic is known to exist on this line, so the state clause is
+		// composed without re-asking whether it does.
+		routes, err := existingEpicRouteClause(ctx, tx, slug)
+		if err != nil {
+			return err
+		}
+		return refuse("not-closed",
+			"V-rows are post-close validation; epic %q is %s%s", slug, status, routes)
 	}
 	return nil
+}
+
+// routeClause is the second clause both `worklog add` refusals carry
+// (§6.2, amendment `worklog-refusals-name-the-routes`): the routes that
+// apply in the epic's CURRENT story state, leading `; ` included.
+//
+// An epic that does not exist yields the empty clause, so a nonsense slug
+// meets the pre-amendment refusal verbatim. That is deliberate: naming
+// `story add` for an epic there is nothing to add a story to would be
+// advice the agent cannot take, and turning this into a `not-found` would
+// change which refusal the form error produces.
+func routeClause(ctx context.Context, tx *sql.Tx, slug string) (string, error) {
+	var one int
+	err := tx.QueryRowContext(ctx, `SELECT 1 FROM epics WHERE slug = ?`, slug).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("worklog add: %w", err)
+	}
+	return existingEpicRouteClause(ctx, tx, slug)
+}
+
+// existingEpicRouteClause composes the clause for an epic already known to
+// exist: the transition that reaches the story best placed to receive the
+// episode, or — in the dead zone — both sanctioned routes and where the
+// authority for each of them sits.
+func existingEpicRouteClause(ctx context.Context, q rules.Querier, slug string) (string, error) {
+	offer, ok, err := rules.StoryToOffer(ctx, q, slug)
+	if err != nil {
+		return "", fmt.Errorf("worklog add: %w", err)
+	}
+	if !ok {
+		return deadZoneClause(slug), nil
+	}
+	return storyRouteClause(slug, offer), nil
+}
+
+// deadZoneClause names both sanctioned routes out of the window in which
+// an epic's stories are all terminal, and marks which authority each needs
+// (§6.2). It is the only branch of the clause that involves the owner.
+func deadZoneClause(slug string) string {
+	return fmt.Sprintf("; epic %q has no story in a non-terminal status"+
+		" — a new story (story add %q --title T, then story ready and story start)"+
+		" is a scope change and the owner's call;"+
+		" work that does not advance this epic's goal is a standalone task"+
+		" (create --title T)", slug, slug)
+}
+
+// storyRouteClause names one existing story and the transition that turns
+// it into the home for this episode. No owner decision is involved in any
+// of these four: the home already exists, and every verb named here is one
+// the implementing agent may run itself.
+//
+// The `then story start` suffix is safe in exactly the three branches that
+// carry it. StoryToOffer sorts IN-PROGRESS first, so reaching PLANNED,
+// READY or BLOCKED proves no story of this epic holds the WIP slot, and
+// the `story start` this clause promises cannot be refused by the WIP
+// index. Offering by lowest id instead would break that: a PLANNED S1
+// beside an IN-PROGRESS S2 would send the agent through a `story ready`
+// that mutates state and into a `wip` refusal.
+//
+// Every slug and story id is interpolated with %q, including inside the
+// suggested commands. Neither is shape-constrained enough to trust: `epics
+// .slug` has no CHECK at all, `stories.id`'s CHECK is `GLOB 'S[0-9]*'`
+// (anything after the first digit), and `import` validates text only for
+// control runes — so an id or slug can carry bidi and format characters
+// into a message another agent reads. %q renders those as escapes and
+// still yields a copy-pasteable CLI token.
+func storyRouteClause(slug string, s rules.Story) string {
+	head := fmt.Sprintf("; story %q of epic %q is %s", s.ID, slug, s.Status)
+	switch s.Status {
+	case rules.StoryPlanned:
+		return head + fmt.Sprintf(" — story ready %q %q, then story start %q %q",
+			slug, s.ID, slug, s.ID)
+	case rules.StoryReady:
+		return head + fmt.Sprintf(" — story start %q %q", slug, s.ID)
+	case rules.StoryBlocked:
+		return head + fmt.Sprintf(" — story unblock %q %q --resolution TEXT, then story start %q %q",
+			slug, s.ID, slug, s.ID)
+	case rules.StoryInProgress:
+		return head + fmt.Sprintf(" and already holds the WIP slot"+
+			" — story done %q %q --commits RANGE --gate G writes the episode", slug, s.ID)
+	default:
+		// Unreachable: StoryToOffer returns only the four above. A status
+		// added to the schema without a route lands here, and naming the
+		// story without a route beats inventing one.
+		return head
+	}
 }
 
 // validateCorrection enforces §5.7's correction shape at the verb: the

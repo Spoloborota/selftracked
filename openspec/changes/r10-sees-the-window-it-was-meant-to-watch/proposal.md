@@ -71,6 +71,12 @@ So the predicate lands **once**, in `internal/rules` — a package
 without a cycle — and both surfaces call it. Restating it in a second SQL
 literal is what this change exists to prevent, not a detail of it.
 
+*Implementation note (2026-07-25): the file was in fact created by story
+S2, the first story to need the predicate, rather than by this
+amendment's story. This change consumes it. Recorded here instead of
+rewriting the sentence above, so the record shows the ordering guess and
+what actually happened.*
+
 ### 3. R10 joins the `--fast` partition, and `--quiet` stops swallowing advisories
 
 R10 is pure-SQL: two small queries (an `idle_days` lookup and the epic

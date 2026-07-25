@@ -10,18 +10,24 @@ import (
 	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
+	"github.com/Spoloborota/selftracked/internal/rules"
 )
 
 const (
 	// storyArity: SLUG SID.
 	storyArity = 2
 
-	storyPlanned    = "PLANNED"
-	storyReady      = "READY"
-	storyBlocked    = "BLOCKED"
-	storyInProgress = "IN-PROGRESS"
-	storyDone       = "DONE"
-	storyDissolved  = "DISSOLVED"
+	// The story-status vocabulary has ONE definition, in internal/rules,
+	// because surfaces outside the verbs (the worklog refusal clause today;
+	// R10 and prime as their stories land) must agree with the verbs about
+	// which statuses are terminal. These are aliases, not a second copy —
+	// the call sites keep the short unexported names.
+	storyPlanned    = rules.StoryPlanned
+	storyReady      = rules.StoryReady
+	storyBlocked    = rules.StoryBlocked
+	storyInProgress = rules.StoryInProgress
+	storyDone       = rules.StoryDone
+	storyDissolved  = rules.StoryDissolved
 
 	evStory   = "story"
 	evWorklog = "worklog"
