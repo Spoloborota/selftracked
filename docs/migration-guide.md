@@ -171,3 +171,53 @@ for your review as ordinary working-tree changes; commit them when
 satisfied. From here on, state changes go through verbs only — `prime`
 is the session-start read, and the generated `PROMPT.md` carries the
 working contract.
+
+## 8. The adaptation handoff — agent-executed onboarding
+
+`init` is deliberately mechanical; everything after it — chaining into
+the host's gates, deriving the corpus, deciding what the dictionary
+should describe — is judgment work. On an agent-driven project the
+natural executor is the project's own agent, and the deliverable that
+makes the adoption repeatable is not a script but a **handoff
+instruction** the agent executes. Rehearsed handoffs share a shape:
+
+- **One fresh copy per attempt.** Each rehearsal starts from a pristine
+  copy of the host (on APFS, `cp -a -c` clones the whole tree, uncommitted
+  prose included, at near-zero cost) and is thrown away, never repaired.
+- **Exact chaining lines with their positions and the why.** The host's
+  own gates keep running first in pre-commit (they own the repo);
+  selftracked's post-commit line goes at the top because a host
+  post-commit may exit early. Quote the guarded lines `init` printed.
+- **An expectation at every step**: exit codes, the `imported N epic(s),
+  …` counts line, and the advisory census `verify` should print — class
+  and count ("N × R13 and nothing else"). A silent-on-success host gate is
+  stated as such, or the executing agent will report its silence as a
+  deviation. Any output outside the stated expectation is a finding, not
+  something to recover from.
+- **A fidelity table**: expected per-status task counts and per-table row
+  counts derived from the source prose by independent counting, plus the
+  exact commands to reproduce them against the imported dump.
+- **The bookkeeping-commit command with explicit staging** (`git add
+  .selftracked/dump.sql STATE.md && git commit …`): git refuses a commit
+  whose only content was staged by the pre-commit hook when the index
+  started empty.
+- **A corpus-freshness rule.** A corpus is a derivative of a snapshot;
+  when the live prose has moved since, re-derive or delta-check before
+  the live install.
+- **A deferred-to-owner list**, so the agent does not improvise
+  decisions: dictionary scoping, artifact-link sweeps, and the live
+  install itself stay with the owner.
+
+**Sufficiency criterion:** a fresh-context agent given ONLY the handoff
+reaches `verify` green with the fidelity table matching, no improvised
+recovery and no questions asked. Validate by actually running one — twice,
+on two fresh copies — before calling the handoff done.
+
+**Multi-subproject hosts.** One repository still means one tracker; the
+partition lives in the data: scoped dictionary rows (`paths set
+class@scope root`) describe each subproject's real doc roots, epics carry
+a subproject prefix in their slugs, and a subproject that is no longer
+active imports as terminal records (`park --why` for what remains). Imported
+backlog rows reference their prose homes as text, which `verify` surfaces
+as R13 advisories; `link <id> class@scope:relpath --role home` retires
+them row by row. Both are safely deferred until after the import lands.
