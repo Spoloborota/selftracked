@@ -9,18 +9,18 @@ _none_
 ## Task queue
 
 - open: 38
-- in review: 1
+- in review: 0
 - needs triage: 0
 
 ## Recent activity
 
+- `2026-07-25T20:17:10Z` #57 set-status: Owner verdict 2026-07-25: R16 stays ADVISORY - the ratified INSERT-path posture is unchanged and no amendment supersedes it. The question is closed on two grounds established before the ruling. First, this was a decision rather than an oversight: openspec/changes/terminal-epic-conditions-stay-true/proposal.md:26 gives the unguarded import path as the reason R16 exists, and R16 scopes itself to verb-closed epics for exactly that case. Second, the residual advisory-versus-red choice is settled by reproduction: a red R16 could not be cleared. In a clean instance the task half clears two ways (set-status DONE, edit --detach) while the story half clears by no route at all - story dissolve, ready and done all refuse with code terminal, stories cannot be deleted, a re-import of the same story id is refused story-exists, and there is deliberately no epic reopen (spec §5.4) - so one stray import would make full verify permanently red, escapable only by raw SQL or a load --force rewind. The asymmetry that reproduction exposed is filed separately as #60; the missing operator warning in the spec and the migration guide is filed as #53.
+- `2026-07-25T20:17:10Z` #58 edit: note: Between the last story going terminal an…→Between the last story going terminal an…
+- `2026-07-25T20:16:54Z` #56 edit: note: PROMPT.md, the skill and the rules file …→PROMPT.md, the skill and the rules file …
+- `2026-07-25T20:16:54Z` #52 edit: note: docs/migration-guide.md SS6 tells the re…→docs/migration-guide.md §6 tells the re…
 - `2026-07-25T19:45:16Z` #61 create: Agent must surface work that has no home and put the choice to the owner
 - `2026-07-25T19:21:49Z` epic:pilot-adaptation epic: close: 2026-07-25
 - `2026-07-25T19:21:44Z` epic:pilot-adaptation/S6 story: done: f7adec0 3912d44 67f4f9e 7240817 4cda175; gate: selftracked verify: full, 0 violation(s), exit 0; go test ./... not re-run (no code changed in this story)
 - `2026-07-25T19:21:26Z` epic:pilot-adaptation/S6 story: start
 - `2026-07-25T19:21:26Z` epic:pilot-adaptation/S6 story: ready
 - `2026-07-25T19:21:26Z` epic:pilot-adaptation/S6 edit: dod: →The full deploy path (install, import, f…
-- `2026-07-25T19:21:26Z` epic:pilot-adaptation/S6 story: add: Re-verify the deploy path against the amended binary, and re-audit the backlog it produced
-- `2026-07-25T19:21:12Z` #51 edit: note: Ten verb paths now refuse writes against…→Writes against a CLOSED or DISSOLVED epi…
-- `2026-07-25T19:21:03Z` #60 create: R16 reports a state that no verb can clear
-- `2026-07-25T19:21:03Z` #59 create: R10 cannot see off-book work inside its idle window
