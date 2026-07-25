@@ -6,8 +6,11 @@ description: The selftracked working loop — how to prime, refine the backlog, 
 # The selftracked working loop
 
 1. **`prime`.** Run `selftracked prime --json`. If it reports
-   `dump_divergence: true`, **stop and reconcile first** (`selftracked
-   load`, then re-prime) — do not write over a diverged tracker.
+   `dump_divergence: true`, **stop and reconcile first** — do not write
+   over a diverged tracker: `selftracked load --force` replaces the
+   local database with the tracked dump (it prints what it discards
+   first); re-apply any unsynced local writes through verbs, then
+   re-prime. Plain `load` refuses when a database already exists.
 2. **Backlog refinement** when `totals.triage > 0`: triage each
    NEEDS-TRIAGE task to `OPEN`, `IN-REVIEW`, park it, or `WONT-DO`. The
    `triage[]` list is capped (`prime_cap`), so when the queue is larger,

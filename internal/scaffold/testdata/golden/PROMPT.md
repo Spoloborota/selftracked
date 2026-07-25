@@ -10,8 +10,11 @@ fixed set of verbs — never by touching the database or the dump directly.
 **Start every session with `prime`** — the session-start read: active
 epics with their unmet criteria, sprint goals (every IN-PROGRESS story),
 and the ready / triage / in-review / stale / parked queues. If it reports
-dump divergence, stop and reconcile (`load`, then re-run `prime`) before
-any write. Work then goes through verbs; commits reference tasks by `#NN`
+dump divergence, stop and reconcile before any write: `load --force`
+replaces the local database with the tracked dump (it prints what it
+discards first) — then re-apply any unsynced local writes through verbs
+and re-run `prime`. Plain `load` only builds a missing database; with an
+existing one it refuses. Work then goes through verbs; commits reference tasks by `#NN`
 and/or the epic slug in the message.
 
 **End every session with a bookkeeping commit**, so the dump refreshed by
