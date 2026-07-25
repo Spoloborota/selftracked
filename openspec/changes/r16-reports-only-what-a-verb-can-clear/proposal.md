@@ -7,11 +7,12 @@ per-transition; `internal/verb/terminal_epic.go` — the guard's documented
 carve-out list; `internal/verify/rules_fs.go` — R16's messages;
 `internal/cli/testdata/terminal-epic.txtar` — its header and a missing
 case. No schema change.
-Status: **proposed** · raised 2026-07-25 by task #60 under
+Status: **accepted** · raised 2026-07-25 by task #60 under
 epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
 D-EP7) · **supersedes part of an accepted amendment
-(`terminal-epics-refuse-reopening-writes`)** · awaiting owner review
-before application (plan §9)
+(`terminal-epics-refuse-reopening-writes`)** · ratified by the owner
+2026-07-25, who chose the carve-out over the message-only alternative
+recorded below · applied to the spec the same day
 
 ## Why
 

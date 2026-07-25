@@ -4,9 +4,10 @@ Target: `docs/v0-spec.md` §11.1 (the `prime` JSON contract and the digest
 it describes); revision 3.31 → 3.32. `internal/verb/prime.go` — two
 contract fields and the digest; `internal/rules/` — consumed, not
 redefined. Tests. No schema change.
-Status: **proposed** · raised 2026-07-25 by task #61 (v0 half) under
-epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · awaiting owner review before application (plan §9)
+Status: **accepted** · raised 2026-07-25 by task #66 (the v0 half, split
+from #61 on the owner's 2026-07-25 verdict) under epic
+`tracking-integrity`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
+ratified by the owner 2026-07-25 · applied to the spec the same day
 
 ## Why
 

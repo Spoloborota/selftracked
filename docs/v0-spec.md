@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.28 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.33 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -70,7 +70,24 @@ conditions become a claim `verify` re-checks (amendment
 `terminal-epic-conditions-stay-true`, rev 3.27); and a terminal epic
 refuses the writes that would re-open those conditions, with `criteria
 check` becoming report-only there (amendment
-`terminal-epics-refuse-reopening-writes`, rev 3.28) → this revision.
+`terminal-epics-refuse-reopening-writes`, rev 3.28) → epic
+`tracking-integrity` opened on the dead zone in which an ACTIVE epic whose
+stories are all terminal accepts no record of work, and its five
+amendments were written proposal-first, revised against a five-lens critic
+round, and ratified together by the owner on 2026-07-25: the two refusals
+met there name the routes that apply in the epic's current state
+(`worklog-refusals-name-the-routes`, rev 3.29); R10 gains a window-free
+trigger for that state, joins the `--fast` partition, and `--quiet` stops
+discarding the advisories the commit boundary computes
+(`r10-sees-the-window-it-was-meant-to-watch`, rev 3.30); every R16 finding
+names its repair, and the story half gains one — `story dissolve` on a
+CLOSED epic, the carve-out `edit --detach`'s own reasoning already implied
+(`r16-reports-only-what-a-verb-can-clear`, rev 3.31); `prime` states the
+condition as a typed `notices[]` entry instead of a bare counter, and the
+story tally stops hiding PLANNED
+(`prime-names-an-epic-that-cannot-receive-work`, rev 3.32); the generated
+contract says when new work is a task and when it is a story
+(`contract-says-where-new-work-goes`, rev 3.33) → this revision.
 Implementation has started; §5's schema and §3.1's connection posture are
 built.
 
@@ -717,7 +734,7 @@ prefixed) — stated as an invariant the grammar must preserve.
 | `epic` | `epic create SLUG --goal G` · `activate` · `pause --why` · `dissolve --why` · `show` · `list [--active]` · `close` | Lifecycle per the §5.3 matrix; `close` works from ACTIVE or PAUSED (BACKLOG never ran — dissolve it instead). `dissolve` has close-grade preconditions: refuses while a story is IN-PROGRESS or a task in OPEN/IN-REVIEW/NEEDS-TRIAGE is homed to the epic; PLANNED/READY/BLOCKED stories are auto-DISSOLVED (each getting its DISSOLVED worklog row) in the same transaction. Blocker messages for parked tasks suggest unpark / `edit --detach`. |
 | `criteria` | `criteria add SLUG --text T` · `criteria met SLUG SEQ --evidence E` · `criteria check SLUG` | `check` EXECUTES every `$ `-prefixed criterion (cwd = repo root, inherited env, per-command timeout, stop at first failure), records pass/fail + timestamp as evidence, **flips `met` 1→0 on a failing re-run** (regressions cannot stay green), and exits 1 on any failure. On a **terminal** epic `check` runs and reports but records NOTHING — it prints that it did not — because persisting would overwrite the acceptance record the epic was closed on, which no verb can restore and the events trail does not copy (amendment `terminal-epics-refuse-reopening-writes`). `met` is for owner-attested (non-runnable) criteria only. Threat model: runnable criteria are shell commands from repo state — executing them is the same trust decision as running the repo's build/tests or its tracked hooks; a hostile branch already owns those surfaces, so criteria add no new one (§14). |
 | `story` | `add SLUG --title T · ready SLUG SID · start · block --reason · unblock --resolution TEXT · done --commits RANGE --gate G [--review R] · dissolve --why` | The state-writing lifecycle verbs — `start`, `block`, `done`, `dissolve` — each append their worklog episode row (§5.7); `add`, `ready`, and `unblock` do not (no worklog state exists for those transitions) — `unblock`'s durable record is its `story` events row. `start`: READY + DoR + WIP. `done`: `--commits` and `--gate` are required (`--review` optional) — status flip + DONE row are one transaction (no non-atomic path exists). `unblock` requires `--resolution` — **what cleared the block**, recorded verbatim in the same transaction's events row (`event='story'`, detail = the resolution text): when the block was an owner question (the `[BLOCKED: PO decision]` convention), the resolution starts with the literal greppable prefix `PO:` and quotes the verdict — a provisional instruction («try X, revisit if wrong») IS a verdict and is quoted like one; a decision living only in chat does not exist. When the block was external (a dependency, an outage — `block --reason` is not owner-only, §11.3 uses it for any blocker), the resolution states the observed fact that cleared it, no prefix. The `PO:` prefix is an authoring convention (prompt-enforced) and applies wherever an owner verdict is recorded — resolutions, IN-REVIEW exit notes, question-task titles (§12 uses all three): the schema cannot distinguish verdicts from other text, so the prefix is what makes owner ratifications machine-findable in the trail afterward. The literal token is deliberately locale-fixed for greppability; a non-English crew adapts the literal in its prompt config, not per-use. Presence-of-text is verb-enforced only (enforcement map). |
-| `worklog` | `worklog add SLUG --story SID\|V-N --state ST [--corrects N] [--commits] [--gate] [--review] [--note]` | Manual appends are only: `V-N` rows (epic must be CLOSED) and `--corrects N` correction rows (any story; N names an original non-correction row — §5.7; state must match the corrected row; excluded from R6, R10-idle and close-rule-2 accounting — §5.7). Everything else is written by story verbs. No `--date`: rows are dated at append time by the binary — a correction happens when it happens, and a backdating flag would reopen the narrative-date drift class (§5) through a verb. The true historical date of a corrected FACT belongs in the row's `note` as content, sourced per the PROMPT.md provenance rules (git/mtime, never session narrative) — the row's own date stays the append date. |
+| `worklog` | `worklog add SLUG --story SID\|V-N --state ST [--corrects N] [--commits] [--gate] [--review] [--note]` | Manual appends are only: `V-N` rows (epic must be CLOSED) and `--corrects N` correction rows (any story; N names an original non-correction row — §5.7; state must match the corrected row; excluded from R6, R10-idle and close-rule-2 accounting — §5.7). Everything else is written by story verbs. Both refusals an agent meets here while trying to record work — the `usage` refusal of a non-`V` `--story` without `--corrects`, and the `not-closed` refusal of a `V-N` row on a non-CLOSED epic — **name the routes that apply in the epic's current state** (amendment `worklog-refusals-name-the-routes`): where a non-terminal story exists, the transition verb that reaches it; where none does (the dead zone), a new story — a **scope change and the owner's call** — or a standalone `create`. Normative about which routes are named, not about wording. No `--date`: rows are dated at append time by the binary — a correction happens when it happens, and a backdating flag would reopen the narrative-date drift class (§5) through a verb. The true historical date of a corrected FACT belongs in the row's `note` as content, sourced per the PROMPT.md provenance rules (git/mtime, never session narrative) — the row's own date stays the append date. |
 | `paths` | `paths ls` · `paths set CLASS[@SCOPE] ROOT [--ephemeral] [--note]` · `paths move CLASS[@SCOPE] NEWROOT [--with-files]` | `--with-files` performs the move via `git mv` when in a git repo (renames AND stages), else plain rename — no red window either way. `set` warns on overlapping roots of the same class only. |
 | `config` | `config ls` · `config set <production_globs\|idle_days\|prime_cap> VALUE` | The sanctioned editor for configuration keys (closed list in schema v1 — new keys arrive only with schema versions; values validated: `idle_days`/`prime_cap` positive integers, `production_globs` parseable globs; events-logged). System meta keys (§5.1) are not settable here. |
 | `stale` | `stale [--since REF] [--quiet]` | git-changed files ∩ resolved non-ephemeral artifact links of non-terminal work; output ordered path ASC (deterministic). |
@@ -781,7 +798,15 @@ homed there, and `edit` of the epic's goal or a story's fields — each
 the post-close vocabulary: `V-n` rows, `--corrects` correction rows, and
 artifact links (a retrospective attached to a closed epic breaks no
 condition). `edit --detach` also stays open — it removes a violation, and
-is the repair the `reopen` refusal names. The gate is transition-time by
+is the repair the `reopen` refusal names. **`story dissolve` of a
+non-terminal story stays open on a CLOSED epic only** (amendment
+`r16-reports-only-what-a-verb-can-clear`): `DISSOLVED` is the one story
+target that *satisfies* close condition (1), the DISSOLVED worklog row it
+appends satisfies (2), and conditions (4)–(6) do not involve story
+status — so, like `edit --detach`, it removes a violation rather than
+creating one, and it is the repair R16's story finding names. A
+DISSOLVED epic is excluded: it never passed a close gate, so it holds no
+claim to restore. The gate is transition-time by
 construction, so R16 (§7) re-checks the claim for state that arrives by
 `import` or raw SQL, which no verb guard can see.
 
@@ -794,9 +819,21 @@ foreign_key_check` (the former does not cover FKs — research doc); `--fast`
 (the pre-commit path) = `quick_check` + `foreign_key_check` + every pure-SQL
 Stage-1 rule (R4, R6–R9, R12 — cheap queries needing no serialization and no
 filesystem/git access; R4's correction-row structure check among them, so a
-malformed correction is caught at the commit boundary) + R15. It skips only
-the serialization-bound rules (R1, and R14 folded into it) and the
-filesystem/git-bound ones (R2, R3, R5, R10, R11, R13). R1 is skipped deliberately: the hook regenerates dump + STATE.md
+malformed correction is caught at the commit boundary) + R10 + R15. It skips
+only the serialization-bound rules (R1, and R14 folded into it) and the
+filesystem/git-bound ones (R2, R3, R5, R11, R13). R10 joined the fast set
+with amendment `r10-sees-the-window-it-was-meant-to-watch`: it is pure-SQL
+(an `idle_days` lookup, an epic scan, a clock read), and its earlier place
+among the filesystem/git skips never matched what it does. **`--quiet` and
+the advisory channel** (same amendment): the pre-commit path runs
+`verify --fast --quiet`, and `--quiet` suppresses the report while advisory
+findings never affect the exit code — so an advisory moved into the fast
+partition would be computed and then discarded. `--quiet` therefore prints
+**exactly one line to stderr** when the run is red-free but advisory
+findings exist, naming the rules and not their instances (`verify: advisory
+R10, R13 (run 'selftracked verify' for detail)`). The report body stays
+suppressed and the exit contract is unchanged: advisories still never fail a
+commit. R1 is skipped deliberately: the hook regenerates dump + STATE.md
 immediately after (§9), so the pair is fresh by construction and the whole
 hook still costs **one** serialization pass (at multi-year event volume that
 pass is the hook's dominant cost — long-horizon research doc) — while the
@@ -816,12 +853,12 @@ Stage 1:
 | R7 | duplicates links ⇔ dup_of, one-to-one; no dup_of target is itself DUPLICATE (no chains/cycles) |
 | R8 | Every `events.entity` resolves (grammar + existence) — except `paths`/`config`/`gate-skip` events, instance-scoped by design: their entity is the affected token verbatim (or, for `gate-skip`, a fixed instance token), skipped by event type |
 | R9 | `sqlite_sequence` ≥ MAX(id) per AUTOINCREMENT table (an absent `sqlite_sequence` row counts as 0; the clause applies only when the table has rows); `meta.events_archived_through` present, a non-negative integer, and **= 0 in schema v1** — no verb can write it, so any other value is the raw-SQL tamper signature (a forged boundary would silently truncate the dump's audit trail with R1 green on both sides) — red. Reserved D7-era clause, inactive while the boundary is 0: `sqlite_sequence(events)` ≥ the boundary |
-| R10 | Advisory: ACTIVE epics with no READY/IN-PROGRESS story and no **non-correction** worklog append in `idle_days` → idle report (PAUSED/BACKLOG are silent — intentional states; correction rows are excluded so an unrelated historical correction cannot reset the idle clock of a genuinely neglected epic — §5.7) |
+| R10 | Advisory, two triggers on an ACTIVE epic (PAUSED/BACKLOG are silent — intentional states). **(a) No home, no window** (amendment `r10-sees-the-window-it-was-meant-to-watch`): no story in a **non-terminal** status — none `PLANNED`, `READY`, `BLOCKED` or `IN-PROGRESS`, i.e. every story terminal or no story at all — reported at once, independent of `idle_days`, because that is the state in which work can be recorded nowhere. Deliberately narrower than (b)'s story clause: a `PLANNED` story is a home (`story ready` → `story start` reaches it with no scope change), and a `BLOCKED` story is the sanctioned PO-absent state (§11.3) where the correct action is to stop. **(b) Idle**: no READY/IN-PROGRESS story and no **non-correction** worklog append in `idle_days` → idle report (correction rows are excluded so an unrelated historical correction cannot reset the idle clock of a genuinely neglected epic — §5.7). One epic yields one line stating whichever facts hold. The non-terminal-story predicate has **one definition**, in `internal/rules`, shared with `prime`'s `no-workable-story` notice (§11.1) — a second hand-written copy of the story-status vocabulary is the drift the shared definition exists to prevent |
 | R11 | Advisory: per-machine gate inactive warning. For each of pre-commit and post-commit, the **effective hook location** (`core.hooksPath` when set, else `.git/hooks`) must either be `.selftracked/hooks` or contain a hook file referencing its `.selftracked/hooks/` counterpart (best-effort textual detection, §9; a reference counts as chained only when it appears OUTSIDE a comment — neither a line starting with `#` nor a reference sitting after an inline `#` on a live line qualifies, since a commented mention otherwise reads as a live chain, and false silence is this rule's fail-open direction); the warning names each unchained hook — covering unset, set-but-unchained, and pre-commit-chained-but-post-commit-not states |
 | R12 | Terminal-state ⇔ events-trail cross-check: every CLOSED/DISSOLVED epic and DONE/WONT-DO/DUPLICATE task must have a matching events row (or an `import` events row). A terminal state with no trail = the raw-SQL forgery signature (§1.1) — red |
 | R13 | Advisory: OPEN tasks with no **live** `home` link — an archived home is history, not a home: R3 stops checking an archived artifact's existence, so counting one here would let an OPEN task hold a home pointing at a deleted file with no signal anywhere (amendment `r13-counts-live-homes`) |
 | R15 | Advisory: pending `.selftracked/skip-pending` marker (unconverted gate skip) |
-| R16 | Advisory: a CLOSED epic no longer satisfies the conditions it was closed on — a non-terminal story, a task in OPEN/IN-REVIEW/NEEDS-TRIAGE homed to it, or a criterion with stored `met = 0`. Scoped to epics THIS tracker closed (an `epic` event carrying the close stamp): one that arrived CLOSED through `import` never passed the gate, so there is no claim to re-check. It re-executes nothing — `met` is read as stored, because reusing close condition (3)'s engine would run repo-state shell commands inside `verify`, which its read-only connection forbids and whose execution surface `verify` must not own (amendment `terminal-epic-conditions-stay-true`) |
+| R16 | Advisory: a CLOSED epic no longer satisfies the conditions it was closed on — a non-terminal story, a task in OPEN/IN-REVIEW/NEEDS-TRIAGE homed to it, or a criterion with stored `met = 0`. Scoped to epics THIS tracker closed (an `epic` event carrying the close stamp): one that arrived CLOSED through `import` never passed the gate, so there is no claim to re-check. It re-executes nothing — `met` is read as stored, because reusing close condition (3)'s engine would run repo-state shell commands inside `verify`, which its read-only connection forbids and whose execution surface `verify` must not own (amendment `terminal-epic-conditions-stay-true`). **Every finding names its repair** (amendment `r16-reports-only-what-a-verb-can-clear`): the homed task → `edit <id> --detach` or set it terminal; the non-terminal story → `story dissolve <slug> <sid> --why …`, the carve-out §6.4 opens for exactly this; the unmet criterion → **no verb writes that state** on a verb-closed epic (`criteria add`/`met` refuse, `criteria check` is report-only, `import` refuses to re-declare an existing epic), so the clause is a raw-SQL signature of R12's family and says so |
 
 Every rule ships with a red fixture; a gate that cannot fail is decoration.
 The one textual matcher among the rules (R11) additionally ships a **variant
@@ -1271,8 +1308,12 @@ upgrade path) is all the session sees — the typed
 `prime` run.
 
 `prime` JSON (stable contract): `epics_active[]` (slug, goal, stories
-{done, in_progress, ready[], blocked[]}, criteria_unmet — a **count**, never
-criterion text), `epics_paused[]` (slugs),
+{done, in_progress, planned, ready[], blocked[]}, criteria_unmet — a
+**count**, never criterion text; `planned` joined the tally with amendment
+`prime-names-an-epic-that-cannot-receive-work` — without it an epic holding
+three PLANNED stories and an empty epic render identically, which would make
+the absence of a notice the only signal and put the whole weight on a
+field's silence), `epics_paused[]` (slugs),
 `epics_backlog[]` (slugs), `ready[]`, `triage[]` (NEEDS-TRIAGE queue),
 `in_review[]`, `stale[]`, `totals{}`, `dump_divergence` (bool),
 `dump_requires_newer_binary` (bool — §8.6 forward-only surfaced at session
@@ -1281,7 +1322,23 @@ start), `migrated` (present only when this invocation migrated, §8.6),
 PAUSED**, deliberately: `ready[]`/`blocked[]` nest under `epics_active[]`
 only, so this entry is the one window into a paused epic's in-flight work,
 and dropping it would hide that work (§2); multiple entries = "finish or
-choose explicitly", never a silent pick). The backlog-type lists —
+choose explicitly", never a silent pick), `notices[]` (amendment
+`prime-names-an-epic-that-cannot-receive-work`) — typed objects
+`{code, epic}` in deterministic order (code ASC, then epic ASC), **never
+capped**, placed between `sprint_goals[]` and `totals{}` (field order is
+part of this contract). v0 defines exactly one code,
+`no-workable-story`, emitted per ACTIVE epic with no story in a
+non-terminal status — §7's R10 trigger (a), read through the same single
+definition in `internal/rules`, never a second copy. A notice is a **typed
+enumeration, not prose**: a fixed code token plus an identifier, so the
+rule below that `goal` and `title` are the contract's only prose-class
+payload holds unchanged. The condition is *stated*, not enforced — no verb
+requires the agent to act on it; the interactive protocol that puts the
+choice to the owner is deliberately v0.1. The human digest (explicitly
+outside this stable contract) renders each notice as a sentence before its
+counter line, which is the whole point: a bare `sprint goals: 0` reads the
+same for a healthy epic between two stories as for one nothing can be
+recorded against. The backlog-type lists —
 `ready[]`, `triage[]`, `in_review[]`, `stale[]`, `epics_paused[]`,
 `epics_backlog[]` — are **capped** at `prime_cap` entries (a validated
 `config` key, default 20) in stated deterministic order (id ASC; `stale[]`
@@ -1332,7 +1389,19 @@ from `ready` honoring `sprint_goals` →
 `story start` → work → commit with `#NN`/slug → `story done --commits …
 --gate …` → at epic end `epic close` → **end every session with a
 bookkeeping commit** (the dump refreshed by the session's last write must
-reach git — §8.3). Drift rule: new idea = `create` + park, one command.
+reach git — §8.3). **Work that did not come from `ready[]`** — an owner's
+request, a defect found mid-task, a follow-up, which is how most work
+arrives — is classified before any write by the rule the generated
+contract states (amendment `contract-says-where-new-work-goes`): work
+advancing an ACTIVE epic's goal is a story under it, and **opening one is
+a scope change the owner authorizes**, never the implementing agent;
+anything else is a task; work matching no existing task, story or epic is
+named out loud before the first write. Drift rule: new idea = `create` +
+park, one command. The two are scoped against each other explicitly — the
+drift rule governs work discovered **while a story is in progress**
+(capture it, do not pivot); the classification governs work being **taken
+up now**, when no story holds it — because left unscoped they answer the
+same trigger differently.
 **PO-absent branch**: every remaining story blocked and `in_review`
 non-empty → stop; ensure each open question is an IN-REVIEW task (they
 surface in every future `prime`); if an in-progress story is what blocks,

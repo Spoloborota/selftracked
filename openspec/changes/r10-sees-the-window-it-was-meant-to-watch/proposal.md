@@ -6,9 +6,11 @@ row, and the `--quiet` behaviour the pre-commit path relies on); revision
 `internal/verify/rules_fs.go` — R10's query and message;
 `internal/verify/verify.go` — the partition; `internal/verify/verb.go` —
 the `--quiet` summary line. Fixtures. No schema change.
-Status: **proposed** · raised 2026-07-25 by task #59 under
+Status: **accepted** · raised 2026-07-25 by task #59 under
 epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · awaiting owner review before application (plan §9)
+D-EP7) · ratified by the owner 2026-07-25, who chose the `--quiet`
+summary line over the trigger-only alternative recorded below · applied
+to the spec the same day
 
 ## Why
 

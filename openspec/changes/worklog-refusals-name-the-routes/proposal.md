@@ -4,9 +4,11 @@ Target: `docs/v0-spec.md` §6.2 (`worklog` row); revision 3.28 → 3.29.
 `internal/verb/worklog.go` — two refusal messages, both made state-aware.
 Tests. No schema change, no new write route, no change to what is
 accepted or refused — only to what a refusal says.
-Status: **proposed** · raised 2026-07-25 by task #58 under
+Status: **accepted** · raised 2026-07-25 by task #58 under
 epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · awaiting owner review before application (plan §9)
+D-EP7) · revised the same day against a five-lens critic round (the
+state-aware refusal replaces an unconditional sentence) · ratified by the
+owner 2026-07-25 · applied to the spec the same day
 
 ## Why
 

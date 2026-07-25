@@ -7,9 +7,10 @@ existing drift rule reconciled with it; this repository's own `PROMPT.md`
 and `.claude/skills/selftracked/SKILL.md`, which are byte-identical
 copies of those templates. Content tests. No schema change, no verb
 change.
-Status: **proposed** · raised 2026-07-25 by task #55 under
+Status: **accepted** · raised 2026-07-25 by task #55 under
 epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · awaiting owner review before application (plan §9)
+D-EP7) · ratified by the owner 2026-07-25 · applied to the spec the same
+day
 
 ## Why
 
