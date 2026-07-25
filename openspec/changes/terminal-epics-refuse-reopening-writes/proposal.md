@@ -9,7 +9,8 @@ Status: **accepted** · raised 2026-07-25 by tasks #35/#48/#49 (S5
 campaign block D, widened by coordinator drills and a five-lens critic
 round) · ratified by the owner 2026-07-25 on
 `docs/research/2026-07-25-terminal-epic-and-archived-home-semantics.md`
-revision 2, option B1 with the repair carve-outs
+revision 2, option B1 with the repair carve-outs ·
+**applied** the same day (go test ./... green, `make gates` exit 0)
 
 ## Why
 

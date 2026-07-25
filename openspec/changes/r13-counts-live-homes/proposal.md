@@ -6,7 +6,8 @@ change, no verb change, no inventory motion.
 Status: **accepted** · raised 2026-07-25 by task #33 (S5 campaign, block
 C) · ratified by the owner 2026-07-25 on
 `docs/research/2026-07-25-terminal-epic-and-archived-home-semantics.md`
-revision 2, option A2
+revision 2, option A2 ·
+**applied** the same day (go test ./... green, `make gates` exit 0)
 
 ## Why
 

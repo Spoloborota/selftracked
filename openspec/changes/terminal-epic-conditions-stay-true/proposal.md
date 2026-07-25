@@ -7,7 +7,8 @@ Status: **accepted** · raised 2026-07-25 by tasks #35/#48 (S5 campaign,
 block D, widened by coordinator drills) · ratified by the owner
 2026-07-25 on
 `docs/research/2026-07-25-terminal-epic-and-archived-home-semantics.md`
-revision 2, option B2
+revision 2, option B2 ·
+**applied** the same day (go test ./... green, `make gates` exit 0)
 
 ## Why
 

@@ -6,10 +6,17 @@ security-and-publication). Revision 1 carried two factual errors and an
 infeasible implementation sketch; §7 lists what changed and why, because
 a proposal that quietly repairs itself teaches the reader nothing.
 
-Status: **analysis + proposed implementation, awaiting owner ratification.**
-Nothing here is decided. Each proposal that changes specified behaviour
-travels the amendment flow (`openspec/changes/<name>/`) before any code
-lands; this document is the evidence the amendment would cite.
+Status: **ratified and applied, 2026-07-25.** The owner accepted A2 for
+question A and B2+B1 (B4 deferred) for question B. Three amendments carry
+the change — `r13-counts-live-homes`, `terminal-epic-conditions-stay-true`,
+`terminal-epics-refuse-reopening-writes` — and the code landed with them
+(spec rev 3.26 → 3.28; tasks #33, #35, #48, #49 closed with evidence).
+This document stays as the evidence those amendments cite; the analysis
+below is preserved as written, including the two option sets, so a later
+reader can see what was weighed rather than only what won. Where the
+implementation departed from the sketch below, the amendments say so —
+notably R16's import exemption and `criteria check` becoming report-only
+on a terminal epic rather than refused.
 
 Raised by: tasks #33 and #35 (owner questions, IN-REVIEW), widened by
 #48 and #49 (defects filed 2026-07-25). Observations come from drills in
