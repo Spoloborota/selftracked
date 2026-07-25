@@ -9,8 +9,11 @@ copies of those templates. Content tests. No schema change, no verb
 change.
 Status: **accepted** · raised 2026-07-25 by task #55 under
 epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · ratified by the owner 2026-07-25 · applied to the spec the same
-day
+D-EP7) · revised the same day against a five-lens critic round (the
+drift-rule reconciliation and this repository's own copies were added
+after it showed a template-only change would close #55 without fixing the
+repository that raised it) · ratified by the owner 2026-07-25 · applied to
+the spec the same day
 
 ## Why
 

@@ -8,7 +8,10 @@ row, and the `--quiet` behaviour the pre-commit path relies on); revision
 the `--quiet` summary line. Fixtures. No schema change.
 Status: **accepted** · raised 2026-07-25 by task #59 under
 epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · ratified by the owner 2026-07-25, who chose the `--quiet`
+D-EP7) · revised the same day against a five-lens critic round (the
+`--quiet` half, the shared predicate and the reversed fixture were added
+after it showed the partition move alone was inert) · ratified by the
+owner 2026-07-25, who chose the `--quiet`
 summary line over the trigger-only alternative recorded below · applied
 to the spec the same day
 

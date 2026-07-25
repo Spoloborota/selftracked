@@ -10,7 +10,10 @@ case. No schema change.
 Status: **accepted** · raised 2026-07-25 by task #60 under
 epic `tracking-integrity`, story S1 · review tier **FULL** (plan §5,
 D-EP7) · **supersedes part of an accepted amendment
-(`terminal-epics-refuse-reopening-writes`)** · ratified by the owner
+(`terminal-epics-refuse-reopening-writes`)** · revised the same day
+against a five-lens critic round (the carve-out was narrowed from
+CLOSED-or-DISSOLVED to CLOSED, and the shared `moveStory` call site named)
+· ratified by the owner
 2026-07-25, who chose the carve-out over the message-only alternative
 recorded below · applied to the spec the same day
 

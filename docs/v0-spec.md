@@ -794,10 +794,11 @@ re-open a close condition**: `criteria add`, `criteria met`, `story add`,
 every story transition, `create --epic`, `edit --epic`, `reopen` of a task
 homed there, and `edit` of the epic's goal or a story's fields — each
 `{"code":"terminal"}`, exit 1 (amendment
-`terminal-epics-refuse-reopening-writes`). Three surfaces stay open and are
-the post-close vocabulary: `V-n` rows, `--corrects` correction rows, and
-artifact links (a retrospective attached to a closed epic breaks no
-condition). `edit --detach` also stays open — it removes a violation, and
+`terminal-epics-refuse-reopening-writes`). The post-close vocabulary is a closed
+list (unnumbered on purpose — it has grown twice, and a numeral in this
+sentence has already gone stale once): `V-n` rows, `--corrects` correction
+rows, and artifact links (a retrospective attached to a closed epic breaks
+no condition). `edit --detach` also stays open — it removes a violation, and
 is the repair the `reopen` refusal names. **`story dissolve` of a
 non-terminal story stays open on a CLOSED epic only** (amendment
 `r16-reports-only-what-a-verb-can-clear`): `DISSOLVED` is the one story
@@ -817,9 +818,9 @@ construction, so R16 (§7) re-checks the claim for state that arrives by
 Stage 0 — container: `PRAGMA integrity_check` **plus** `PRAGMA
 foreign_key_check` (the former does not cover FKs — research doc); `--fast`
 (the pre-commit path) = `quick_check` + `foreign_key_check` + every pure-SQL
-Stage-1 rule (R4, R6–R9, R12 — cheap queries needing no serialization and no
+Stage-1 rule (R4, R6–R10, R12 — cheap queries needing no serialization and no
 filesystem/git access; R4's correction-row structure check among them, so a
-malformed correction is caught at the commit boundary) + R10 + R15. It skips
+malformed correction is caught at the commit boundary) + R15. It skips
 only the serialization-bound rules (R1, and R14 folded into it) and the
 filesystem/git-bound ones (R2, R3, R5, R11, R13). R10 joined the fast set
 with amendment `r10-sees-the-window-it-was-meant-to-watch`: it is pure-SQL
@@ -1325,8 +1326,13 @@ and dropping it would hide that work (§2); multiple entries = "finish or
 choose explicitly", never a silent pick), `notices[]` (amendment
 `prime-names-an-epic-that-cannot-receive-work`) — typed objects
 `{code, epic}` in deterministic order (code ASC, then epic ASC), **never
-capped**, placed between `sprint_goals[]` and `totals{}` (field order is
-part of this contract). v0 defines exactly one code,
+capped**, placed immediately after `sprint_goals[]` and before `totals{}`
+in the payload. Field order is part of this contract — but read that
+against the *struct*, not against this paragraph: the enumeration here is
+descriptive and has never been in payload order (it names `totals{}` and
+the two boolean flags before `sprint_goals[]`, which the payload emits
+after). A pre-existing looseness, recorded where a new field's placement
+now depends on it. v0 defines exactly one code,
 `no-workable-story`, emitted per ACTIVE epic with no story in a
 non-terminal status — §7's R10 trigger (a), read through the same single
 definition in `internal/rules`, never a second copy. A notice is a **typed
@@ -1396,7 +1402,10 @@ contract states (amendment `contract-says-where-new-work-goes`): work
 advancing an ACTIVE epic's goal is a story under it, and **opening one is
 a scope change the owner authorizes**, never the implementing agent;
 anything else is a task; work matching no existing task, story or epic is
-named out loud before the first write. Drift rule: new idea = `create` +
+named out loud before the first write. Of that last case v0 mechanizes
+exactly one part — `prime` names the epic-scoped instance as a
+`no-workable-story` notice (§11.1); the rest is the agent's own judgement,
+unenforced, until the v0.1 interactive protocol. Drift rule: new idea = `create` +
 park, one command. The two are scoped against each other explicitly — the
 drift rule governs work discovered **while a story is in progress**
 (capture it, do not pivot); the classification governs work being **taken

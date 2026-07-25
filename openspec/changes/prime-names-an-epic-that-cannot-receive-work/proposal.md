@@ -7,7 +7,10 @@ redefined. Tests. No schema change.
 Status: **accepted** · raised 2026-07-25 by task #66 (the v0 half, split
 from #61 on the owner's 2026-07-25 verdict) under epic
 `tracking-integrity`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-ratified by the owner 2026-07-25 · applied to the spec the same day
+revised the same day against a five-lens critic round (`stories.planned`
+and the named test guards were added after it showed the contract could
+not express the condition even implicitly) · ratified by the owner
+2026-07-25 · applied to the spec the same day
 
 ## Why
 
