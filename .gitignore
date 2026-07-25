@@ -20,6 +20,9 @@ __pycache__/
 *.sqlite-journal
 .DS_Store
 
+# Editor state — per-machine, never part of the published tree
+/.vscode/
+
 # selftracked dogfooding: local per-machine artifacts (the tool's own design).
 # Anchored: the unanchored form also matched the scaffold test's golden
 # tree, silently untracking a golden (caught by the first-push clean-
