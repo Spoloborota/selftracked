@@ -72,6 +72,7 @@ func TestGeneratedContentAssertions(t *testing.T) {
 		{"INV-477", "SKILL.md", "backlog refinement re-prime", "re-`prime` between passes"},
 		{"INV-478", "SKILL.md", "the drift rule", "`create` + park, one command"},
 		{"INV-479", "SKILL.md", "the bookkeeping-commit rule", "bookkeeping commit"},
+		{"#19", "SKILL.md", "explicit staging for the bookkeeping commit", "git add .selftracked/dump.sql STATE.md"},
 		{"INV-480", "SKILL.md", "the PO-absent branch", "never answer the PO"},
 	}
 	docs := map[string]string{
@@ -83,7 +84,8 @@ func TestGeneratedContentAssertions(t *testing.T) {
 		}
 	}
 	// The rule file carries the no-raw-SQL and no-PO rules too (INV-471/473).
-	for _, want := range []string{"run `sqlite3`", "answer a product-owner decision"} {
+	for _, want := range []string{"run `sqlite3`", "answer a product-owner decision",
+		"git add .selftracked/dump.sql STATE.md"} {
 		if !strings.Contains(rule, norm(want)) {
 			t.Errorf(".claude rule missing %q", want)
 		}

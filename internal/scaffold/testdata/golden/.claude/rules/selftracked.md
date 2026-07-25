@@ -10,7 +10,10 @@ This repository's work is tracked in `.selftracked/`. Obey these rules:
   task to `IN-REVIEW` and `story block --reason` the affected story; the
   owner answers.
 - **End every session with a bookkeeping commit** so the dump refreshed by
-  your last write reaches git.
+  your last write reaches git. Stage it explicitly — `git add
+  .selftracked/dump.sql STATE.md && git commit` — because when the index
+  starts empty, git refuses the commit even though the pre-commit hook
+  stages the refreshed pair.
 
 Configuration lives in `meta` rows edited via the `config` verb — there is
 no config file.

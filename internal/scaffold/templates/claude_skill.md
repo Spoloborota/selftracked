@@ -21,7 +21,9 @@ description: The selftracked working loop — how to prime, refine the backlog, 
    and stamps the close in one transaction).
 6. **End every session with a bookkeeping commit** — the dump refreshed by
    your last write must reach git, or the next `verify` reports a dirty
-   dump.
+   dump. Stage explicitly (`git add .selftracked/dump.sql STATE.md && git
+   commit`): a commit whose only content is what the pre-commit hook
+   stages is refused by git when the index started empty.
 
 ## Drift rule
 
