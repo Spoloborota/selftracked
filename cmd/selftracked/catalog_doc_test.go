@@ -48,7 +48,10 @@ func TestGeneratedPromptListsEveryVerb(t *testing.T) {
 	text := string(prompt)
 	var missing []string
 	for _, v := range catalog {
-		if !strings.Contains(text, "`"+v.Name+"`") {
+		// A verb may appear bare (`prime`) or opening a signature
+		// (`create --title T …`); both start with a backtick + name.
+		if !strings.Contains(text, "`"+v.Name+"`") &&
+			!strings.Contains(text, "`"+v.Name+" ") {
 			missing = append(missing, v.Name)
 		}
 	}

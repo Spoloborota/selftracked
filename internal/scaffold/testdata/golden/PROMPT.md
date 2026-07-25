@@ -5,6 +5,26 @@ deterministically to `.selftracked/dump.sql` (the one tracked, reviewed,
 synced surface) and projected to `STATE.md`. You interact with it through a
 fixed set of verbs — never by touching the database or the dump directly.
 
+## The working loop
+
+**Start every session with `prime`** — the session-start read: active
+epics with their unmet criteria, sprint goals (every IN-PROGRESS story),
+and the ready / triage / in-review / stale / parked queues. If it reports
+dump divergence, stop and reconcile (`load`, then re-run `prime`) before
+any write. Work then goes through verbs; commits reference tasks by `#NN`
+and/or the epic slug in the message.
+
+**End every session with a bookkeeping commit**, so the dump refreshed by
+your last write reaches git — and stage the pair explicitly:
+
+```sh
+git add .selftracked/dump.sql STATE.md && git commit -m "Bookkeeping: ..."
+```
+
+The explicit `git add` matters: the pre-commit hook refreshes and stages
+the pair itself, but when the index started empty, git refuses the commit
+anyway — hook-staged content alone does not count.
+
 ## Sync (§8.4)
 
 Git is the only sync channel: `.selftracked/dump.sql` and the generated docs
@@ -44,19 +64,69 @@ use, so a single `grep PO:` always finds every owner ruling.
 
 ## Verbs
 
-Run any verb with `--json` for machine-readable output; `--help` prints its
-signature. The catalog:
+Every verb accepts `--json` for machine-readable output; `--help` prints
+its signature. The catalog, with signatures:
 
-- **Tasks:** `create`, `edit`, `set-status`, `reopen`, `park`, `unpark`,
-  `ready`, `show`, `list`.
-- **Relations & artifacts:** `rel`, `link`, `unlink`.
-- **Epics & stories:** `epic`, `story`, `worklog`, `criteria`.
-- **Paths & config:** `paths`, `config`.
-- **Maintenance & state:** `log`, `stale`, `gate`, `dump`, `load`, `import`,
-  `verify`, `state`, `prime`, `init`.
+- **Tasks:**
+  - `create --title T [--status OPEN|IN-REVIEW|NEEDS-TRIAGE] [--note N]
+    [--epic SLUG] [--label]` — default status is `NEEDS-TRIAGE`.
+  - `edit <ref> [--title T] [--note N] [--goal G] [--dod D] [--consumes C]
+    [--produces P] [--epic SLUG|--detach]`
+  - `set-status <id> <STATUS> [--note N] [--dup-of ID]` — targets are the
+    task statuses below; every `set-status` call REWRITES the status
+    note, so pass `--note` (superseded notes survive in the events
+    trail).
+  - `reopen <id> --why TEXT` · `park <id> --why TEXT` · `unpark <id>`
+  - `ready [--epic SLUG]` · `show <ref>` ·
+    `list [--status S] [--epic SLUG] [--parked] [--labels]`
+- **Relations & artifacts:**
+  - `rel add <id> <depends|relates|supersedes> <id> [--note N]` ·
+    `rel rm <id> <type> <id>` · `rel tree <id>` · `rel cycles`
+  - `link <id|epic:SLUG> <class[@scope]:relpath> --role R` ·
+    `link archive|unarchive <artifact-ref> [--force]` ·
+    `unlink <id|epic:SLUG> <class[@scope]:relpath>`
+- **Epics & stories:**
+  - `epic create SLUG --goal G` · `epic activate SLUG` ·
+    `epic pause SLUG --why TEXT` · `epic dissolve SLUG --why TEXT` ·
+    `epic show SLUG` · `epic list [--active]` · `epic close SLUG`
+  - `story add SLUG --title T` · `story ready SLUG SID` ·
+    `story start SLUG SID` · `story block SLUG SID --reason TEXT` ·
+    `story unblock SLUG SID --resolution TEXT` ·
+    `story done SLUG SID --commits RANGE --gate G [--review R]` ·
+    `story dissolve SLUG SID --why TEXT`
+  - `worklog add SLUG --story SID|V-N --state ST [--corrects N]
+    [--commits] [--gate] [--review] [--note]`
+  - `criteria add SLUG --text T` · `criteria met SLUG SEQ --evidence E` ·
+    `criteria check SLUG`
+- **Paths & config:**
+  - `paths ls` · `paths set CLASS[@SCOPE] ROOT [--ephemeral] [--note N]` ·
+    `paths move CLASS[@SCOPE] NEWROOT [--with-files]`
+  - `config ls` · `config set <production_globs|idle_days|prime_cap> VALUE`
+- **Maintenance & state:** `prime` (the session-start read) ·
+  `verify [--fast] [--quiet]` · `log <ref> [--limit N]` ·
+  `stale [--since REF]` · `dump [--stdout]` · `load [--force]` · `state` ·
+  `gate skip-mark` · `import --file F [--format md-table|json] [--legacy]`
+  · `init`.
 
 Configuration lives in `meta` rows edited only through `config`; there is
 no config file.
+
+## Status vocabulary
+
+- **Tasks:** `OPEN` (workable; `parked` marks deferred-but-open) ·
+  `IN-REVIEW` (awaiting the product owner, including tasks that ARE
+  questions) · `NEEDS-TRIAGE` (the default on create; `prime` surfaces
+  the triage queue) · `DONE` (note = what closed it) · `WONT-DO` (note =
+  the reopen trigger) · `DUPLICATE` (requires `--dup-of` naming the
+  canonical) · `LABEL` (reserved marker; no lifecycle). Transitions are
+  matrix-checked: terminal→OPEN is `reopen`'s job, any transition clears
+  `parked`, and any exit from `IN-REVIEW` requires `--note` carrying the
+  owner's verdict.
+- **Stories:** `PLANNED` → `READY` → `IN-PROGRESS` → `DONE`, plus
+  `BLOCKED` (`story block`/`unblock`) and `DISSOLVED`. One `IN-PROGRESS`
+  story per epic.
+- **Epics:** `BACKLOG` → `ACTIVE` → `CLOSED`, plus `PAUSED` and
+  `DISSOLVED`.
 
 ## Durable-doc authoring rules
 
