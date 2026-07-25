@@ -90,6 +90,9 @@ func criteriaAdd(e *cli.Env, slug, text string) error {
 	}
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
+		if err := refuseTerminalEpic(ctx, tx, slug, "criteria add"); err != nil {
+			return nil, err
+		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO epic_criteria (epic, seq, criterion)
 			VALUES (?1, COALESCE((SELECT MAX(seq) FROM epic_criteria WHERE epic = ?1), 0) + 1, ?2)`,
@@ -120,6 +123,9 @@ func criteriaMet(e *cli.Env, slug, seqTok, evidence string) error {
 	}
 	err = Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
+		if err := refuseTerminalEpic(ctx, tx, slug, "criteria met"); err != nil {
+			return nil, err
+		}
 		var criterion string
 		err := tx.QueryRowContext(ctx,
 			`SELECT criterion FROM epic_criteria WHERE epic = ? AND seq = ?`, slug, seq).Scan(&criterion)
@@ -150,13 +156,23 @@ func criteriaMet(e *cli.Env, slug, seqTok, evidence string) error {
 // engine runs inside epic close's condition (3).
 func criteriaCheck(e *cli.Env, slug string) error {
 	var output []string
-	var failed bool
+	var failed, reportOnly bool
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
+		// On a terminal epic the check still RUNS — "does this closed
+		// epic's criterion still hold?" is a legitimate question — but
+		// records nothing: persisting would overwrite the acceptance
+		// record the epic was closed on, which no verb can restore
+		// (amendment `terminal-epics-refuse-reopening-writes`).
+		terminal, _, err := epicIsTerminal(ctx, tx, slug)
+		if err != nil {
+			return nil, err
+		}
+		reportOnly = terminal
 		// Standalone check: only a failed RUNNABLE criterion is a
 		// failure; unmet owner-attested criteria belong to the epic
 		// close's condition (3), not to this verb (§6.2, task #7).
-		_, failedRuns, out, err := runCriteria(ctx, tx, slug)
+		_, failedRuns, out, err := runCriteria(ctx, tx, slug, !terminal)
 		if err != nil {
 			return nil, err
 		}
@@ -172,6 +188,10 @@ func criteriaCheck(e *cli.Env, slug string) error {
 	}
 	for _, l := range output {
 		_, _ = fmt.Fprintln(e.Stdout, l)
+	}
+	if reportOnly {
+		_, _ = fmt.Fprintf(e.Stdout,
+			"epic:%s is terminal: results reported, not recorded\n", slug)
 	}
 	if failed {
 		return refuse("criteria", "a runnable criterion failed")

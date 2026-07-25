@@ -32,7 +32,7 @@ func closeBlockers(ctx context.Context, tx *sql.Tx, slug string) ([]string, []st
 	}
 
 	// (3) criteria: runnables re-executed now, non-runnables met=1.
-	attested, failedRuns, output, err := runCriteria(ctx, tx, slug)
+	attested, failedRuns, output, err := runCriteria(ctx, tx, slug, true)
 	checkBlockers := make([]string, 0, len(attested)+len(failedRuns))
 	checkBlockers = append(checkBlockers, attested...)
 	checkBlockers = append(checkBlockers, failedRuns...)
@@ -112,7 +112,11 @@ func storyConditions(ctx context.Context, tx *sql.Tx, slug string) ([]string, er
 // condition (3)'s business, not a check failure (§6.2; found by the S10
 // dogfood as task #7, where the shared list made the standalone verb
 // report "a runnable criterion failed" with every runnable green).
-func runCriteria(ctx context.Context, tx *sql.Tx, slug string) ([]string, []string, []string, error) {
+// persist=false makes the run report-only: the criteria execute and their
+// lines come back, but nothing is written. That branch exists for a
+// terminal epic's `criteria check`, whose acceptance record must survive
+// the diagnostic (amendment `terminal-epics-refuse-reopening-writes`).
+func runCriteria(ctx context.Context, tx *sql.Tx, slug string, persist bool) ([]string, []string, []string, error) {
 	var attested, failedRuns, output []string
 	crits, err := loadCriteria(ctx, tx, slug)
 	if err != nil {
@@ -131,7 +135,7 @@ func runCriteria(ctx context.Context, tx *sql.Tx, slug string) ([]string, []stri
 		if stopped {
 			continue // stop at first failure (§6.2): later runnables are not executed
 		}
-		line, blocker, err := runOne(ctx, tx, slug, c.seq, cmd)
+		line, blocker, err := runOne(ctx, tx, slug, c.seq, cmd, persist)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -173,7 +177,7 @@ func loadCriteria(ctx context.Context, tx *sql.Tx, slug string) ([]crit, error) 
 
 // runOne executes a single runnable criterion, records its evidence, and
 // applies the regression flip (met 1→0 on failure).
-func runOne(ctx context.Context, tx *sql.Tx, slug string, seq int64, cmd string) (string, string, error) {
+func runOne(ctx context.Context, tx *sql.Tx, slug string, seq int64, cmd string, persist bool) (string, string, error) {
 	pass, detail := executeCriterion(ctx, cmd)
 	evidence := fmt.Sprintf("%s %s @ %s", map[bool]string{true: "PASS", false: "FAIL"}[pass], detail, now())
 	line := fmt.Sprintf("criterion %d: %s", seq, evidence)
@@ -181,10 +185,12 @@ func runOne(ctx context.Context, tx *sql.Tx, slug string, seq int64, cmd string)
 	if pass {
 		met = 1
 	}
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE epic_criteria SET met = ?, evidence = ? WHERE epic = ? AND seq = ?`,
-		met, evidence, slug, seq); err != nil {
-		return "", "", err //nolint:wrapcheck // constraint codes ride to the mapper
+	if persist {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE epic_criteria SET met = ?, evidence = ? WHERE epic = ? AND seq = ?`,
+			met, evidence, slug, seq); err != nil {
+			return "", "", err //nolint:wrapcheck // constraint codes ride to the mapper
+		}
 	}
 	blocker := ""
 	if !pass {

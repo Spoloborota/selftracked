@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.25 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.28 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -62,8 +62,15 @@ colocated install cannot block the host repository's commits (amendment
 `chaining-recipe-guards-abandonment`, rev 3.24) → the same review found
 R3's on-disk guarantee had no reader — no verb printed an entity's linked
 artifacts, leaving a linked ADR invisible; `show` and `epic show` gain the
-forward lookup (amendment `show-verbs-print-linked-artifacts`) → this
-revision.
+forward lookup (amendment `show-verbs-print-linked-artifacts`) → the
+full-surface functional campaign on an adapted host raised three semantics
+the spec had left to implementation accident: R13 counts live homes only
+(amendment `r13-counts-live-homes`, rev 3.26); a CLOSED epic's satisfied
+conditions become a claim `verify` re-checks (amendment
+`terminal-epic-conditions-stay-true`, rev 3.27); and a terminal epic
+refuses the writes that would re-open those conditions, with `criteria
+check` becoming report-only there (amendment
+`terminal-epics-refuse-reopening-writes`, rev 3.28) → this revision.
 Implementation has started; §5's schema and §3.1's connection posture are
 built.
 
@@ -708,7 +715,7 @@ prefixed) — stated as an invariant the grammar must preserve.
 | `rel` | `rel add <id> <depends\|relates\|supersedes> <id> [--note]` · `rel rm <id> <type> <id>` · `rel tree <id>` · `rel cycles` | No `duplicates` here (single writer of that fact is `set-status`). Refuses cycles and LABEL/DUPLICATE targets. `relates` queried undirected. |
 | `link` | `link <id\|epic:SLUG> <class[@scope]:relpath> --role R` · `unlink …` · `link archive <artifact-ref> [--force]` · `link unarchive <artifact-ref>` | Role from the closed vocabulary. File must exist (exit 1 refusal otherwise) unless class is ephemeral — ephemeral links are existence-exempt by design and `stale` ignores them (stated limitation). `archive` warns and requires `--force` when the artifact is a live `home`. `link` refuses a relpath that does not resolve inside its class(+scope) registered root (no `..` escapes) — root registration is what retention (`gc`, §17) and R3 reason about, so an escaping path would dodge both. |
 | `epic` | `epic create SLUG --goal G` · `activate` · `pause --why` · `dissolve --why` · `show` · `list [--active]` · `close` | Lifecycle per the §5.3 matrix; `close` works from ACTIVE or PAUSED (BACKLOG never ran — dissolve it instead). `dissolve` has close-grade preconditions: refuses while a story is IN-PROGRESS or a task in OPEN/IN-REVIEW/NEEDS-TRIAGE is homed to the epic; PLANNED/READY/BLOCKED stories are auto-DISSOLVED (each getting its DISSOLVED worklog row) in the same transaction. Blocker messages for parked tasks suggest unpark / `edit --detach`. |
-| `criteria` | `criteria add SLUG --text T` · `criteria met SLUG SEQ --evidence E` · `criteria check SLUG` | `check` EXECUTES every `$ `-prefixed criterion (cwd = repo root, inherited env, per-command timeout, stop at first failure), records pass/fail + timestamp as evidence, **flips `met` 1→0 on a failing re-run** (regressions cannot stay green), and exits 1 on any failure. `met` is for owner-attested (non-runnable) criteria only. Threat model: runnable criteria are shell commands from repo state — executing them is the same trust decision as running the repo's build/tests or its tracked hooks; a hostile branch already owns those surfaces, so criteria add no new one (§14). |
+| `criteria` | `criteria add SLUG --text T` · `criteria met SLUG SEQ --evidence E` · `criteria check SLUG` | `check` EXECUTES every `$ `-prefixed criterion (cwd = repo root, inherited env, per-command timeout, stop at first failure), records pass/fail + timestamp as evidence, **flips `met` 1→0 on a failing re-run** (regressions cannot stay green), and exits 1 on any failure. On a **terminal** epic `check` runs and reports but records NOTHING — it prints that it did not — because persisting would overwrite the acceptance record the epic was closed on, which no verb can restore and the events trail does not copy (amendment `terminal-epics-refuse-reopening-writes`). `met` is for owner-attested (non-runnable) criteria only. Threat model: runnable criteria are shell commands from repo state — executing them is the same trust decision as running the repo's build/tests or its tracked hooks; a hostile branch already owns those surfaces, so criteria add no new one (§14). |
 | `story` | `add SLUG --title T · ready SLUG SID · start · block --reason · unblock --resolution TEXT · done --commits RANGE --gate G [--review R] · dissolve --why` | The state-writing lifecycle verbs — `start`, `block`, `done`, `dissolve` — each append their worklog episode row (§5.7); `add`, `ready`, and `unblock` do not (no worklog state exists for those transitions) — `unblock`'s durable record is its `story` events row. `start`: READY + DoR + WIP. `done`: `--commits` and `--gate` are required (`--review` optional) — status flip + DONE row are one transaction (no non-atomic path exists). `unblock` requires `--resolution` — **what cleared the block**, recorded verbatim in the same transaction's events row (`event='story'`, detail = the resolution text): when the block was an owner question (the `[BLOCKED: PO decision]` convention), the resolution starts with the literal greppable prefix `PO:` and quotes the verdict — a provisional instruction («try X, revisit if wrong») IS a verdict and is quoted like one; a decision living only in chat does not exist. When the block was external (a dependency, an outage — `block --reason` is not owner-only, §11.3 uses it for any blocker), the resolution states the observed fact that cleared it, no prefix. The `PO:` prefix is an authoring convention (prompt-enforced) and applies wherever an owner verdict is recorded — resolutions, IN-REVIEW exit notes, question-task titles (§12 uses all three): the schema cannot distinguish verdicts from other text, so the prefix is what makes owner ratifications machine-findable in the trail afterward. The literal token is deliberately locale-fixed for greppability; a non-English crew adapts the literal in its prompt config, not per-use. Presence-of-text is verb-enforced only (enforcement map). |
 | `worklog` | `worklog add SLUG --story SID\|V-N --state ST [--corrects N] [--commits] [--gate] [--review] [--note]` | Manual appends are only: `V-N` rows (epic must be CLOSED) and `--corrects N` correction rows (any story; N names an original non-correction row — §5.7; state must match the corrected row; excluded from R6, R10-idle and close-rule-2 accounting — §5.7). Everything else is written by story verbs. No `--date`: rows are dated at append time by the binary — a correction happens when it happens, and a backdating flag would reopen the narrative-date drift class (§5) through a verb. The true historical date of a corrected FACT belongs in the row's `note` as content, sourced per the PROMPT.md provenance rules (git/mtime, never session narrative) — the row's own date stays the append date. |
 | `paths` | `paths ls` · `paths set CLASS[@SCOPE] ROOT [--ephemeral] [--note]` · `paths move CLASS[@SCOPE] NEWROOT [--with-files]` | `--with-files` performs the move via `git mv` when in a git repo (renames AND stages), else plain rename — no red window either way. `set` warns on overlapping roots of the same class only. |
@@ -765,6 +772,19 @@ second story must not hold the close hostage). On success, one
 transaction: status→CLOSED, close_sweep→today, events row. Post-close
 validation = `V-n` rows.
 
+A terminal epic (CLOSED or DISSOLVED) then **refuses the writes that would
+re-open a close condition**: `criteria add`, `criteria met`, `story add`,
+every story transition, `create --epic`, `edit --epic`, `reopen` of a task
+homed there, and `edit` of the epic's goal or a story's fields — each
+`{"code":"terminal"}`, exit 1 (amendment
+`terminal-epics-refuse-reopening-writes`). Three surfaces stay open and are
+the post-close vocabulary: `V-n` rows, `--corrects` correction rows, and
+artifact links (a retrospective attached to a closed epic breaks no
+condition). `edit --detach` also stays open — it removes a violation, and
+is the repair the `reopen` refusal names. The gate is transition-time by
+construction, so R16 (§7) re-checks the claim for state that arrives by
+`import` or raw SQL, which no verb guard can see.
+
 ---
 
 ## 7. Integrity: `verify`
@@ -799,8 +819,9 @@ Stage 1:
 | R10 | Advisory: ACTIVE epics with no READY/IN-PROGRESS story and no **non-correction** worklog append in `idle_days` → idle report (PAUSED/BACKLOG are silent — intentional states; correction rows are excluded so an unrelated historical correction cannot reset the idle clock of a genuinely neglected epic — §5.7) |
 | R11 | Advisory: per-machine gate inactive warning. For each of pre-commit and post-commit, the **effective hook location** (`core.hooksPath` when set, else `.git/hooks`) must either be `.selftracked/hooks` or contain a hook file referencing its `.selftracked/hooks/` counterpart (best-effort textual detection, §9; a reference counts as chained only when it appears OUTSIDE a comment — neither a line starting with `#` nor a reference sitting after an inline `#` on a live line qualifies, since a commented mention otherwise reads as a live chain, and false silence is this rule's fail-open direction); the warning names each unchained hook — covering unset, set-but-unchained, and pre-commit-chained-but-post-commit-not states |
 | R12 | Terminal-state ⇔ events-trail cross-check: every CLOSED/DISSOLVED epic and DONE/WONT-DO/DUPLICATE task must have a matching events row (or an `import` events row). A terminal state with no trail = the raw-SQL forgery signature (§1.1) — red |
-| R13 | Advisory: OPEN tasks with no `home` link |
+| R13 | Advisory: OPEN tasks with no **live** `home` link — an archived home is history, not a home: R3 stops checking an archived artifact's existence, so counting one here would let an OPEN task hold a home pointing at a deleted file with no signal anywhere (amendment `r13-counts-live-homes`) |
 | R15 | Advisory: pending `.selftracked/skip-pending` marker (unconverted gate skip) |
+| R16 | Advisory: a CLOSED epic no longer satisfies the conditions it was closed on — a non-terminal story, a task in OPEN/IN-REVIEW/NEEDS-TRIAGE homed to it, or a criterion with stored `met = 0`. Scoped to epics THIS tracker closed (an `epic` event carrying the close stamp): one that arrived CLOSED through `import` never passed the gate, so there is no claim to re-check. It re-executes nothing — `met` is read as stored, because reusing close condition (3)'s engine would run repo-state shell commands inside `verify`, which its read-only connection forbids and whose execution surface `verify` must not own (amendment `terminal-epic-conditions-stay-true`) |
 
 Every rule ships with a red fixture; a gate that cannot fail is decoration.
 The one textual matcher among the rules (R11) additionally ships a **variant

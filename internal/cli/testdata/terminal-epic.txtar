@@ -1,0 +1,75 @@
+# A terminal epic refuses the writes that would re-open its close
+# conditions, keeps its two sanctioned surfaces open, and survives a
+# `criteria check` with its acceptance record intact (amendment
+# `terminal-epics-refuse-reopening-writes`; tasks #35, #48, #49).
+
+seeddb
+exec git init -q
+exec git config user.email t@e
+exec git config user.name t
+exec touch marker.flag
+exec git add -A
+exec git commit -qm seed
+
+# Build a closeable epic: two stories, one runnable criterion that passes,
+# and a task homed to it that reaches a terminal status before the close
+# (condition 4 would block otherwise).
+expectexit 0 selftracked epic create term --goal g
+expectexit 0 selftracked criteria add term --text '$ test -f marker.flag'
+expectexit 0 selftracked epic activate term
+expectexit 0 selftracked create --title homed --status OPEN --epic term
+expectexit 0 selftracked set-status 2 DONE --note 'shipped before the close'
+expectexit 0 selftracked story add term --title s1
+expectexit 0 selftracked story add term --title s2
+expectexit 0 selftracked story ready term S1
+expectexit 0 selftracked story start term S1
+expectexit 0 selftracked story done term S1 --commits HEAD --gate 'manual'
+expectexit 0 selftracked story dissolve term S2 --why 'not needed'
+expectexit 0 selftracked epic close term
+stdout 'CLOSED'
+
+# Every write that would re-open a close condition now refuses with the
+# domain code, exit 1 (a domain refusal, not a usage error).
+expectexit 1 selftracked criteria add term --text 'late obligation'
+stderr 'terminal'
+expectexit 1 selftracked story add term --title s3
+stderr 'terminal'
+expectexit 1 selftracked create --title late --status OPEN --epic term
+stderr 'terminal'
+expectexit 1 selftracked edit epic:term --goal 'rewritten after the close'
+stderr 'terminal'
+expectexit 1 selftracked edit epic:term/S1 --dod 'rewritten after the close'
+stderr 'terminal'
+
+# The whole story lifecycle is covered by one guard, not just `add`.
+expectexit 1 selftracked story ready term S1
+stderr 'terminal'
+expectexit 1 selftracked story start term S1
+stderr 'terminal'
+
+# criteria met refuses; the record it would rewrite is the ratified one.
+expectexit 1 selftracked criteria met term 1 --evidence 'attested late'
+stderr 'terminal'
+
+# criteria check still RUNS on a terminal epic - the diagnostic question
+# is legitimate - but records nothing: the close-time PASS survives even
+# when the condition now fails.
+exec rm marker.flag
+expectexit 1 selftracked criteria check term
+stdout 'criterion 1: FAIL'
+stdout 'results reported, not recorded'
+grep 'PASS test -f marker.flag' .selftracked/dump.sql
+! grep 'FAIL test -f marker.flag' .selftracked/dump.sql
+
+# The sanctioned post-close surfaces stay open: V-rows and corrections.
+expectexit 0 selftracked worklog add term --story V-1 --state DONE --note 'post-close validation'
+expectexit 0 selftracked worklog add term --story S1 --state DONE --corrects 2 --note 'correcting the DONE row'
+
+# reopen refuses while the task is homed to a terminal epic, and names
+# detach as the repair; detach itself stays open, and reopen then works.
+expectexit 1 selftracked reopen 2 --why 'needs more work'
+stderr 'terminal'
+stderr 'detach'
+expectexit 0 selftracked edit 2 --detach
+expectexit 0 selftracked reopen 2 --why 'needs more work'
+stdout 'reopened'

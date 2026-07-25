@@ -3,7 +3,7 @@
 // the write pipeline heals. Stage 0 is the container check (integrity /
 // foreign keys); Stage 1 is the rule battery. Rules split two ways —
 // red (R1–R9, R12: a violation fails the run) and advisory (R10, R11, R13,
-// R15: reported, exit unaffected) — and the pre-commit `--fast` partition
+// R15, R16: reported, exit unaffected) — and the pre-commit `--fast` partition
 // runs only the pure-SQL rules plus R15, skipping serialization/filesystem/
 // git work (§7). R14 / R1 check 3 (STATE.md byte-equals its render) lands
 // here at S8c with the renderer (amendment r14-rides-its-renderer-at-s8c).
@@ -32,12 +32,12 @@ const (
 
 // advisoryRules are the rule names §7 marks advisory: reported, never
 // fatal. Everything else in a Report's findings is red.
-var advisoryRules = map[string]bool{"R10": true, "R11": true, "R13": true, "R15": true}
+var advisoryRules = map[string]bool{"R10": true, "R11": true, "R13": true, "R15": true, "R16": true}
 
 // Report is one verify run's outcome, findings already split by severity.
 type Report struct {
 	Red      []rules.Violation // R1–R9, R12, Stage 0 — a non-empty Red fails the run
-	Advisory []rules.Violation // R10, R11, R13, R15 — reported only
+	Advisory []rules.Violation // R10, R11, R13, R15, R16 — reported only
 	Fast     bool              // whether this was the --fast partition
 }
 
@@ -115,7 +115,7 @@ func stage0(ctx context.Context, db *sql.DB, rep *Report, fast bool) error {
 
 // stage1 runs the rule battery. --fast runs only the pure-SQL rules (R4 +
 // DBOnly's R6–R9/R12) and R15; full verify adds the serialization (R1),
-// filesystem (R2, R3), git (R5) and advisory (R10, R11, R13) rules.
+// filesystem (R2, R3), git (R5) and advisory (R10, R11, R13, R16) rules.
 func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool) error {
 	r4, err := rules.R4(ctx, db)
 	if err != nil {
@@ -144,6 +144,7 @@ func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool)
 		func() ([]rules.Violation, error) { return r10(ctx, db) },
 		func() ([]rules.Violation, error) { return r11(ctx, dir) },
 		func() ([]rules.Violation, error) { return r13(ctx, db) },
+		func() ([]rules.Violation, error) { return r16(ctx, db) },
 	} {
 		vs, err := run()
 		if err != nil {

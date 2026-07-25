@@ -676,6 +676,87 @@ func TestR13OpenTaskWithHomeNotFlagged(t *testing.T) {
 	}
 }
 
+// --- R13 counts LIVE homes only (amendment `r13-counts-live-homes`) ---
+
+func TestR13ArchivedHomeDoesNotCount(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.exec(`INSERT INTO path_dictionary (class, scope, root) VALUES ('research','','docs/research')`)
+	h.exec(`INSERT INTO artifacts (class, scope, relpath, archived) VALUES ('research','','gone.md',1)`)
+	h.exec(`INSERT INTO tasks (id, title, status, created_at, updated_at) VALUES (1,'t','OPEN','d','d')`)
+	h.exec(`INSERT INTO task_artifacts (task, artifact, role) VALUES (1,1,'home')`)
+	h.regen()
+	// The root is missing on disk on purpose: an archived artifact is
+	// exempt from R3, which is exactly why counting it as a home lets an
+	// OPEN task hold a pointer to nothing with no signal anywhere.
+	mustAdvisory(t, h.verify(false), "R13")
+}
+
+func TestR13LiveHomeBesideAnArchivedOneCounts(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	if err := os.MkdirAll(filepath.Join(h.root, "docs/research"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(h.root, "docs/research/live.md"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.exec(`INSERT INTO path_dictionary (class, scope, root) VALUES ('research','','docs/research')`)
+	h.exec(`INSERT INTO artifacts (id, class, scope, relpath, archived) VALUES (1,'research','','old.md',1)`)
+	h.exec(`INSERT INTO artifacts (id, class, scope, relpath) VALUES (2,'research','','live.md')`)
+	h.exec(`INSERT INTO tasks (id, title, status, created_at, updated_at) VALUES (1,'t','OPEN','d','d')`)
+	h.exec(`INSERT INTO task_artifacts (task, artifact, role) VALUES (1,1,'home')`)
+	h.exec(`INSERT INTO task_artifacts (task, artifact, role) VALUES (1,2,'home')`)
+	h.regen()
+	if hasRule(h.verify(false).Advisory, "R13") {
+		t.Fatal("one live home is a home, whatever else was archived")
+	}
+}
+
+// --- R16: a closed epic still satisfies what it was closed on ---
+
+func TestR16ImportedClosedEpicIsExempt(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	// Same divergent shape as R16's fixture, but the epic arrived CLOSED
+	// through import: it never passed the gate, so there is no claim to
+	// re-check (amendment `terminal-epic-conditions-stay-true`).
+	h.exec(`INSERT INTO epics (slug, goal, status, close_sweep, created_at)
+	        VALUES ('e','g','CLOSED','2026-01-01','d')`)
+	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','PLANNED')`)
+	h.exec(`INSERT INTO events (at, entity, event, detail) VALUES ('d','epic:e','import','corpus')`)
+	h.regen()
+	if hasRule(h.verify(false).Advisory, "R16") {
+		t.Fatal("an imported CLOSED epic never passed the close gate; R16 must not claim it did")
+	}
+}
+
+func TestR16ClosedEpicWithHomedWorkableTask(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.exec(`INSERT INTO epics (slug, goal, status, close_sweep, created_at)
+	        VALUES ('e','g','CLOSED','2026-01-01','d')`)
+	h.exec(`INSERT INTO events (at, entity, event, detail) VALUES ('d','epic:e','epic','close: 2026-01-01')`)
+	h.exec(`INSERT INTO tasks (id, title, status, epic, created_at, updated_at)
+	        VALUES (1,'t','OPEN','e','d','d')`)
+	h.regen()
+	mustAdvisory(t, h.verify(false), "R16")
+}
+
+func TestR16CleanClosedEpicIsSilent(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.exec(`INSERT INTO epics (slug, goal, status, close_sweep, created_at)
+	        VALUES ('e','g','CLOSED','2026-01-01','d')`)
+	h.exec(`INSERT INTO events (at, entity, event, detail) VALUES ('d','epic:e','epic','close: 2026-01-01')`)
+	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DISSOLVED')`)
+	h.exec(`INSERT INTO epic_criteria (epic, seq, criterion, met, evidence) VALUES ('e',1,'c',1,'ev')`)
+	h.regen()
+	if hasRule(h.verify(false).Advisory, "R16") {
+		t.Fatal("a closed epic that still satisfies its conditions must stay silent")
+	}
+}
+
 // --- INV-495: a mechanized audit that every emittable rule has a red fixture ---
 
 // TestRuleFixtureCoverage is the gate INV-495 asks for: a failing fixture
@@ -690,8 +771,9 @@ func TestRuleFixtureCoverage(t *testing.T) {
 	t.Parallel()
 	wantRules := []string{
 		"fk", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "R13", "R15",
+		"R16",
 	}
-	advisory := map[string]bool{"R10": true, "R11": true, "R13": true, "R15": true}
+	advisory := map[string]bool{"R10": true, "R11": true, "R13": true, "R15": true, "R16": true}
 	fixtures := map[string]func(h *harness){
 		"fk": func(h *harness) {
 			h.execNoFK(`INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('ghost', 999, 'home')`)
@@ -756,6 +838,14 @@ func TestRuleFixtureCoverage(t *testing.T) {
 		},
 		"R15": func(h *harness) {
 			_ = os.WriteFile(filepath.Join(h.dir, "skip-pending"), []byte(""), 0o600)
+		},
+		"R16": func(h *harness) {
+			h.exec(`INSERT INTO epics (slug, goal, status, close_sweep, created_at)
+			        VALUES ('e','g','CLOSED','2026-01-01','d')`)
+			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','PLANNED')`)
+			h.exec(`INSERT INTO events (at, entity, event, detail)
+			        VALUES ('d','epic:e','epic','close: 2026-01-01')`)
+			h.regen()
 		},
 	}
 

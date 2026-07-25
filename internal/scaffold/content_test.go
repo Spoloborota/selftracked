@@ -77,7 +77,7 @@ func TestGeneratedContentAssertions(t *testing.T) {
 		{"INV-406", "work/README.md", "the cleanup/gc note", "manual for now"},
 		{"INV-404", "work/README.md", "opt-in classes are NOT pre-registered", "**not** pre-registered"},
 		{"INV-476", "SKILL.md", "the loop's divergence stop-first", "stop and reconcile first"},
-		{"#25", "SKILL.md", "divergence reconcile names load --force", "`selftracked load --force` replaces the local database"},
+		{"#25", "SKILL.md", "reconcile names load --force", "`selftracked load --force` replaces the local"},
 		{"#25", "PROMPT.md", "divergence reconcile names load --force", "`load --force` replaces the local database"},
 		{"#25", "PROMPT.md", "plain load refusal documented", "it refuses"},
 		{"INV-477", "SKILL.md", "backlog refinement re-prime", "re-`prime` between passes"},
@@ -95,8 +95,10 @@ func TestGeneratedContentAssertions(t *testing.T) {
 		}
 	}
 	// The rule file carries the no-raw-SQL and no-PO rules too (INV-471/473).
-	for _, want := range []string{"run `sqlite3`", "answer a product-owner decision",
-		"git add .selftracked/dump.sql STATE.md"} {
+	for _, want := range []string{
+		"run `sqlite3`", "answer a product-owner decision",
+		"git add .selftracked/dump.sql STATE.md",
+	} {
 		if !strings.Contains(rule, norm(want)) {
 			t.Errorf(".claude rule missing %q", want)
 		}

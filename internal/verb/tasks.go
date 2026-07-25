@@ -138,6 +138,9 @@ func createVerb() cli.Verb {
 				stamp := now()
 				var epicVal any
 				if epic != "" {
+					if err := refuseTerminalEpic(context.Background(), tx, epic, "create --epic"); err != nil {
+						return nil, err
+					}
 					epicVal = epic
 				}
 				err := tx.QueryRowContext(context.Background(),
@@ -654,6 +657,9 @@ func reopenTask(tx *sql.Tx, id int64, why string) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := refuseTerminalEpicOfTask(ctx, tx, id, "reopen"); err != nil {
+		return nil, err
+	}
 	switch cur.Status {
 	case statusDone, statusWontDo:
 		// Reopenable.
@@ -842,6 +848,9 @@ func editTaskBranch(e *cli.Env, r ref.Ref, f editFields) error {
 func editEpicGoal(e *cli.Env, slug, goal string) error {
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
+		if err := refuseTerminalEpic(ctx, tx, slug, "edit --goal"); err != nil {
+			return nil, err
+		}
 		var old string
 		if err := tx.QueryRowContext(ctx, `SELECT goal FROM epics WHERE slug = ?`, slug).Scan(&old); err != nil {
 			return nil, refuse("not-found", "no epic %q", slug)
@@ -864,6 +873,9 @@ func editEpicGoal(e *cli.Env, slug, goal string) error {
 func editStoryFields(e *cli.Env, r ref.Ref, dod, consumes, produces string) error {
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
+		if err := refuseTerminalEpic(ctx, tx, r.Epic, "editing a story"); err != nil {
+			return nil, err
+		}
 		var changes []string
 		for _, fld := range []struct{ col, val string }{
 			{"dod", dod}, {"consumes", consumes}, {"produces", produces},
@@ -916,6 +928,13 @@ func editTask(tx *sql.Tx, id int64, title, note, epic string, detach bool) ([]Ev
 	cur, err := scanTask(ctx, tx, id)
 	if err != nil {
 		return nil, err
+	}
+	// Attaching to a terminal epic re-opens close condition (4); detaching
+	// is the repair and stays open.
+	if epic != "" {
+		if err := refuseTerminalEpic(ctx, tx, epic, "edit --epic"); err != nil {
+			return nil, err
+		}
 	}
 	set, args, changes := editSet(cur, title, note, epic, detach)
 	if len(set) == 0 {

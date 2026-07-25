@@ -17,8 +17,11 @@ stderr 'at least one field'
 expectexit 1 selftracked edit 1 --epic e --detach
 stderr 'mutually exclusive'
 
-# Re-home and detach; a nonexistent epic is the FK speaking (exit 1).
+# Re-home and detach; a nonexistent epic is named by the terminal-epic
+# guard's own lookup (exit 1) — it reads the target epic's status before
+# the FK ever fires, so the refusal says which epic is missing
+# (amendment `terminal-epics-refuse-reopening-writes`).
 expectexit 0 selftracked edit 1 --detach
 expectexit 0 selftracked edit 1 --epic e
 expectexit 1 selftracked edit 1 --epic ghostepic
-stderr 'constraint'
+stderr 'no epic'

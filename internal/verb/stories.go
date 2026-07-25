@@ -113,6 +113,9 @@ func storyAdd(e *cli.Env, slug, title string) error {
 	var sid string
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
+		if err := refuseTerminalEpic(ctx, tx, slug, "story add"); err != nil {
+			return nil, err
+		}
 		var next int64
 		err := tx.QueryRowContext(ctx, `
 			SELECT COALESCE(MAX(CAST(substr(id, 2) AS INTEGER)), 0) + 1
@@ -155,6 +158,13 @@ type move struct {
 // forever and append a duplicate episode each time (INV-119). The guard
 // refuses any status that is not a declared source for this move.
 func moveStory(ctx context.Context, tx *sql.Tx, slug, sid string, m move) ([]Event, error) {
+	// One guard covers every story transition: ready/start/done/block/
+	// unblock/dissolve all route here, and each of them would otherwise
+	// append episode history to a closed epic outside the V-row surface
+	// §6.4 sanctioned.
+	if err := refuseTerminalEpic(ctx, tx, slug, "a story transition"); err != nil {
+		return nil, err
+	}
 	var cur string
 	err := tx.QueryRowContext(ctx,
 		`SELECT status FROM stories WHERE epic = ? AND id = ?`, slug, sid).Scan(&cur)
@@ -204,6 +214,11 @@ func storyReadyVerb(e *cli.Env, slug, sid string) error {
 func storyStart(e *cli.Env, slug, sid string) error {
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		ctx := context.Background()
+		// `start` does not route through moveStory (it owns the WIP-1
+		// check), so it carries the terminal-epic guard itself.
+		if err := refuseTerminalEpic(ctx, tx, slug, "story start"); err != nil {
+			return nil, err
+		}
 		var wip string
 		err := tx.QueryRowContext(ctx,
 			`SELECT id FROM stories WHERE epic = ? AND status = 'IN-PROGRESS'`, slug).Scan(&wip)

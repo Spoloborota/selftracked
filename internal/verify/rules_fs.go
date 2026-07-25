@@ -297,18 +297,61 @@ func r10(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
 	return out, err
 }
 
-// r13 (advisory): OPEN tasks with no `home` artifact link (§5.8).
+// r13 (advisory): OPEN tasks with no LIVE `home` artifact link (§5.8;
+// amendment `r13-counts-live-homes`). An archived home is history, not a
+// home: R3 stops checking an archived artifact's existence, so counting
+// one here would let an OPEN task hold a home that points at a deleted
+// file with no signal from any surface.
 func r13(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT t.id FROM tasks t
 		WHERE t.status = 'OPEN' AND NOT EXISTS (
-			SELECT 1 FROM task_artifacts ta WHERE ta.task = t.id AND ta.role = 'home')
+			SELECT 1 FROM task_artifacts ta JOIN artifacts a ON a.id = ta.artifact
+			WHERE ta.task = t.id AND ta.role = 'home' AND a.archived = 0)
 		ORDER BY t.id`)
 	if err != nil {
 		return nil, fmt.Errorf("R13: %w", err)
 	}
 	var out []rules.Violation
 	out, err = drain(rows, out, "R13", "OPEN task #%v has no home link")
+	return out, err
+}
+
+// r16 (advisory): a CLOSED epic no longer satisfies the conditions it was
+// closed on (§6.4 conditions 1, 3, 4; amendment
+// `terminal-epic-conditions-stay-true`). Scoped to epics THIS tracker
+// closed — an `epic` event carrying the close stamp: an epic that arrived
+// CLOSED through `import` never passed the gate, so there is no claim to
+// re-check. Conditions 2/5 ride R6 and story rows cannot be deleted, so
+// condition 6 cannot fall.
+//
+// It re-executes nothing: `met` is read as stored, the way `epic show`
+// reads it. Reusing close condition (3)'s engine would run repo-state
+// shell commands inside verify and write their results back — verify's
+// connection is query_only and the execution surface is not verify's to
+// own.
+func r16(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
+	const closedByVerb = `EXISTS (SELECT 1 FROM events ev
+		WHERE ev.entity = 'epic:' || e.slug AND ev.event = 'epic'
+		  AND ev.detail LIKE 'close:%')`
+	rows, err := db.QueryContext(ctx, `
+		SELECT e.slug || ': story ' || s.id || ' is not terminal'
+		FROM epics e JOIN stories s ON s.epic = e.slug
+		WHERE e.status = 'CLOSED' AND s.status NOT IN ('DONE','DISSOLVED') AND `+closedByVerb+`
+		UNION ALL
+		SELECT e.slug || ': task #' || t.id || ' (' || t.status || ') is homed here'
+		FROM epics e JOIN tasks t ON t.epic = e.slug
+		WHERE e.status = 'CLOSED' AND t.status IN ('OPEN','IN-REVIEW','NEEDS-TRIAGE') AND `+closedByVerb+`
+		UNION ALL
+		SELECT e.slug || ': criterion ' || c.seq || ' is not met'
+		FROM epics e JOIN epic_criteria c ON c.epic = e.slug
+		WHERE e.status = 'CLOSED' AND c.met = 0 AND `+closedByVerb+`
+		ORDER BY 1`)
+	if err != nil {
+		return nil, fmt.Errorf("R16: %w", err)
+	}
+	var out []rules.Violation
+	out, err = drain(rows, out, "R16", "closed epic %v")
 	return out, err
 }
 
