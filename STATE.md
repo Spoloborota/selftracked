@@ -8,12 +8,13 @@ _none_
 
 ## Task queue
 
-- open: 37
+- open: 38
 - in review: 1
 - needs triage: 0
 
 ## Recent activity
 
+- `2026-07-25T19:45:16Z` #61 create: Agent must surface work that has no home and put the choice to the owner
 - `2026-07-25T19:21:49Z` epic:pilot-adaptation epic: close: 2026-07-25
 - `2026-07-25T19:21:44Z` epic:pilot-adaptation/S6 story: done: f7adec0 3912d44 67f4f9e 7240817 4cda175; gate: selftracked verify: full, 0 violation(s), exit 0; go test ./... not re-run (no code changed in this story)
 - `2026-07-25T19:21:26Z` epic:pilot-adaptation/S6 story: start
@@ -23,4 +24,3 @@ _none_
 - `2026-07-25T19:21:12Z` #51 edit: note: Ten verb paths now refuse writes against…→Writes against a CLOSED or DISSOLVED epi…
 - `2026-07-25T19:21:03Z` #60 create: R16 reports a state that no verb can clear
 - `2026-07-25T19:21:03Z` #59 create: R10 cannot see off-book work inside its idle window
-- `2026-07-25T19:21:03Z` #58 create: An ACTIVE epic whose stories are all terminal has no route to record new work
