@@ -231,3 +231,133 @@ func TestNonTerminalStoryStatusesIsNotShared(t *testing.T) {
 		t.Errorf("after mutating the first result, got %v, want %v", second, want)
 	}
 }
+
+// epicsDB is a fresh schema holding the named epics with the given
+// statuses, and whatever stories each case seeds under them.
+func epicsDB(t *testing.T, epics map[string]string, stories map[string]map[string]string) *sql.DB {
+	t.Helper()
+	db, err := schema.Open(filepath.Join(t.TempDir(), "db.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	if err := schema.Create(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	for slug, status := range epics {
+		// status_note is CHECK-required for PAUSED and DISSOLVED, and
+		// close_sweep is CHECK-tied to CLOSED exactly; both are supplied to
+		// the shape the schema demands rather than branched on at each seed.
+		sweep := ""
+		if status == "CLOSED" {
+			sweep = "2026-01-01"
+		}
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO epics (slug, goal, status, status_note, close_sweep, created_at)
+			 VALUES (?, 'g', ?, 'n', ?, 'd')`, slug, status, sweep)
+		if err != nil {
+			t.Fatalf("seed epic %s=%s: %v", slug, status, err)
+		}
+	}
+	for slug, ss := range stories {
+		for id, status := range ss {
+			blocked := ""
+			if status == rules.StoryBlocked {
+				blocked = "why"
+			}
+			_, err := db.ExecContext(ctx,
+				`INSERT INTO stories (epic, id, title, status, blocked) VALUES (?, ?, 't', ?, ?)`,
+				slug, id, status, blocked)
+			if err != nil {
+				t.Fatalf("seed story %s/%s=%s: %v", slug, id, status, err)
+			}
+		}
+	}
+	return db
+}
+
+// TestEpicsWithoutWorkableStory pins the predicate R10's trigger (a) and
+// `prime`'s notice both read: which epic statuses are in scope, and which
+// story statuses count as a home. The set is WIDER than the
+// READY/IN-PROGRESS pair R10's idle clause uses, and the PLANNED/BLOCKED
+// rows below are exactly that difference.
+func TestEpicsWithoutWorkableStory(t *testing.T) {
+	t.Parallel()
+	for name, tc := range map[string]struct {
+		epics   map[string]string
+		stories map[string]map[string]string
+		want    []string
+	}{
+		"an ACTIVE epic with no stories at all": {
+			epics: map[string]string{"a": "ACTIVE"},
+			want:  []string{"a"},
+		},
+		"an ACTIVE epic whose stories are all terminal": {
+			epics:   map[string]string{"a": "ACTIVE"},
+			stories: map[string]map[string]string{"a": {"S1": rules.StoryDone, "S2": rules.StoryDissolved}},
+			want:    []string{"a"},
+		},
+		"a PLANNED story is a home": {
+			epics:   map[string]string{"a": "ACTIVE"},
+			stories: map[string]map[string]string{"a": {"S1": rules.StoryDone, "S2": rules.StoryPlanned}},
+			want:    nil,
+		},
+		"a BLOCKED story is a home": {
+			epics:   map[string]string{"a": "ACTIVE"},
+			stories: map[string]map[string]string{"a": {"S1": rules.StoryBlocked}},
+			want:    nil,
+		},
+		"a READY story is a home": {
+			epics:   map[string]string{"a": "ACTIVE"},
+			stories: map[string]map[string]string{"a": {"S1": rules.StoryReady}},
+			want:    nil,
+		},
+		"an IN-PROGRESS story is a home": {
+			epics:   map[string]string{"a": "ACTIVE"},
+			stories: map[string]map[string]string{"a": {"S1": rules.StoryInProgress}},
+			want:    nil,
+		},
+		"non-ACTIVE epics are out of scope whatever their stories": {
+			epics: map[string]string{"b": "BACKLOG", "p": "PAUSED", "c": "CLOSED", "d": "DISSOLVED"},
+			want:  nil,
+		},
+		"several epics come back in slug order": {
+			epics:   map[string]string{"zeta": "ACTIVE", "alpha": "ACTIVE", "mid": "ACTIVE"},
+			stories: map[string]map[string]string{"mid": {"S1": rules.StoryReady}},
+			want:    []string{"alpha", "zeta"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			db := epicsDB(t, tc.epics, tc.stories)
+			got, err := rules.EpicsWithoutWorkableStory(context.Background(), db)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !equal(got, tc.want) {
+				t.Fatalf("EpicsWithoutWorkableStory = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestEpicsWithoutWorkableStoryFromTx: the predicate is asked from inside a
+// write transaction too (a verb composing a message before it commits), so
+// *sql.Tx must satisfy RowsQuerier.
+func TestEpicsWithoutWorkableStoryFromTx(t *testing.T) {
+	t.Parallel()
+	db := epicsDB(t, map[string]string{"a": "ACTIVE"}, nil)
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	got, err := rules.EpicsWithoutWorkableStory(context.Background(), tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !equal(got, []string{"a"}) {
+		t.Fatalf("from a tx = %v, want [a]", got)
+	}
+}

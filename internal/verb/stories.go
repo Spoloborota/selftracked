@@ -144,8 +144,8 @@ func storyAdd(e *cli.Env, slug, title string) error {
 }
 
 // move is one story transition: its legal source statuses, the target,
-// the blocked-field value, the episode row it appends (empty = none), and
-// its events detail.
+// the blocked-field value, the episode row it appends (empty = none), its
+// events detail, and whether it is a close-condition REPAIR.
 type move struct {
 	sources []string
 	target  string
@@ -156,6 +156,17 @@ type move struct {
 	commits string
 	gate    string
 	review  string
+
+	// closedEpicRepair exempts this transition from the terminal-epic guard
+	// on an epic THIS TRACKER closed by verb — and only there; a DISSOLVED
+	// epic, and a CLOSED one that arrived through `import` without ever
+	// passing a close gate, are both refused regardless (amendment
+	// `r16-reports-only-what-a-verb-can-clear`, §6.4). Set it ONLY for a
+	// transition whose target satisfies a close condition instead of
+	// breaking one; `dissolve` is the sole such transition, and the field's
+	// zero value means a move added to this table tomorrow is guarded
+	// without anyone remembering to guard it.
+	closedEpicRepair bool
 }
 
 // moveStory applies a transition INSIDE tx after guarding the source
@@ -164,11 +175,15 @@ type move struct {
 // forever and append a duplicate episode each time (INV-119). The guard
 // refuses any status that is not a declared source for this move.
 func moveStory(ctx context.Context, tx *sql.Tx, slug, sid string, m move) ([]Event, error) {
-	// One guard covers every story transition: ready/start/done/block/
-	// unblock/dissolve all route here, and each of them would otherwise
-	// append episode history to a closed epic outside the V-row surface
-	// §6.4 sanctioned.
-	if err := refuseTerminalEpic(ctx, tx, slug, "a story transition"); err != nil {
+	// One guard covers every story transition routing here — ready, block,
+	// unblock, done, dissolve (start carries its own call) — because each of
+	// them would otherwise append episode history to a closed epic outside
+	// the V-row surface §6.4 sanctioned. `dissolve` is the ONE exception,
+	// and it declares itself through move.closedEpicRepair rather than by
+	// skipping the call: the strict behaviour is the default, so a
+	// transition added to the table without a thought about the terminal
+	// case still refuses.
+	if err := refuseTerminalEpicExcept(ctx, tx, slug, "a story transition", m.closedEpicRepair); err != nil {
 		return nil, err
 	}
 	var cur string
@@ -323,6 +338,16 @@ func storyDoneVerb(e *cli.Env, slug, sid, commits, gate, review string) error {
 	return nil
 }
 
+// storyDissolve is the one story transition that stays open on a
+// verb-closed epic (§6.4; amendment `r16-reports-only-what-a-verb-can-clear`):
+// it is the repair R16's story finding names, and DISSOLVED is the only
+// story target that satisfies close condition (1) rather than breaking it.
+// The carve-out is narrow in three independent ways, each enforced
+// elsewhere and each covered by a fixture: it does NOT widen the source set
+// (an already-terminal story still meets moveStory's `wrong-state`
+// refusal), it does not reach a DISSOLVED epic, and it does not reach a
+// CLOSED epic that no `epic close` produced — refuseTerminalEpicExcept
+// checks provenance, not status.
 func storyDissolve(e *cli.Env, slug, sid, why string) error {
 	if why == "" {
 		return refuse("usage", "story dissolve requires --why")
@@ -333,7 +358,9 @@ func storyDissolve(e *cli.Env, slug, sid, why string) error {
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {
 		return moveStory(context.Background(), tx, slug, sid, move{
 			sources: []string{storyPlanned, storyReady, storyBlocked, storyInProgress},
-			target:  "DISSOLVED", worklog: "DISSOLVED", note: why, detail: "dissolve: " + why,
+			target:  storyDissolved, worklog: storyDissolved, note: why, detail: "dissolve: " + why,
+
+			closedEpicRepair: true,
 		})
 	})
 	if err != nil {

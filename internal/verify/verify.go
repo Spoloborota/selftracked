@@ -4,8 +4,8 @@
 // foreign keys); Stage 1 is the rule battery. Rules split two ways —
 // red (R1–R9, R12: a violation fails the run) and advisory (R10, R11, R13,
 // R15, R16: reported, exit unaffected) — and the pre-commit `--fast` partition
-// runs only the pure-SQL rules plus R15, skipping serialization/filesystem/
-// git work (§7). R14 / R1 check 3 (STATE.md byte-equals its render) lands
+// runs only the pure-SQL rules (R10 among them) plus R15, skipping
+// serialization/filesystem/git work (§7). R14 / R1 check 3 (STATE.md byte-equals its render) lands
 // here at S8c with the renderer (amendment r14-rides-its-renderer-at-s8c).
 package verify
 
@@ -114,8 +114,9 @@ func stage0(ctx context.Context, db *sql.DB, rep *Report, fast bool) error {
 }
 
 // stage1 runs the rule battery. --fast runs only the pure-SQL rules (R4 +
-// DBOnly's R6–R9/R12) and R15; full verify adds the serialization (R1),
-// filesystem (R2, R3), git (R5) and advisory (R10, R11, R13, R16) rules.
+// DBOnly's R6–R9/R12, plus the pure-SQL advisory R10) and R15; full verify
+// adds the serialization (R1), filesystem (R2, R3), git (R5) and the
+// remaining advisory (R11, R13, R16) rules.
 func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool) error {
 	r4, err := rules.R4(ctx, db)
 	if err != nil {
@@ -129,8 +130,17 @@ func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool)
 	rep.route(dbOnly)
 	dbOnlyClean := len(dbOnly) == 0 // gates R1 check 2 — see r1's doc
 
-	// R15 is the only advisory rule cheap enough for the commit boundary.
+	// The two advisory rules cheap enough for the commit boundary: R15 is a
+	// bare file check, and R10 is pure SQL (an idle_days lookup, two epic
+	// scans, a clock read) — its former place among the filesystem/git skips
+	// never matched what it does (amendment
+	// `r10-sees-the-window-it-was-meant-to-watch`).
 	rep.route(r15(dir))
+	r10v, err := r10(ctx, db)
+	if err != nil {
+		return err
+	}
+	rep.route(r10v)
 	if fast {
 		return nil
 	}
@@ -141,7 +151,6 @@ func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool)
 		func() ([]rules.Violation, error) { return r2(ctx, db, dir) },
 		func() ([]rules.Violation, error) { return r3(ctx, db, dir) },
 		func() ([]rules.Violation, error) { return r5(ctx, db, dir) },
-		func() ([]rules.Violation, error) { return r10(ctx, db) },
 		func() ([]rules.Violation, error) { return r11(ctx, dir) },
 		func() ([]rules.Violation, error) { return r13(ctx, db) },
 		func() ([]rules.Violation, error) { return r16(ctx, db) },

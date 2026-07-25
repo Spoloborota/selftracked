@@ -1,12 +1,16 @@
 package verify
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/rules"
@@ -44,12 +48,13 @@ func run(e *cli.Env, quiet, fast bool) error {
 		}
 		return err
 	}
-	if !quiet {
-		if e.JSON {
-			emitJSON(e.Stdout, rep)
-		} else {
-			emitText(e.Stdout, rep)
-		}
+	switch {
+	case quiet:
+		emitQuietAdvisory(e.Stderr, rep)
+	case e.JSON:
+		emitJSON(e.Stdout, rep)
+	default:
+		emitText(e.Stdout, rep)
 	}
 	if len(rep.Red) > 0 {
 		return &cli.CodedError{
@@ -59,6 +64,74 @@ func run(e *cli.Env, quiet, fast bool) error {
 		}
 	}
 	return nil
+}
+
+// emitQuietAdvisory is `--quiet`'s ONE concession (§7; amendment
+// `r10-sees-the-window-it-was-meant-to-watch`). The pre-commit hook runs
+// `verify --fast --quiet`, and advisory findings never touch the exit code
+// — so without this line every advisory computed at the commit boundary is
+// discarded, which made moving R10 into `--fast` inert.
+//
+// It prints exactly one line, to STDERR (stdout stays byte-empty under
+// `--quiet`, which callers parse), naming the RULES and not their
+// instances: a repository with dozens of advisory findings pays one line
+// per commit, not dozens. It stays silent in the two cases where it would
+// be noise or a duplicate: no advisory findings at all, and a red run —
+// the red path already speaks, through the report and the exit code. The
+// report body stays suppressed and the exit contract is untouched.
+func emitQuietAdvisory(w io.Writer, rep Report) {
+	if w == nil || len(rep.Red) > 0 || len(rep.Advisory) == 0 {
+		return
+	}
+	_, _ = fmt.Fprintf(w, "verify: advisory %s (run 'selftracked verify' for detail)\n",
+		strings.Join(advisoryRuleNames(rep.Advisory), ", "))
+}
+
+// advisoryRuleNames is the distinct rule names of vs in RULE-NUMBER order,
+// not in the order the engine happened to run them: the fast partition
+// emits R15 before R10, so first-seen order would print "R15, R10" and vary
+// with an unrelated reordering of stage1. Names that are not `R<n>` sort
+// after the numbered ones, lexically — no advisory rule has that shape
+// today, and a silent mis-sort is a worse answer than a defined one.
+func advisoryRuleNames(vs []rules.Violation) []string {
+	seen := make(map[string]bool, len(vs))
+	names := make([]string, 0, len(vs))
+	for _, v := range vs {
+		if !seen[v.Rule] {
+			seen[v.Rule] = true
+			names = append(names, v.Rule)
+		}
+	}
+	slices.SortFunc(names, func(a, b string) int {
+		na, oka := ruleNumber(a)
+		nb, okb := ruleNumber(b)
+		switch {
+		case oka && okb:
+			if c := cmp.Compare(na, nb); c != 0 {
+				return c
+			}
+		case oka != okb:
+			if oka {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a, b)
+	})
+	return names
+}
+
+// ruleNumber parses the `R<n>` rule-name shape, reporting whether it held.
+func ruleNumber(name string) (int, bool) {
+	rest, ok := strings.CutPrefix(name, "R")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(rest)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 func mode(fast bool) string {

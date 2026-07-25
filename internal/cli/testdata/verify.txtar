@@ -18,15 +18,58 @@ expectexit 0 selftracked verify --fast
 ! stdout 'R11'
 stdout 'verify --fast: 0 violation'
 
-# --quiet suppresses the report entirely; the exit code still speaks.
+# --quiet suppresses the report BODY; stdout stays byte-empty and the exit
+# code speaks. The advisory channel is no longer swallowed with it
+# (amendment `r10-sees-the-window-it-was-meant-to-watch`): exactly one line
+# on STDERR, naming the rules and not their instances, in rule-number order
+# rather than the order stage1 happened to run them. The seeded instance
+# trips R10 (an ACTIVE epic with no story) and R11 (no chained hooks); its
+# task is NEEDS-TRIAGE, so R13 stays quiet.
 expectexit 0 selftracked verify --quiet
 ! stdout '.'
+stderr 'verify: advisory R10, R11 \(run .selftracked verify. for detail\)'
+
+# --quiet WINS over --json, and always has: the report body is suppressed on
+# both streams, so stdout stays byte-empty (no JSON document) and the
+# advisory summary rides stderr as prose. Pinned because the combination
+# was untested and its behaviour changed when the advisory line landed.
+expectexit 0 selftracked verify --quiet --json
+! stdout '.'
+stderr 'verify: advisory R10, R11 \(run'
+
+# The order is by RULE NUMBER, not by the order stage1 happened to run the
+# rules: --fast routes R15 before R10, and the line still reads R10 first.
+exec touch .selftracked/skip-pending
+expectexit 0 selftracked verify --fast --quiet
+stderr 'verify: advisory R10, R15 \(run'
+exec rm .selftracked/skip-pending
+
+# Nothing is printed when there is nothing to say. --fast skips R11/R13/R16
+# and the marker is gone, so giving epic e a READY story silences R10 and
+# leaves the advisory set empty.
+expectexit 0 selftracked story add e --title s1
+expectexit 0 selftracked story ready e S1
+expectexit 0 selftracked verify --fast --quiet
+! stdout '.'
+! stderr 'advisory'
+
+# ...and --json adds nothing to that silence either.
+expectexit 0 selftracked verify --fast --quiet --json
+! stdout '.'
+! stderr 'advisory'
 
 # A dirty dump (the tracked bytes no longer match the database) is a red R1
 # refusal: exit 1, FAIL on stdout, the coded error on stderr.
 cp bad.sql .selftracked/dump.sql
 expectexit 1 selftracked verify
 stdout 'FAIL R1'
+stderr 'integrity violation'
+
+# A red run prints nothing extra under --quiet: the exit code and the
+# refusal already speak, and R11 is still advisory underneath.
+expectexit 1 selftracked verify --quiet
+! stdout '.'
+! stderr 'advisory'
 stderr 'integrity violation'
 
 # --json renders the machine report; the red finding carries its severity.

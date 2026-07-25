@@ -1,7 +1,15 @@
 # A terminal epic refuses the writes that would re-open its close
-# conditions, keeps its two sanctioned surfaces open, and survives a
+# conditions, keeps its sanctioned surfaces open, and survives a
 # `criteria check` with its acceptance record intact (amendment
 # `terminal-epics-refuse-reopening-writes`; tasks #35, #48, #49).
+#
+# The sanctioned surfaces are not two: V-rows, correction rows,
+# `edit --detach`, artifact links on an `epic:` target, and — since
+# amendment `r16-reports-only-what-a-verb-can-clear` — `story dissolve` of a
+# non-terminal story on a CLOSED epic (§6.4). The last one is the narrow
+# one, so this scenario also proves what it did NOT open: the other four
+# transitions through `moveStory`, `start`'s own guard, an already-terminal
+# story, and a DISSOLVED epic.
 
 seeddb
 exec git init -q
@@ -41,11 +49,25 @@ stderr 'terminal'
 expectexit 1 selftracked edit epic:term/S1 --dod 'rewritten after the close'
 stderr 'terminal'
 
-# The whole story lifecycle is covered by one guard, not just `add`.
+# The whole story lifecycle is covered by one guard, not just `add`. Five
+# transitions route through `moveStory` and `start` carries its own call;
+# `dissolve` alone is exempt, so the other four are asserted one by one —
+# a mis-scoped carve-out would unguard them silently.
 expectexit 1 selftracked story ready term S1
 stderr 'terminal'
 expectexit 1 selftracked story start term S1
 stderr 'terminal'
+expectexit 1 selftracked story block term S1 --reason 'late block'
+stderr 'terminal'
+expectexit 1 selftracked story unblock term S1 --resolution 'late unblock'
+stderr 'terminal'
+expectexit 1 selftracked story done term S1 --commits HEAD --gate manual
+stderr 'terminal'
+
+# The carve-out does not widen the SOURCE set: dissolving an already
+# terminal story still refuses, now on the story's own state.
+expectexit 1 selftracked story dissolve term S1 --why 'S1 is already DONE'
+stderr 'wrong-state'
 
 # criteria met refuses; the record it would rewrite is the ratified one.
 expectexit 1 selftracked criteria met term 1 --evidence 'attested late'
@@ -73,3 +95,63 @@ stderr 'detach'
 expectexit 0 selftracked edit 2 --detach
 expectexit 0 selftracked reopen 2 --why 'needs more work'
 stdout 'reopened'
+
+# --- the `story dissolve` carve-out (§6.4; amendment
+# `r16-reports-only-what-a-verb-can-clear`) ---
+
+# A non-terminal story on a CLOSED epic cannot be produced by a verb — the
+# close gate forbids it. It arrives the way R16 exists to catch: a
+# children-only corpus naming an epic that is already closed (task #53).
+expectexit 0 selftracked import --legacy --file late-story.json
+expectexit 0 selftracked verify
+stdout 'closed epic term: story S3 is not terminal'
+stdout 'story dissolve term S3 --why'
+
+# NOW the other transitions can be probed honestly. Every refusal asserted
+# above rode S1, which is DONE and therefore not a legal source for any of
+# them — so the source-state check alone could have produced it, and a
+# guard wrongly exempting non-terminal stories would have passed. S3 is
+# PLANNED, a legal source for both `ready` and `block`, so nothing but the
+# terminal guard can refuse them.
+expectexit 1 selftracked story ready term S3
+stderr 'terminal'
+expectexit 1 selftracked story block term S3 --reason 'late block'
+stderr 'terminal'
+
+# The repair R16 names actually runs, on a CLOSED epic, and clears the
+# finding — the point of the carve-out.
+expectexit 0 selftracked story dissolve term S3 --why 'imported after the close; never worked'
+stdout 'DISSOLVED'
+expectexit 0 selftracked verify
+! stdout 'story S3 is not terminal'
+
+# The carve-out follows PROVENANCE, not status. A DISSOLVED epic never
+# passed a close gate, so it holds no claim to restore.
+expectexit 0 selftracked epic create gone --goal g
+expectexit 0 selftracked story add gone --title s1
+expectexit 0 selftracked epic dissolve gone --why 'abandoned'
+expectexit 1 selftracked story dissolve gone S1 --why 'tidy up'
+stderr 'terminal'
+expectexit 1 selftracked story add gone --title s2
+stderr 'terminal'
+
+# Neither did an epic that arrived CLOSED through `import`: the corpus
+# declares the status, no `epic close` ever ran, so R16 makes no claim
+# about it — and the repair for a claim R16 does not make must not exist.
+# The two facts are asserted together because their AGREEMENT is the
+# property: a guard keyed on status rather than provenance would open a
+# write here that no finding ever names.
+expectexit 0 selftracked import --legacy --file foreign-closed.json
+expectexit 0 selftracked verify
+! stdout 'closed epic foreign'
+expectexit 1 selftracked story dissolve foreign S1 --why 'tidy up'
+stderr 'terminal'
+
+-- late-story.json --
+{"stories": [{"epic":"term","id":"S3","title":"arrived after the close","status":"PLANNED"}]}
+-- foreign-closed.json --
+{
+  "epics": [{"slug":"foreign","goal":"closed elsewhere","status":"CLOSED","close_sweep":"2026-01-05"}],
+  "stories": [{"epic":"foreign","id":"S1","title":"never worked","status":"PLANNED"},
+              {"epic":"foreign","id":"S2","title":"abandoned elsewhere","status":"DISSOLVED"}]
+}

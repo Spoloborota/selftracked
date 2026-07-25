@@ -17,6 +17,14 @@ type Querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
+// RowsQuerier is Querier's multi-row companion, satisfied by *sql.DB and
+// *sql.Tx alike. Kept separate rather than folded into Querier so a caller
+// that only ever asks for one row is not made to satisfy a method it does
+// not use.
+type RowsQuerier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
 // The six story statuses of §5.7's CHECK constraint. Named here, rather
 // than only in `internal/verb`, because surfaces outside the verbs reason
 // about the terminal / non-terminal split and hand-written subsets had
@@ -57,6 +65,56 @@ type Story struct {
 // silently redefine the predicate for everyone else.
 func NonTerminalStoryStatuses() []string {
 	return []string{StoryInProgress, StoryReady, StoryBlocked, StoryPlanned}
+}
+
+// EpicsWithoutWorkableStory returns, in slug order, every ACTIVE epic that
+// holds no story in a non-terminal status — every story terminal, or no
+// story at all. That is the state in which work can be recorded nowhere
+// under the epic, so it is reported at once rather than after a window:
+// R10's trigger (a) (§7) and `prime`'s no-workable-story notice (§11.1)
+// both ask this question, and this is the one place it is answered.
+//
+// The status set is NonTerminalStoryStatuses' — deliberately WIDER than
+// the READY/IN-PROGRESS pair R10's idle clause uses. They are different
+// questions: "can this epic receive work at all" admits a PLANNED or
+// BLOCKED story as a home, while "has this epic gone quiet" does not.
+//
+// PAUSED, BACKLOG, CLOSED and DISSOLVED epics are silent by design: only
+// an ACTIVE epic claims to be receiving work.
+func EpicsWithoutWorkableStory(ctx context.Context, q RowsQuerier) ([]string, error) {
+	statuses := NonTerminalStoryStatuses()
+	// The IN list is generated from the one Go slice and bound as arguments,
+	// exactly as StoryToOffer does: the status vocabulary is never spelled
+	// into SQL text, which is the drift this package exists to prevent.
+	var in strings.Builder
+	args := make([]any, 0, len(statuses))
+	for i, s := range statuses {
+		if i > 0 {
+			in.WriteString(",")
+		}
+		in.WriteString("?" + strconv.Itoa(i+1))
+		args = append(args, s)
+	}
+	query := `SELECT e.slug FROM epics e WHERE e.status = 'ACTIVE' AND NOT EXISTS (
+			SELECT 1 FROM stories s WHERE s.epic = e.slug AND s.status IN (` + in.String() + `))
+		ORDER BY e.slug`
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("epics without a workable story: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, fmt.Errorf("epics without a workable story: %w", err)
+		}
+		out = append(out, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("epics without a workable story: %w", err)
+	}
+	return out, nil
 }
 
 // StoryToOffer returns the ONE story of an epic that a message should

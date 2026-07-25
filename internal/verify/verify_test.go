@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -141,6 +142,19 @@ func hasRule(vs []rules.Violation, rule string) bool {
 		}
 	}
 	return false
+}
+
+// rulesNamed is every message a given rule emitted, in report order — the
+// shape a test needs when one rule name carries several distinguishable
+// findings and presence alone would not say which fired.
+func rulesNamed(vs []rules.Violation, rule string) []string {
+	var out []string
+	for _, v := range vs {
+		if v.Rule == rule {
+			out = append(out, v.Message)
+		}
+	}
+	return out
 }
 
 func mustRed(t *testing.T, rep verify.Report, rule string) {
@@ -429,7 +443,9 @@ func TestDBRulesRoutedToRed(t *testing.T) {
 	}
 }
 
-// --- R10 advisory idle report, and its correction-clock exclusion (INV-306/117) ---
+// --- R10 advisory: the homeless trigger, the idle report, and the
+// correction-clock exclusion (INV-306/117; amendment
+// `r10-sees-the-window-it-was-meant-to-watch`) ---
 
 func TestR10IdleEpic(t *testing.T) {
 	t.Parallel()
@@ -440,17 +456,115 @@ func TestR10IdleEpic(t *testing.T) {
 	mustAdvisory(t, h.verify(false), "R10")
 }
 
-func TestR10RecentAppendSuppresses(t *testing.T) {
+// TestR10Messages pins trigger (a), trigger (b), their combination and
+// their silences by MESSAGE, not by rule presence: the two triggers share
+// one rule name, so a presence check cannot tell which fired — and the
+// "one epic, one line" contract is only visible in the count.
+//
+// The dead-zone row (`all-terminal-recent-append`) is the seed the retired
+// TestR10RecentAppendSuppresses asserted SILENCE on. It is the exact state
+// #58 described — the last story's DONE row appended minutes ago, so the
+// idle clause is false by construction while no work can be recorded
+// anywhere — and it is now the trigger's headline case.
+func TestR10Messages(t *testing.T) {
 	t.Parallel()
-	h := newHarness(t)
 	old := time.Now().UTC().AddDate(0, 0, -60).Format("2006-01-02T15:04:05Z")
 	recent := time.Now().UTC().Format("2006-01-02T15:04:05Z")
-	h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e', 'g', 'ACTIVE', ?)`, old)
-	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S1', 't', 'DONE')`)
-	h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits) VALUES ('e', 1, 'S1', ?, 'DONE', 'abc')`, recent)
-	h.regen()
-	if hasRule(h.verify(false).Advisory, "R10") {
-		t.Fatal("a recent non-correction append must suppress R10")
+	const (
+		homeless = "epic e has no story that can receive work; new work has no home"
+		idle     = "epic e is idle (no active story, no append in 14 days)"
+		both     = "epic e has no story that can receive work; new work has no home; " +
+			"and it is idle (no append in 14 days)"
+	)
+	for name, tc := range map[string]struct {
+		seed func(h *harness)
+		want string // "" = R10 must stay silent
+	}{
+		"no-stories-at-all": {
+			// No story and no append: both facts hold, one line states both.
+			seed: func(_ *harness) {},
+			want: both,
+		},
+		"all-terminal-recent-append": {
+			// Trigger (a) alone — the dead zone the idle clock cannot see.
+			seed: func(h *harness) {
+				h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
+				h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits)
+				        VALUES ('e',1,'S1',?,'DONE','abc')`, recent)
+			},
+			want: homeless,
+		},
+		"all-terminal-old-append": {
+			seed: func(h *harness) {
+				h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
+				h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits)
+				        VALUES ('e',1,'S1',?,'DONE','abc')`, old)
+			},
+			want: both,
+		},
+		"planned-story-old-append": {
+			// Trigger (b) alone: PLANNED is a home, so (a) is silent, but it
+			// is not READY/IN-PROGRESS, so the idle clause still watches it.
+			seed: func(h *harness) {
+				h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','PLANNED')`)
+				// The row's STATE is immaterial to R10 — only its date and its
+				// non-correction-ness are read.
+				h.exec(`INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e',1,'S1',?,'IN-PROGRESS')`, old)
+			},
+			want: idle,
+		},
+		"planned-story-recent-append": {
+			// The property the retired fixture was really guarding: a recent
+			// non-correction append still suppresses the IDLE half.
+			seed: func(h *harness) {
+				h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','PLANNED')`)
+				h.exec(`INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e',1,'S1',?,'IN-PROGRESS')`, recent)
+			},
+			want: "",
+		},
+		"ready-story-old-append": {
+			// READY silences both clauses; (a) because it is non-terminal,
+			// (b) because it is exactly what (b) looks for.
+			seed: func(h *harness) {
+				h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','READY')`)
+			},
+			want: "",
+		},
+		"blocked-story": {
+			// BLOCKED is the sanctioned PO-absent state: a home for (a), not
+			// an active story for (b) — so only the idle line may appear.
+			seed: func(h *harness) {
+				h.exec(`INSERT INTO stories (epic, id, title, status, blocked) VALUES ('e','S1','t','BLOCKED','why')`)
+			},
+			want: idle,
+		},
+		"paused-epic-is-silent": {
+			seed: func(h *harness) {
+				h.exec(`UPDATE epics SET status = 'PAUSED', status_note = 'parked' WHERE slug = 'e'`)
+			},
+			want: "",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			h := newHarness(t)
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE',?)`, old)
+			tc.seed(h)
+			h.regen()
+			got := rulesNamed(h.verify(false).Advisory, "R10")
+			if tc.want == "" {
+				if len(got) != 0 {
+					t.Fatalf("R10 must stay silent; got %v", got)
+				}
+				return
+			}
+			if len(got) != 1 {
+				t.Fatalf("one epic must yield exactly one R10 line; got %v", got)
+			}
+			if got[0] != tc.want {
+				t.Fatalf("R10 message:\n got %q\nwant %q", got[0], tc.want)
+			}
+		})
 	}
 }
 
@@ -461,11 +575,19 @@ func TestR10CorrectionDoesNotResetClock(t *testing.T) {
 	recent := time.Now().UTC().Format("2006-01-02T15:04:05Z")
 	h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e', 'g', 'ACTIVE', ?)`, old)
 	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S1', 't', 'DONE')`)
+	// S2 keeps the epic OUT of trigger (a) so this test still isolates the
+	// idle clock: without it the homeless trigger would fire regardless of
+	// the correction and the assertion would prove nothing.
+	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e', 'S2', 't', 'PLANNED')`)
 	h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits) VALUES ('e', 1, 'S1', ?, 'DONE', 'abc')`, old)
 	// A RECENT correction of the old row must NOT reset the idle clock (§5.7).
 	h.exec(`INSERT INTO worklog (epic, seq, story, date, state, corrects) VALUES ('e', 2, 'S1', ?, 'DONE', 1)`, recent)
 	h.regen()
-	mustAdvisory(t, h.verify(false), "R10")
+	got := rulesNamed(h.verify(false).Advisory, "R10")
+	want := "epic e is idle (no active story, no append in 14 days)"
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("R10 must report the IDLE half only; got %v, want [%q]", got, want)
+	}
 }
 
 // --- R13 advisory: OPEN task with no home link (INV-311) ---
@@ -513,16 +635,59 @@ func TestFastPartition(t *testing.T) {
 	}
 }
 
-func TestFastRunsR15SkipsR11(t *testing.T) {
+// TestFastRunsR15AndR10SkipsR11 pins the advisory half of the partition:
+// R15 (a bare file check) and R10 (pure SQL, moved in by amendment
+// `r10-sees-the-window-it-was-meant-to-watch`) run at the commit boundary;
+// the git-bound R11 does not.
+func TestFastRunsR15AndR10SkipsR11(t *testing.T) {
 	t.Parallel()
 	h := newHarness(t)
 	if err := os.WriteFile(filepath.Join(h.dir, "skip-pending"), []byte(""), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
+	h.regen()
 	fast := h.verify(true)
-	mustAdvisory(t, fast, "R15") // R15 is the one advisory cheap enough for --fast
+	mustAdvisory(t, fast, "R15")
+	mustAdvisory(t, fast, "R10")
 	if hasRule(fast.Advisory, "R11") {
 		t.Fatal("--fast must skip the git-bound advisory rule R11")
+	}
+	if hasRule(fast.Advisory, "R16") {
+		t.Fatal("--fast must skip the full-only advisory rule R16")
+	}
+}
+
+// --- R16: every finding names a repair (amendment
+// `r16-reports-only-what-a-verb-can-clear`) ---
+
+// TestR16NamesItsRepair pins all three clause texts. The repair is the
+// finding's whole point — an advisory a reader cannot act on is one they
+// learn to scroll past — so it is asserted verbatim, not by substring of
+// the condition half alone.
+func TestR16NamesItsRepair(t *testing.T) {
+	t.Parallel()
+	h := newHarness(t)
+	h.exec(`INSERT INTO epics (slug, goal, status, close_sweep, created_at)
+	        VALUES ('e','g','CLOSED','2026-01-01','d')`)
+	h.exec(`INSERT INTO events (at, entity, event, detail) VALUES ('d','epic:e','epic','close: 2026-01-01')`)
+	h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','PLANNED')`)
+	h.exec(`INSERT INTO tasks (title, epic, status, created_at, updated_at) VALUES ('t','e','OPEN','d','d')`)
+	h.exec(`INSERT INTO epic_criteria (epic, seq, criterion, met) VALUES ('e',1,'c',0)`)
+	h.regen()
+	got := rulesNamed(h.verify(false).Advisory, "R16")
+	want := []string{
+		"closed epic e: criterion 1 is not met; no verb writes this state here — it arrived by raw SQL",
+		"closed epic e: story S1 is not terminal; repair: selftracked story dissolve e S1 --why TEXT",
+		"closed epic e: task #1 (OPEN) is homed here; repair: selftracked edit 1 --detach, or set it terminal",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("R16 findings:\n got %v\nwant %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("R16 finding %d:\n got %q\nwant %q", i, got[i], want[i])
+		}
 	}
 }
 
@@ -759,6 +924,20 @@ func TestR16CleanClosedEpicIsSilent(t *testing.T) {
 
 // --- INV-495: a mechanized audit that every emittable rule has a red fixture ---
 
+// ruleFixture is one entry of the INV-495 coverage gate: the pathological
+// state to seed, and the message fragments the rule must then emit.
+//
+// `want` exists because rule-name presence is too weak a gate for a rule
+// with several branches. R10 carries two independent triggers and R16
+// three clauses; a fixture that trips ANY of them keeps the gate green
+// while another branch is deleted outright — which is what happened, and
+// what these fragments close. A rule with one branch may leave `want`
+// empty; the seed then only has to make the rule speak.
+type ruleFixture struct {
+	seed func(h *harness)
+	want []string
+}
+
 // TestRuleFixtureCoverage is the gate INV-495 asks for: a failing fixture
 // per rule, enumerated so a rule added to the engine without one is caught
 // here rather than by a manual second pass (the way R7/R8 were the first
@@ -767,6 +946,11 @@ func TestR16CleanClosedEpicIsSilent(t *testing.T) {
 // a rule to the engine means adding it here AND a fixture below, or this
 // test fails. integrity_check is excluded: its red state (a corrupt page)
 // is not constructible hermetically without risking an unopenable DB.
+//
+// §7's "a gate that cannot fail is decoration" is the standard this test is
+// held to itself, which is why the multi-branch rules assert their message
+// text: reverting a branch must turn THIS gate red, not merely some ad-hoc
+// test elsewhere in the file.
 func TestRuleFixtureCoverage(t *testing.T) {
 	t.Parallel()
 	wantRules := []string{
@@ -774,79 +958,106 @@ func TestRuleFixtureCoverage(t *testing.T) {
 		"R16",
 	}
 	advisory := map[string]bool{"R10": true, "R11": true, "R13": true, "R15": true, "R16": true}
-	fixtures := map[string]func(h *harness){
-		"fk": func(h *harness) {
+	recent := time.Now().UTC().Format("2006-01-02T15:04:05Z")
+	fixtures := map[string]ruleFixture{
+		"fk": {seed: func(h *harness) {
 			h.execNoFK(`INSERT INTO epic_artifacts (epic, artifact, role) VALUES ('ghost', 999, 'home')`)
 			h.regen()
-		},
-		"R1": func(h *harness) {
+		}},
+		"R1": {seed: func(h *harness) {
 			_ = os.WriteFile(filepath.Join(h.dir, "dump.sql"), []byte("garbage\n"), 0o600)
-		},
-		"R2": func(h *harness) {
+		}},
+		"R2": {seed: func(h *harness) {
 			h.exec(`INSERT INTO path_dictionary (class, scope, root) VALUES ('research','','docs/research')`)
 			h.regen()
-		},
-		"R3": func(h *harness) {
+		}},
+		"R3": {seed: func(h *harness) {
 			_ = os.MkdirAll(filepath.Join(h.root, "docs/research"), 0o750)
 			h.exec(`INSERT INTO path_dictionary (class, scope, root) VALUES ('research','','docs/research')`)
 			h.exec(`INSERT INTO artifacts (class, scope, relpath) VALUES ('research','','gone.md')`)
 			h.regen()
-		},
-		"R4": func(h *harness) {
+		}},
+		"R4": {seed: func(h *harness) {
 			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
 			h.exec(`INSERT INTO worklog (epic, seq, story, date, state) VALUES ('e',1,'V-1','d','DONE')`)
 			h.regen()
-		},
-		"R5": func(h *harness) {
+		}},
+		"R5": {seed: func(h *harness) {
 			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
 			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
 			h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits)
 			        VALUES ('e',1,'S1','d','DONE','deadbeefdeadbeefdeadbeef')`)
 			h.regen()
-		},
-		"R6": func(h *harness) {
+		}},
+		"R6": {seed: func(h *harness) {
 			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2020-01-01T00:00:00Z')`)
 			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','DONE')`)
 			h.regen()
-		},
-		"R7": func(h *harness) {
+		}},
+		"R7": {seed: func(h *harness) {
 			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('a','OPEN','d','d')`)
 			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('b','OPEN','d','d')`)
 			h.exec(`INSERT INTO task_links (from_task, to_task, type) VALUES (1,2,'duplicates')`)
 			h.regen()
-		},
-		"R8": func(h *harness) {
+		}},
+		"R8": {seed: func(h *harness) {
 			h.exec(`INSERT INTO events (at, entity, event) VALUES ('d','#999','set-status')`)
 			h.regen()
-		},
-		"R9": func(h *harness) {
+		}},
+		"R9": {seed: func(h *harness) {
 			h.exec(`UPDATE meta SET value = '5' WHERE key = 'events_archived_through'`)
 			h.regen()
-		},
-		"R10": func(h *harness) {
-			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('e','g','ACTIVE','2000-01-01T00:00:00Z')`)
+		}},
+		// R10 has TWO independent triggers, so one epic cannot cover it: an
+		// old-dated epic with no stories trips both at once, and the gate
+		// would stay green with either predicate deleted. Two epics, each
+		// tripping exactly one trigger, and both messages required.
+		"R10": {seed: func(h *harness) {
+			// (a) homeless but NOT idle: every story terminal, appended just now.
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('homeless','g','ACTIVE','2000-01-01T00:00:00Z')`)
+			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('homeless','S1','t','DONE')`)
+			h.exec(`INSERT INTO worklog (epic, seq, story, date, state, commits)
+			        VALUES ('homeless',1,'S1',?,'DONE','abc')`, recent)
+			// (b) idle but NOT homeless: a PLANNED story is a home, and it is
+			// not READY/IN-PROGRESS, so only the idle clause can speak.
+			h.exec(`INSERT INTO epics (slug, goal, status, created_at) VALUES ('idler','g','ACTIVE','2000-01-01T00:00:00Z')`)
+			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('idler','S1','t','PLANNED')`)
 			h.regen()
-		},
-		"R11": func(_ *harness) {}, // a fresh git repo has no chained hooks
-		"R12": func(h *harness) {
+		}, want: []string{
+			"epic homeless has no story that can receive work; new work has no home",
+			"epic idler is idle (no active story, no append in 14 days)",
+		}},
+		"R11": {seed: func(_ *harness) {}}, // a fresh git repo has no chained hooks
+		"R12": {seed: func(h *harness) {
 			h.exec(`INSERT INTO tasks (title, status, status_note, created_at, updated_at) VALUES ('t','DONE','d','d','d')`)
 			h.regen()
-		},
-		"R13": func(h *harness) {
+		}},
+		"R13": {seed: func(h *harness) {
 			h.exec(`INSERT INTO tasks (title, status, created_at, updated_at) VALUES ('t','OPEN','d','d')`)
 			h.regen()
-		},
-		"R15": func(h *harness) {
+		}},
+		"R15": {seed: func(h *harness) {
 			_ = os.WriteFile(filepath.Join(h.dir, "skip-pending"), []byte(""), 0o600)
-		},
-		"R16": func(h *harness) {
+		}},
+		// All three clauses, and each one's REPAIR text. The repair is the
+		// clause's whole point (amendment
+		// `r16-reports-only-what-a-verb-can-clear`), so a fixture that only
+		// proved the condition half would leave the feature ungated.
+		"R16": {seed: func(h *harness) {
 			h.exec(`INSERT INTO epics (slug, goal, status, close_sweep, created_at)
 			        VALUES ('e','g','CLOSED','2026-01-01','d')`)
 			h.exec(`INSERT INTO stories (epic, id, title, status) VALUES ('e','S1','t','PLANNED')`)
+			h.exec(`INSERT INTO tasks (id, title, status, epic, created_at, updated_at)
+			        VALUES (1,'t','OPEN','e','d','d')`)
+			h.exec(`INSERT INTO epic_criteria (epic, seq, criterion, met) VALUES ('e',1,'c',0)`)
 			h.exec(`INSERT INTO events (at, entity, event, detail)
 			        VALUES ('d','epic:e','epic','close: 2026-01-01')`)
 			h.regen()
-		},
+		}, want: []string{
+			"story S1 is not terminal; repair: selftracked story dissolve e S1 --why TEXT",
+			"task #1 (OPEN) is homed here; repair: selftracked edit 1 --detach, or set it terminal",
+			"criterion 1 is not met; no verb writes this state here — it arrived by raw SQL",
+		}},
 	}
 
 	// Completeness: the fixture set must match wantRules exactly.
@@ -858,17 +1069,25 @@ func TestRuleFixtureCoverage(t *testing.T) {
 			t.Fatalf("rule %s is in wantRules but has no red fixture", r)
 		}
 	}
-	// Each fixture must actually make verify emit its rule.
+	// Each fixture must actually make verify emit its rule — and, where the
+	// rule has more than one branch, emit every branch's text.
 	for _, rule := range wantRules {
 		t.Run(rule, func(t *testing.T) {
 			t.Parallel()
 			h := newHarness(t)
-			fixtures[rule](h)
+			fx := fixtures[rule]
+			fx.seed(h)
 			rep := h.verify(false)
 			if advisory[rule] {
 				mustAdvisory(t, rep, rule)
 			} else {
 				mustRed(t, rep, rule)
+			}
+			got := append(rulesNamed(rep.Red, rule), rulesNamed(rep.Advisory, rule)...)
+			for _, want := range fx.want {
+				if !slices.ContainsFunc(got, func(m string) bool { return strings.Contains(m, want) }) {
+					t.Errorf("%s must emit a finding containing %q; got %v", rule, want, got)
+				}
 			}
 		})
 	}

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -258,29 +259,72 @@ func r5(ctx context.Context, db *sql.DB, dir string) ([]rules.Violation, error) 
 	return out, nil
 }
 
-// r10 (advisory) is the idle report, §7 verbatim: ACTIVE epics with no
-// READY/IN-PROGRESS story and no non-correction worklog append in
-// idle_days. An epic with no such append at all counts as idle (COALESCE to
-// the empty string, which sorts before any timestamp). Correction rows are
-// excluded so an unrelated historical correction cannot reset a neglected
-// epic's clock (§5.7, INV-117). PAUSED/BACKLOG epics are silent by design.
+// r10 (advisory) is §7's two-trigger report on an ACTIVE epic. PAUSED and
+// BACKLOG epics are silent by design — they are intentional states.
 //
-// The comparison is lexical, which is sound because every verb writes dates
-// in one canonical form (now(): ISO-8601 UTC, ...Z). A non-canonical stored
-// date (only reachable by raw SQL, or by an importer that fails to
+//	(a) No home, no window (amendment
+//	    `r10-sees-the-window-it-was-meant-to-watch`): no story in a
+//	    NON-TERMINAL status, i.e. every story terminal or no story at all.
+//	    Reported at once, independent of idle_days, because that is the
+//	    state in which work can be recorded nowhere. The predicate is
+//	    rules.EpicsWithoutWorkableStory — the one definition, shared with
+//	    `prime`.
+//	(b) Idle: no READY/IN-PROGRESS story and no non-correction worklog
+//	    append in idle_days. An epic with no such append at all counts as
+//	    idle (COALESCE to the empty string, which sorts before any
+//	    timestamp). Correction rows are excluded so an unrelated historical
+//	    correction cannot reset a neglected epic's clock (§5.7, INV-117).
+//
+// The two story clauses are DELIBERATELY different sets and the asymmetry
+// is load-bearing, not drift: (a) asks "can this epic receive work at all",
+// where a PLANNED story is a home (`story ready` → `story start` reaches it
+// with no scope change) and a BLOCKED one is the sanctioned PO-absent state
+// (§11.3); (b) asks "has this epic gone quiet", where neither counts.
+//
+// ONE EPIC YIELDS ONE LINE, stating whichever facts hold — an epic that is
+// both homeless and idle is one finding, not two.
+//
+// (b)'s comparison is lexical, which is sound because every verb writes
+// dates in one canonical form (now(): ISO-8601 UTC, ...Z). A non-canonical
+// stored date (only reachable by raw SQL, or by an importer that fails to
 // normalise — an S9 obligation) would compare wrongly; R10 is advisory and
 // assumes the canonical storage the write path guarantees.
 func r10(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
+	homeless, err := rules.EpicsWithoutWorkableStory(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("R10: %w", err)
+	}
+	idleDays, err := r10IdleDays(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	idle, err := r10IdleEpics(ctx, db, idleDays)
+	if err != nil {
+		return nil, err
+	}
+	return r10Findings(homeless, idle, idleDays), nil
+}
+
+// r10IdleDays reads the configured window. A value outside `config set`'s
+// own validation is a raw-SQL tamper: an infrastructure failure, not a rule
+// finding, because the rule cannot be evaluated at all.
+func r10IdleDays(ctx context.Context, db *sql.DB) (int, error) {
 	var raw string
 	if err := db.QueryRowContext(ctx, `SELECT value FROM meta WHERE key = 'idle_days'`).Scan(&raw); err != nil {
-		return nil, fmt.Errorf("R10: read idle_days: %w", err)
+		return 0, fmt.Errorf("R10: read idle_days: %w", err)
 	}
 	idleDays, err := strconv.Atoi(raw)
 	if err != nil || idleDays <= 0 {
-		// config set validates idle_days as a positive integer, so this is a
-		// raw-SQL tamper: an infrastructure failure, not a rule finding.
-		return nil, fmt.Errorf("R10: %w: idle_days %q is not a positive integer", errTamperedConfig, raw)
+		return 0, fmt.Errorf("R10: %w: idle_days %q is not a positive integer", errTamperedConfig, raw)
 	}
+	return idleDays, nil
+}
+
+// r10IdleEpics is trigger (b), in slug order. Its story clause is the
+// READY/IN-PROGRESS pair and stays inline: it is not the shared
+// non-terminal vocabulary and must not be generated from it — see r10's
+// note on the asymmetry.
+func r10IdleEpics(ctx context.Context, db *sql.DB, idleDays int) ([]string, error) {
 	cutoff := time.Now().UTC().AddDate(0, 0, -idleDays).Format("2006-01-02T15:04:05Z")
 	rows, err := db.QueryContext(ctx, `
 		SELECT e.slug FROM epics e
@@ -292,9 +336,55 @@ func r10(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("R10: %w", err)
 	}
-	var out []rules.Violation
-	out, err = drain(rows, out, "R10", fmt.Sprintf("epic %%s is idle (no active story, no append in %d days)", idleDays))
-	return out, err
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, fmt.Errorf("R10: %w", err)
+		}
+		out = append(out, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("R10: %w", err)
+	}
+	return out, nil
+}
+
+// r10Findings merges the two trigger sets into one finding per epic. Both
+// inputs arrive in slug order; the union is re-sorted so the report is
+// deterministic whichever trigger contributed a slug.
+func r10Findings(homeless, idle []string, idleDays int) []rules.Violation {
+	isHomeless := make(map[string]bool, len(homeless))
+	for _, slug := range homeless {
+		isHomeless[slug] = true
+	}
+	isIdle := make(map[string]bool, len(idle))
+	for _, slug := range idle {
+		isIdle[slug] = true
+	}
+	union := make([]string, 0, len(homeless)+len(idle))
+	union = append(union, homeless...)
+	union = append(union, idle...)
+	slices.Sort(union)
+	union = slices.Compact(union)
+	out := make([]rules.Violation, 0, len(union))
+	for _, slug := range union {
+		var msg string
+		switch {
+		case isHomeless[slug] && isIdle[slug]:
+			// Both facts, one line. The idle half drops "no active story":
+			// the homeless clause already says something stronger.
+			msg = fmt.Sprintf("epic %s has no story that can receive work; new work has no home; "+
+				"and it is idle (no append in %d days)", slug, idleDays)
+		case isHomeless[slug]:
+			msg = fmt.Sprintf("epic %s has no story that can receive work; new work has no home", slug)
+		default:
+			msg = fmt.Sprintf("epic %s is idle (no active story, no append in %d days)", slug, idleDays)
+		}
+		out = append(out, rules.Violation{Rule: "R10", Message: msg})
+	}
+	return out
 }
 
 // r13 (advisory): OPEN tasks with no LIVE `home` artifact link (§5.8;
@@ -330,20 +420,43 @@ func r13(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
 // shell commands inside verify and write their results back — verify's
 // connection is query_only and the execution surface is not verify's to
 // own.
+//
+// EVERY FINDING NAMES ITS REPAIR (amendment
+// `r16-reports-only-what-a-verb-can-clear`), because two of the three
+// clauses used to report a state no verb could clear, and an advisory a
+// reader cannot act on is one they learn to scroll past — at the cost of
+// R10, R11, R13 and R15, which share the same channel. The story clause
+// names the §6.4 carve-out this change opened for exactly it; the criterion
+// clause names no verb, because none exists: on a verb-closed epic
+// `criteria add`/`criteria met` refuse, `criteria check` is report-only and
+// `import` refuses to re-declare an existing epic, so `met = 0` there is a
+// raw-SQL signature of R12's family and the message says so.
 func r16(ctx context.Context, db *sql.DB) ([]rules.Violation, error) {
-	const closedByVerb = `EXISTS (SELECT 1 FROM events ev
-		WHERE ev.entity = 'epic:' || e.slug AND ev.event = 'epic'
-		  AND ev.detail LIKE 'close:%')`
+	// The provenance predicate has ONE definition, in internal/rules, shared
+	// with the §6.4 `story dissolve` carve-out: the repair a finding names
+	// must be available exactly where the finding can appear, and two
+	// hand-written copies of "closed by verb" is how that agreement breaks.
+	closedByVerb := rules.ClosedByVerbSQL(`e.slug`)
+	// The concatenated operand is rules.ClosedByVerbSQL applied to a SOURCE
+	// LITERAL — no value, no input, nothing derived from either, reaches the
+	// SQL text; the fragment binds nothing and the whole query takes no
+	// arguments. gosec cannot see that across the call, so the exemption is
+	// stated here rather than by inlining a second copy of the predicate,
+	// which is the defect this shared fragment exists to prevent.
+	//nolint:gosec // G202: operand is a package-level SQL fragment over a source literal
 	rows, err := db.QueryContext(ctx, `
-		SELECT e.slug || ': story ' || s.id || ' is not terminal'
+		SELECT e.slug || ': story ' || s.id || ' is not terminal; repair: selftracked story dissolve '
+		       || e.slug || ' ' || s.id || ' --why TEXT'
 		FROM epics e JOIN stories s ON s.epic = e.slug
 		WHERE e.status = 'CLOSED' AND s.status NOT IN ('DONE','DISSOLVED') AND `+closedByVerb+`
 		UNION ALL
-		SELECT e.slug || ': task #' || t.id || ' (' || t.status || ') is homed here'
+		SELECT e.slug || ': task #' || t.id || ' (' || t.status || ') is homed here; repair: selftracked edit '
+		       || t.id || ' --detach, or set it terminal'
 		FROM epics e JOIN tasks t ON t.epic = e.slug
 		WHERE e.status = 'CLOSED' AND t.status IN ('OPEN','IN-REVIEW','NEEDS-TRIAGE') AND `+closedByVerb+`
 		UNION ALL
-		SELECT e.slug || ': criterion ' || c.seq || ' is not met'
+		SELECT e.slug || ': criterion ' || c.seq
+		       || ' is not met; no verb writes this state here — it arrived by raw SQL'
 		FROM epics e JOIN epic_criteria c ON c.epic = e.slug
 		WHERE e.status = 'CLOSED' AND c.met = 0 AND `+closedByVerb+`
 		ORDER BY 1`)

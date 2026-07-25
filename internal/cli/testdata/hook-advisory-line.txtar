@@ -1,0 +1,34 @@
+# The `--quiet` advisory line must actually REACH a user committing through
+# the shipped pre-commit hook — otherwise moving R10 into `--fast` is still
+# inert, just one layer further down (amendment
+# `r10-sees-the-window-it-was-meant-to-watch`).
+#
+# Two things have to hold, and both are asserted here end to end rather
+# than read off the template, because "the hook does not redirect stderr"
+# is exactly the claim that goes stale when someone edits the template:
+# the hook runs `selftracked verify --fast --quiet` with stderr inherited,
+# and git passes a pre-commit hook's stderr through to the terminal.
+
+exec git init
+exec git config user.email t@e
+exec git config user.name t
+expectexit 0 selftracked init
+exec git config core.hooksPath .selftracked/hooks
+
+# An ACTIVE epic with no story is R10's trigger (a): new work has nowhere
+# to be recorded. Advisory, so the commit must still SUCCEED.
+expectexit 0 selftracked epic create solo --goal g
+expectexit 0 selftracked epic activate solo
+exec git add -A
+exec git commit -m first
+stderr 'verify: advisory R10'
+stderr 'staged refreshed dump.sql'
+
+# Give the epic a home for work and the line stops: the commit boundary
+# goes quiet again once the condition is repaired, so the line is a signal
+# and not permanent decoration.
+expectexit 0 selftracked story add solo --title s1
+expectexit 0 selftracked story ready solo S1
+exec git add -A
+exec git commit -m second
+! stderr 'advisory'
