@@ -180,6 +180,40 @@ func TestPrimeCaps(t *testing.T) {
 	}
 }
 
+// TestPrimeInstanceOmittedOnUnusableSalt drives §11.1's failure contract
+// through prime's own wiring: with a salt that cannot be used (empty —
+// one of the decided failure modes), the field is OMITTED from the JSON
+// (omitempty, no unsalted fallback), prime still answers, and the human
+// digest's first line falls back to opening with the counter.
+func TestPrimeInstanceOmittedOnUnusableSalt(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	seedInstance(t, dir)
+	if err := os.WriteFile(filepath.Join(instanceDir, "instance.salt"), []byte("\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	e := &cli.Env{Stdout: &buf, Stderr: &buf, JSON: true}
+	if err := primeRun(e); err != nil {
+		t.Fatalf("prime must answer with the field omitted, got: %v", err)
+	}
+	if strings.Contains(buf.String(), `"instance"`) {
+		t.Fatalf("instance must be omitted on an unusable salt, got: %s", buf.String())
+	}
+	if !strings.HasPrefix(buf.String(), `{"epics_active":`) {
+		t.Fatalf("omitempty must drop the field entirely, got: %s", buf.String())
+	}
+
+	buf.Reset()
+	e.JSON = false
+	if err := primeRun(e); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(buf.String(), "active epics: ") {
+		t.Fatalf("the human digest must fall back to the counter-first line, got: %s", buf.String())
+	}
+}
+
 // TestPrimeTotalsAndNoProseScan is INV-461/469/470: totals enumerate every
 // capped list plus parked with no duplicate parked scalar, and the ONLY
 // free-text fields in the whole payload are epics_active.goal and

@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/rules"
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
@@ -61,7 +60,7 @@ func Run(ctx context.Context, dir string, fast bool) (Report, error) {
 	rep := Report{Fast: fast}
 	dbPath := filepath.Join(dir, dbFile)
 	if _, err := os.Stat(dbPath); err != nil {
-		return rep, &notFoundError{msg: instance.NotFoundMessage(dbPath)}
+		return rep, &notFoundError{path: dbPath}
 	}
 	db, err := schema.OpenRead(dbPath)
 	if err != nil {
@@ -165,11 +164,14 @@ func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool)
 	return nil
 }
 
-// notFoundError is verify's one refusal: no tracker here. Its message is
-// composed at the refusal site so it carries §6.1's resolution form —
-// verify is the pre-commit gate and the verb an operator runs by hand,
-// which is exactly why the amendment names this site as the one a
-// pipeline-only fix would miss.
-type notFoundError struct{ msg string }
+// notFoundError is verify's one refusal: no tracker here. It carries the
+// historical message; §6.1's resolution form (the ancestor walk) is
+// composed by the CLI adapter in verb.go, NOT here — Run takes an
+// arbitrary dir, while the walk is defined against the process's working
+// directory, and a message walked from the wrong base would name a root
+// unrelated to the dir under check.
+type notFoundError struct{ path string }
 
-func (e *notFoundError) Error() string { return e.msg }
+func (e *notFoundError) Error() string {
+	return "no " + e.path + " here; run selftracked init first"
+}

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
+	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/rules"
 )
 
@@ -44,7 +45,11 @@ func run(e *cli.Env, quiet, fast bool) error {
 	if err != nil {
 		var nf *notFoundError
 		if errors.As(err, &nf) {
-			return &cli.CodedError{Code: "not-found", Message: nf.Error(), Status: 1}
+			// The CLI invocation is by construction rooted at the working
+			// directory (it passed the relative instanceDir above), so HERE
+			// the §6.1 resolution walk applies: name the root it found
+			// instead of advising init into a nested tracker.
+			return &cli.CodedError{Code: "not-found", Message: instance.NotFoundMessage(nf.path), Status: 1}
 		}
 		return err
 	}

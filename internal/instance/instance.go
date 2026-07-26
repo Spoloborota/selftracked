@@ -24,12 +24,20 @@ const (
 	saltFile = "instance.salt"
 	// saltMode matches the sidecar's owner-only posture: the salt is a
 	// per-machine scratch value that must never be readable more widely
-	// than the tracker's own database.
+	// than the tracker's own database. Enforced with an explicit Chmod on
+	// the temp file, not left to os.CreateTemp's incidental default.
 	saltMode = 0o600
 	// saltBytes of cryptographic randomness; stored hex-encoded, one line.
 	saltBytes = 32
 
 	instanceDirName = ".selftracked"
+	// dbFileName/dumpFileName are what makes an ancestor `.selftracked`
+	// directory a TRACKER to the walk: at least one of the two must stat.
+	// A bare directory that merely carries the name — a stray from a
+	// failed init, or a planted decoy — is not a tracker and must not
+	// redirect the refusal away from the real root above it.
+	dbFileName   = "db.sqlite"
+	dumpFileName = "dump.sql"
 )
 
 // Digest returns the tracker identity §11.1 specifies: the leading 48 bits
@@ -54,7 +62,13 @@ func Digest(dir string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	sum := sha256.Sum256(append(salt, path...))
+	// The preimage is built in a fresh buffer: append into salt's own
+	// backing array would be byte-correct today, but any later reader that
+	// retains the salt slice would be silently corrupted by it.
+	in := make([]byte, 0, len(salt)+len(path))
+	in = append(in, salt...)
+	in = append(in, path...)
+	sum := sha256.Sum256(in)
 	return hex.EncodeToString(sum[:])[:12], true
 }
 
@@ -78,12 +92,19 @@ func physicalWD() (string, bool) {
 // ensureSalt reads the tracker's salt, creating it on first use. The three
 // mechanics task #76 required to be decided rather than invented:
 //
-//   - Creation is EXCLUSIVE and symlink-safe: the salt is written to a
-//     temp file and hard-linked into place. link(2) never follows a
-//     pre-existing name at the target, so a symlink planted at
+//   - Creation is EXCLUSIVE and the WRITE is symlink-safe: the salt is
+//     written to a temp file and hard-linked into place. link(2) never
+//     follows a pre-existing name at the target, so a symlink planted at
 //     instance.salt cannot redirect the write; it surfaces as EEXIST.
-//   - Mode is 0600 via os.CreateTemp, the same owner-only posture as the
-//     dump sidecar.
+//     The READ half is deliberately not hardened the same way: a
+//     pre-existing file — or symlink — at the path is taken as the salt
+//     verbatim, because defending a tracker's layout against the
+//     repository that supplies it is out of scope by accepted decision
+//     (ADR 0001: that adversary already holds the code-execution
+//     surfaces §14 names, and a refusal here would also break the benign
+//     symlinked layouts the ADR keeps working).
+//   - Mode is saltMode (0600), enforced by an explicit Chmod on the temp
+//     file — the same owner-only posture as the dump sidecar.
 //   - Two processes racing to create it: both write temps, the first link
 //     wins, the loser reads the winner's fully-written file — the link is
 //     atomic and happens only after the content is closed, so no reader
@@ -108,9 +129,10 @@ func ensureSalt(dir string) ([]byte, bool) {
 		return nil, false
 	}
 	tmpName := tmp.Name()
+	merr := tmp.Chmod(saltMode)
 	_, werr := tmp.Write(content)
 	cerr := tmp.Close()
-	if werr != nil || cerr != nil {
+	if merr != nil || werr != nil || cerr != nil {
 		_ = os.Remove(tmpName)
 		return nil, false
 	}
@@ -132,6 +154,8 @@ func ensureSalt(dir string) ([]byte, bool) {
 // failure — including an empty file — is a decided ok=false, which the
 // digest reports as an omitted field rather than working around.
 func readSalt(path string) ([]byte, bool, bool) {
+	// A planted symlink here is followed; accepted per ADR 0001 (the
+	// tracker's own layout is not defended against the repository).
 	b, err := os.ReadFile(path) //nolint:gosec // fixed .selftracked path
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -146,14 +170,16 @@ func readSalt(path string) ([]byte, bool, bool) {
 	return s, true, true
 }
 
-// AncestorTracker names the nearest ancestor directory holding a
-// `.selftracked/` directory, as a path RELATIVE to the working directory
-// ("..", "../.."), never absolute per §14. It returns "" when no ancestor
-// holds one, when the walk meets a candidate it cannot read (§6.1: an
-// unreadable candidate is treated as absent and the walk stops — a refusal
-// that varied with an unrelated ancestor's permissions would depend on the
-// machine, not the tracker), or when the working directory cannot be
-// physically resolved.
+// AncestorTracker names the nearest ancestor directory holding a tracker —
+// a `.selftracked/` directory in which a database or a tracked dump stats
+// (a fresh clone has only the dump, and a bare directory that merely
+// carries the name must not redirect the refusal) — as a path RELATIVE to
+// the working directory ("..", "../.."), never absolute per §14. It
+// returns "" when no ancestor holds one, when the walk meets a candidate
+// it cannot read (§6.1: an unreadable candidate is treated as absent and
+// the walk stops — a refusal that varied with an unrelated ancestor's
+// permissions would depend on the machine, not the tracker), or when the
+// working directory cannot be physically resolved.
 //
 // The walk exists ONLY to improve a refusal: it stats candidates and stops
 // at the filesystem root — it opens no database, parses no dump, reads no
@@ -176,15 +202,40 @@ func AncestorTracker() string {
 			return "" // filesystem root: nothing anywhere up the tree
 		}
 		rel = filepath.Join(rel, "..")
-		st, err := os.Stat(filepath.Join(parent, instanceDirName))
-		if err == nil && st.IsDir() {
+		isTracker, unreadable := trackerAt(filepath.Join(parent, instanceDirName))
+		if isTracker {
 			return rel
 		}
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if unreadable {
 			return "" // unreadable candidate: treated as absent, walk stops
 		}
 		dir = parent
 	}
+}
+
+// trackerAt says whether dir is a tracker root's `.selftracked`: a
+// directory in which db.sqlite or dump.sql stats. Stat-only — the walk
+// opens nothing. The first value is "this is a tracker"; the second is
+// "the candidate cannot be read", which ends the walk.
+func trackerAt(dir string) (bool, bool) {
+	st, err := os.Stat(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, false
+		}
+		return false, true
+	}
+	if !st.IsDir() {
+		return false, false // a plain file named .selftracked is not a tracker
+	}
+	for _, f := range []string{dbFileName, dumpFileName} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			return true, false
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return false, true
+		}
+	}
+	return false, false
 }
 
 // NotFoundMessage renders §6.1's resolution refusal for a missing tracker

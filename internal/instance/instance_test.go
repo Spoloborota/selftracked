@@ -7,16 +7,23 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 )
 
 var hex12 = regexp.MustCompile(`^[0-9a-f]{12}$`)
 
-// mkTracker creates <root>/.selftracked and returns root.
+// mkTracker creates <root>/.selftracked holding a db.sqlite stub — the
+// walk recognizes a tracker by db.sqlite or dump.sql statting, so a bare
+// directory would be (correctly) invisible to it — and returns root.
 func mkTracker(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, instanceDirName), 0o750); err != nil {
+	dir := filepath.Join(root, instanceDirName)
+	if err := os.Mkdir(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, dbFileName), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -105,7 +112,9 @@ func TestDigestIsSaltedPathDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256(append(seed, phys...))
+	in := append([]byte{}, seed...)
+	in = append(in, phys...)
+	sum := sha256.Sum256(in)
 	want := hex.EncodeToString(sum[:])[:12]
 	got, ok := Digest(instanceDirName)
 	if !ok || got != want {
@@ -179,6 +188,114 @@ func TestAncestorTracker(t *testing.T) {
 	t.Chdir(between)
 	if got := AncestorTracker(); got != filepath.Join("..", "..", "..") {
 		t.Fatalf("a file named .selftracked must be skipped: %q, want ../../..", got)
+	}
+}
+
+// TestAncestorTrackerSkipsBareDirectory: a directory that merely carries
+// the .selftracked name — a stray from a failed init, or a planted decoy —
+// holds neither db.sqlite nor dump.sql and must NOT capture the refusal:
+// the walk continues to the real tracker above it (a security-lens
+// finding on the first cut, where any directory by that name matched).
+func TestAncestorTrackerSkipsBareDirectory(t *testing.T) {
+	root := mkTracker(t)
+	deep := filepath.Join(root, "mid", "deep")
+	if err := os.MkdirAll(deep, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "mid", instanceDirName), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(deep)
+	if got := AncestorTracker(); got != filepath.Join("..", "..") {
+		t.Fatalf("a bare .selftracked directory captured the walk: %q, want ../..", got)
+	}
+
+	// A dump-only tracker (a fresh clone before its first load) IS a
+	// tracker — the case the two-file candidate test exists to keep.
+	cloneRoot := t.TempDir()
+	cdir := filepath.Join(cloneRoot, instanceDirName)
+	if err := os.Mkdir(cdir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cdir, dumpFileName), []byte("-- d\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(cloneRoot, "sub")
+	if err := os.Mkdir(sub, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(sub)
+	if got := AncestorTracker(); got != ".." {
+		t.Fatalf("a dump-only tracker must be found: %q, want ..", got)
+	}
+}
+
+// TestAncestorTrackerPhysicalBasis pins the spec-mandated basis (§6.1:
+// "the walk is physical"): entered through a symlinked path, the distance
+// printed counts REAL parent directories of the physically-resolved
+// working directory. The consequence — a reader whose shell sits at the
+// logical path may find the printed `../..` resolving elsewhere — is the
+// proposal's accepted risk, recorded there; this test exists so a change
+// of basis is a decision, not an accident.
+func TestAncestorTrackerPhysicalBasis(t *testing.T) {
+	base := t.TempDir()
+	// Real tracker at base/deep; cwd entered via base/shortcut -> deep/mid.
+	leaf := filepath.Join(base, "deep", "mid", "leaf")
+	if err := os.MkdirAll(leaf, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	tdir := filepath.Join(base, "deep", instanceDirName)
+	if err := os.Mkdir(tdir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tdir, dbFileName), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(base, "deep", "mid"), filepath.Join(base, "shortcut")); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(filepath.Join(base, "shortcut", "leaf"))
+	// Physically the cwd is deep/mid/leaf, two real parents below the
+	// tracker root; logically it is shortcut/leaf, one parent below base.
+	if got := AncestorTracker(); got != filepath.Join("..", "..") {
+		t.Fatalf("physical basis: got %q, want ../..", got)
+	}
+}
+
+// TestEnsureSaltConcurrent is the #76 race decision under load: N racers
+// against a fresh tracker all end with the SAME salt, exactly one salt
+// file remains, and no temp residue survives.
+func TestEnsureSaltConcurrent(t *testing.T) {
+	root := mkTracker(t)
+	dir := filepath.Join(root, instanceDirName)
+	const racers = 16
+	results := make([][]byte, racers)
+	oks := make([]bool, racers)
+	var wg sync.WaitGroup
+	for i := range racers {
+		wg.Go(func() {
+			results[i], oks[i] = ensureSalt(dir)
+		})
+	}
+	wg.Wait()
+	for i := range racers {
+		if !oks[i] {
+			t.Fatalf("racer %d failed to obtain a salt", i)
+		}
+		if string(results[i]) != string(results[0]) {
+			t.Fatalf("racer %d got a different salt than racer 0", i)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if len(names) != 2 { // db.sqlite stub + instance.salt, no tmp residue
+		t.Fatalf("unexpected residue in %s: %v", dir, names)
 	}
 }
 
