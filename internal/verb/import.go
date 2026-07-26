@@ -147,9 +147,16 @@ func runImport(e *cli.Env, file, format string, legacy bool) error {
 	if err != nil {
 		return refuse("not-found", "cannot read %s: %v", file, err)
 	}
-	c, err := parseCorpus(data, format)
+	c, reader, err := parseCorpus(data, format)
 	if err != nil {
 		return err
+	}
+	// The empty-corpus refusal (§6.2) sits HERE, above validation and above
+	// both readers: each reader can hand back an understood-but-empty corpus
+	// (md-table with no recognized heading, json decoding `{}`), so a fix
+	// inside one would leave the other standing.
+	if c.rows() == 0 {
+		return refuseEmptyCorpus(data, reader, file)
 	}
 	if err := c.validate(legacy); err != nil {
 		return err
@@ -178,27 +185,107 @@ func runImport(e *cli.Env, file, format string, legacy bool) error {
 	for _, w := range im.warnings {
 		_, _ = fmt.Fprintln(e.Stderr, w)
 	}
-	_, _ = fmt.Fprintf(e.Stdout, "imported %d epic(s), %d story(ies), %d task(s), %d worklog row(s) from %s\n",
-		len(c.Epics), len(c.Stories), len(c.Tasks), len(episodes), file)
+	// All five kinds, path-dictionary rows included: after the empty-corpus
+	// refusal above, a paths-only import is the only remaining green exit,
+	// and a four-counter line would report it as four zeros.
+	_, _ = fmt.Fprintf(e.Stdout,
+		"imported %d path(s), %d epic(s), %d story(ies), %d task(s), %d worklog row(s) from %s\n",
+		len(c.Paths), len(c.Epics), len(c.Stories), len(c.Tasks), len(episodes), file)
 	return nil
+}
+
+// rows counts every row the corpus would insert, across every section the
+// importer writes. The four entity counters are NOT this test: a paths-only
+// corpus leaves all four at zero and is a legitimate import.
+func (c *corpus) rows() int {
+	return len(c.Paths) + len(c.Epics) + len(c.Stories) + len(c.Tasks) + len(c.Worklog)
+}
+
+// corpusSections is the closed section vocabulary both readers share, in the
+// order the importer writes them. It is quoted back by the empty-corpus
+// refusal; `TestCorpusSectionsMatchColumns` pins it against `knownColumns`,
+// so a section added to the readers cannot go missing from the message.
+var corpusSections = []string{secPaths, secEpics, secStories, secTasks, secWorklog}
+
+// refuseEmptyCorpus states the §6.2 rule that a batch verb's green exit is a
+// claim the batch landed. It distinguishes the two reasons a corpus can be
+// empty because they call for different actions: a file nothing was
+// recognized in is usually a mis-cased heading or a bare table with none
+// above it, and the reader's own vocabulary is what redirects its author; a
+// file whose sections were all found and all empty has no syntax problem to
+// hunt for.
+func refuseEmptyCorpus(data []byte, reader, file string) error {
+	if recognizedSections(data, reader) == 0 {
+		return refuse("format",
+			"%s: no %s section was recognized, so no row was imported; %s",
+			file, reader, sectionVocabulary(reader))
+	}
+	return refuse("format",
+		"%s: every %s section in it is empty, so no row was imported; "+
+			"import inserts rows and refuses a corpus that carries none",
+		file, reader)
+}
+
+// sectionVocabulary spells the reader's accepted section names the way that
+// reader spells them, so the refusal shows the exact text a corpus needs.
+func sectionVocabulary(reader string) string {
+	if reader == formatMdTable {
+		return `md-table reads the lowercase headings "## ` +
+			strings.Join(corpusSections, `", "## `) +
+			`", each followed by one pipe table`
+	}
+	return `json reads the object keys "` + strings.Join(corpusSections, `", "`) + `"`
+}
+
+// recognizedSections counts the sections the reader that ran found in the
+// file, whether or not they carried rows. It re-reads the bytes rather than
+// being threaded out of the parsers: it runs only on the already-refused
+// empty-corpus path, and the readers stay exactly as they are.
+func recognizedSections(data []byte, reader string) int {
+	if reader == formatMdTable {
+		n := 0
+		for _, sec := range splitSections(string(data)) {
+			if _, ok := knownColumns[sec.kind]; ok {
+				n++
+			}
+		}
+		return n
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return 0
+	}
+	n := 0
+	for k := range keys {
+		if _, ok := knownColumns[k]; ok {
+			n++
+		}
+	}
+	return n
 }
 
 // parseCorpus selects a parser: an explicit --format is honoured (and a
 // content mismatch refused by the parser itself); with no flag the format is
-// inferred — a leading `{` means json, else md-table.
-func parseCorpus(data []byte, format string) (corpus, error) {
+// inferred — a leading `{` means json, else md-table. It returns the reader
+// that actually ran: with no --format the file was read as a format nobody
+// typed, and the empty-corpus refusal has to name the one it used.
+func parseCorpus(data []byte, format string) (corpus, string, error) {
 	switch format {
 	case formatJSON:
-		return parseJSON(data)
+		c, err := parseJSON(data)
+		return c, formatJSON, err
 	case formatMdTable:
-		return parseMdTable(data)
+		c, err := parseMdTable(data)
+		return c, formatMdTable, err
 	case "":
 		if looksJSON(data) {
-			return parseJSON(data)
+			c, err := parseJSON(data)
+			return c, formatJSON, err
 		}
-		return parseMdTable(data)
+		c, err := parseMdTable(data)
+		return c, formatMdTable, err
 	}
-	return corpus{}, refuse("usage", "unknown --format %q (want json or md-table)", format)
+	return corpus{}, "", refuse("usage", "unknown --format %q (want json or md-table)", format)
 }
 
 func looksJSON(data []byte) bool {

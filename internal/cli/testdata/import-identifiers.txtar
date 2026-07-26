@@ -79,7 +79,7 @@ stderr 'S1a'
 # The legitimate corpus still imports green: a kebab-case slug, a two-digit
 # story id, and a V-<number> post-close row that is NOT a story id.
 expectexit 0 selftracked import --legacy --file good.json
-stdout 'imported 1 epic'
+stdout 'imported 0 path\(s\), 1 epic\(s\)'
 expectexit 0 selftracked epic show grammar-ok
 stdout 'S12 \[DONE\]'
 stdout 'V-1 IN-PROGRESS'
@@ -92,7 +92,7 @@ stderr 'is not kebab-case'
 
 # …and a legitimate md-table corpus imports green.
 expectexit 0 selftracked import --format md-table --file good.md
-stdout 'imported 1 epic'
+stdout 'imported 0 path\(s\), 1 epic\(s\)'
 expectexit 0 selftracked epic show md-ok
 stdout 'S3 \[PLANNED\]'
 

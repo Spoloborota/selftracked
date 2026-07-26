@@ -1,0 +1,140 @@
+# Amendment `an-import-that-inserted-nothing-refuses` (spec §6.2): a corpus
+# from which no row of any kind was inserted is refused, and the counts line
+# names all five kinds.
+#
+# Before this, `import` consumed a whole corpus, inserted nothing and exited 0
+# — four zeros on stdout and a green exit for the caller's next step to trust.
+# The shape was not one reader's: md-table produced it from a file with no
+# recognized heading, and json produced it from `{}`. The rule therefore sits
+# at the verb, and this fixture drives BOTH readers through it; reverting the
+# verb-level check turns every `expectexit 1` here into an exit-0 import.
+#
+# The two green blocks at the end are the over-refusal guards and are the only
+# ones that would survive such a revert: a paths-only corpus inserts rows in
+# the one section the four entity counters cannot see, and it must still
+# import — which is also why the counts line gained the path count in the same
+# change, since after the refusal it is the sole remaining green all-zero line.
+
+exec git init
+exec git config user.email importer@test.invalid
+exec git config user.name importer
+expectexit 0 selftracked init
+
+# The imported path roots must exist on disk (R2 checks non-ephemeral roots).
+exec mkdir -p web/src
+exec mkdir -p docs/adr
+
+# --- nothing recognized -------------------------------------------------
+# A bare pipe table with no heading above it: the reader understood the file
+# and found no section in it. The message names the reader that ran and the
+# headings it accepts, so a corpus author is redirected rather than stopped.
+expectexit 1 selftracked import --file bare.md --format md-table
+stderr 'no md-table section was recognized'
+stderr 'no row was imported'
+stderr 'md-table reads the lowercase headings'
+stderr '## paths'
+stderr '## worklog'
+stderr 'each followed by one pipe table'
+# A refusal prints no counts line: the summary is a claim that rows landed.
+! stdout 'imported'
+
+# Prose with neither heading nor table reaches the same refusal, and so does
+# the inferred-format path — no --format flag, no leading `{`, read as
+# md-table — which is why the message names the reader and not the flag.
+expectexit 1 selftracked import --file prose.md
+stderr 'no md-table section was recognized'
+
+# The json half of the same shape: the two bytes `{}` decode into a corpus
+# with no key at all. A per-parser fix in md-table would have left this green.
+expectexit 1 selftracked import --file empty.json --format json
+stderr 'no json section was recognized'
+stderr 'json reads the object keys .*worklog'
+! stdout 'imported'
+
+# --- recognized, but no rows --------------------------------------------
+# `## tasks` with a header row and no data rows: the section was found and is
+# empty. Distinguished from the case above because the actions differ — there
+# is no heading to fix here, the corpus simply carries nothing.
+expectexit 1 selftracked import --file emptysec.md --format md-table
+stderr 'every md-table section in it is empty'
+stderr 'refuses a corpus that carries none'
+! stderr 'reads the lowercase headings'
+
+# The json equivalent: a key the reader knows, holding an empty array.
+expectexit 1 selftracked import --file emptykey.json --format json
+stderr 'every json section in it is empty'
+
+# --- the loud path that was already correct ------------------------------
+# A heading that is PRESENT but wrongly cased refused loudly before this
+# change and still does, at the reader, before the verb's rule is reached.
+expectexit 1 selftracked import --file cased.md --format md-table
+stderr 'unknown section .*Tasks'
+! stderr 'no row was imported'
+
+# Nothing from any refused corpus reached the tracked dump.
+! grep 'a task nobody imported' .selftracked/dump.sql
+
+# --- green: a paths-only corpus -----------------------------------------
+# The test is over every section the importer writes, not the four entity
+# counters, so a corpus that inserts only dictionary rows still imports — and
+# its counts line now says so instead of printing four zeros.
+expectexit 0 selftracked import --file pathsonly.md --format md-table
+stdout 'imported 1 path\(s\), 0 epic\(s\), 0 story\(ies\), 0 task\(s\), 0 worklog row\(s\) from pathsonly\.md'
+expectexit 0 selftracked paths ls
+stdout 'adr@handbook'
+
+# --- green: an ordinary corpus ------------------------------------------
+# All five kinds counted, in one line, in the order the importer writes them.
+expectexit 0 selftracked import --legacy --file corpus.json
+stdout 'imported 1 path\(s\), 1 epic\(s\), 2 story\(ies\), 1 task\(s\), 3 worklog row\(s\) from corpus\.json'
+expectexit 0 selftracked verify
+
+-- bare.md --
+| title | status |
+| --- | --- |
+| a task nobody imported | OPEN |
+
+-- prose.md --
+This file is prose. It names no section and holds no table, which is the
+shape a hand-written backlog arrives in before anyone converts it.
+
+-- empty.json --
+{}
+
+-- emptykey.json --
+{"tasks":[]}
+
+-- emptysec.md --
+## tasks
+
+| title | status |
+| --- | --- |
+
+-- cased.md --
+## Tasks
+
+| title | status |
+| --- | --- |
+| a task nobody imported | OPEN |
+
+-- pathsonly.md --
+## paths
+
+| class | scope | root | ephemeral |
+| --- | --- | --- | --- |
+| adr | handbook | docs/adr | false |
+
+-- corpus.json --
+{
+  "paths": [{"class":"src","scope":"web","root":"web/src"}],
+  "epics": [{"slug":"counted","goal":"the counts line names every kind"}],
+  "stories": [{"epic":"counted","id":"S1","title":"first story","status":"DONE"},
+              {"epic":"counted","id":"S2","title":"second story"}],
+  "tasks": [{"title":"a counted task","status":"OPEN","epic":"counted","date":"2026-01-03"}],
+  "worklog": [
+    {"epic":"counted","story":"S1","state":"IN-PROGRESS","date":"2026-01-03"},
+    {"epic":"counted","story":"S1","state":"DONE","commits":"see prior work",
+     "legacy_reason":"imported without commit range","gate":"go test ./...","date":"2026-01-04"},
+    {"epic":"counted","story":"S2","state":"IN-PROGRESS","date":"2026-01-05"}
+  ]
+}

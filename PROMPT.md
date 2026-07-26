@@ -10,12 +10,10 @@ fixed set of verbs — never by touching the database or the dump directly.
 **Start every session with `prime`** — the session-start read: active
 epics with their unmet criteria, sprint goals (every IN-PROGRESS story),
 and the ready / triage / in-review / stale / parked queues. If it reports
-dump divergence, stop and reconcile before any write: `load --force`
-replaces the local database with the tracked dump (it prints what it
-discards first) — then re-apply any unsynced local writes through verbs
-and re-run `prime`. Plain `load` only builds a missing database; with an
-existing one it refuses. Work then goes through verbs; commits reference tasks by `#NN`
-and/or the epic slug in the message.
+dump divergence, stop and reconcile before any write — the subsection
+below says how, and which recovery is right is a **decision, not a
+command**. Work then goes through verbs; commits reference tasks by
+`#NN` and/or the epic slug in the message.
 
 **End every session with a bookkeeping commit**, so the dump refreshed by
 your last write reaches git — and stage the pair explicitly:
@@ -27,6 +25,71 @@ git add .selftracked/dump.sql STATE.md && git commit -m "Bookkeeping: ..."
 The explicit `git add` matters: the pre-commit hook refreshes and stages
 the pair itself, but when the index started empty, git refuses the commit
 anyway — hook-staged content alone does not count.
+
+### Reconciling dump divergence (§8.4)
+
+Divergence means the tracked `.selftracked/dump.sql` and the local
+database no longer agree. It has **two directions**, and they call for
+opposite, irreversible moves: **taking the wrong branch is total loss in
+exactly one of them**, because `load --force` on a good database destroys
+every local write that never reached a commit. Decide first; write
+nothing until you have.
+
+**The test** needs no new surface — it is git, plus a read verb that is
+safe while diverged:
+
+```sh
+git log -1 --stat -- .selftracked/dump.sql   # did another commit move it?
+git status --short .selftracked/dump.sql     # or did this working tree?
+selftracked prime                            # what does the database hold?
+```
+
+The rule you apply to those facts: **the good side is the one holding
+work that exists nowhere else.**
+
+**The tracked dump is the good side** — a `git pull` brought another
+machine's newer state and the local database is stale. `load --force`
+replaces the local database with the tracked dump (it prints what it
+discards first); then re-apply any unsynced local writes through verbs
+and re-run `prime`:
+
+```sh
+selftracked load --force
+```
+
+**The local database is the good side** — the working-tree dump was
+clobbered by a checkout, a merge resolution or a hand edit, while the
+database holds writes that never reached git. Discard nothing; re-derive
+the tracked dump from the database:
+
+```sh
+selftracked dump
+selftracked verify   # R1 red? run the `state` it names, verify again
+```
+
+`verify` may report `FAIL R1: STATE.md does not match the database (stale
+projection); run selftracked state`. That is part of this procedure, not
+a new failure — but it fires only when the clobber took `STATE.md` with
+it, as a whole-tree checkout or a merge resolution does. When only
+`.selftracked/dump.sql` was restored, `STATE.md` is still in step with
+the database: `dump` alone clears the divergence and `verify` exits 0
+with no R1. When R1 does fire, run the `state` the message names — that
+message, not a scripted call, is the authority for the repair — then
+`verify` again. Commit only once `verify` is green, so the commit
+carries a current `STATE.md`. The commit is not optional: until it
+lands, the divergence is unresolved on the git side.
+
+```sh
+git add .selftracked/dump.sql STATE.md && git commit -m "Bookkeeping: ..."
+```
+
+**Both sides hold unique work** — that is the two-writer accident §8.4
+calls out below, and neither branch is safe: `load --force` discards this
+machine's writes and `dump` overwrites the other machine's. Stop here and
+reconcile the two histories deliberately.
+
+Plain `load` only builds a missing database; with an existing one it
+refuses.
 
 ## Where new work goes
 

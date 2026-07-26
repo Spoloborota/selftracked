@@ -5,21 +5,16 @@ already tracks its work in prose — backlog tables, epic files, campaign
 documents. It is written against the `import` verb as shipped in v0 and
 was walked against the importer's own fixture corpus; the field names and
 behaviors below are the ones the code accepts, not an aspiration —
-**except for the two named here**, which the specification carries at
+**except for the one named here**, which the specification carries at
 revision 3.42 and the binary does not have yet:
 
 - the criteria corpus field is spelled **`criterion`** by the shipped
   importer, not `text` as the JSON example in §4 shows. `text` becomes
   the name and `criterion` an accepted alias; until then a corpus using
   `text` is refused as an unknown field.
-- the import summary prints **four** counts (epics, stories, tasks,
-  worklog rows), not the five shown in §7 — the path-dictionary count is
-  not among them; and a corpus from which nothing was inserted currently
-  **exits 0** rather than refusing.
 
-Both are stories of the epic that produced this revision of the guide.
-This notice goes away with them; if you are reading it, they have not
-landed.
+It is a story of the epic that produced this revision of the guide. This
+notice goes away with it; if you are reading it, it has not landed.
 
 The one-line summary: **derive a corpus from your prose, rehearse the
 import against a disposable clone until `verify` is green, then install
@@ -132,6 +127,14 @@ as the fixture corpus exercises it, is:
 }
 ```
 
+**A corpus that inserts nothing at all is refused** — in either format,
+because the check sits above both readers rather than inside one. The
+refusal distinguishes its two reasons, since they call for different
+actions: nothing was recognized in the file (an md-table whose headings
+are mis-cased or absent, an empty JSON object), or every recognized
+section was found and empty. The first is a syntax problem to hunt for;
+the second is not.
+
 Dates are **git-first**: a worklog row citing real commits gets its date
 from git (author date of the newest cited commit), out-voting any
 narrative date — a calendar-day disagreement is warned about and the
@@ -153,7 +156,9 @@ each introduced by a `## ` heading. The headings are **lower-case and
 exact**: `## Tasks` is not a spelling variant, it is refused with
 `unknown section "Tasks"`. A heading may appear at most once — a
 repeated section is refused as a duplicate — and a known section that is
-blank or omitted is fine. The column names are the JSON field names:
+blank or omitted is fine **as long as another one carries rows**, under
+section 4's empty-corpus refusal. The column names are the JSON field
+names:
 
 | Section heading | Columns |
 |---|---|

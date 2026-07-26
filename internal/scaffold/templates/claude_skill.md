@@ -7,10 +7,35 @@ description: The selftracked working loop — how to prime, refine the backlog, 
 
 1. **`prime`.** Run `selftracked prime --json`. If it reports
    `dump_divergence: true`, **stop and reconcile first** — do not write
-   over a diverged tracker: `selftracked load --force` replaces the
-   local database with the tracked dump (it prints what it discards
-   first); re-apply any unsynced local writes through verbs, then
-   re-prime. Plain `load` refuses when a database already exists.
+   over a diverged tracker. Which side is authoritative is a **decision,
+   not a command**: divergence has two directions, they call for
+   opposite and irreversible moves, and **the wrong branch is total loss
+   in exactly one of them**. Decide before writing anything:
+   - **The test.** `git log -1 --stat -- .selftracked/dump.sql` and `git
+     status --short .selftracked/dump.sql` say whether the tracked dump
+     moved because another commit arrived or because this working tree
+     changed it; `prime` is read-only and safe while diverged, so it can
+     also be asked what the database holds. The rule: **the good side is
+     the one holding work that exists nowhere else.**
+   - **Tracked dump is the good side** (a pull brought another machine's
+     newer state, the local database is stale): `selftracked load
+     --force` replaces the local database with the tracked dump (it
+     prints what it discards first); re-apply any unsynced local writes
+     through verbs, then re-prime.
+   - **Local database is the good side** (the working-tree dump was
+     clobbered by a checkout, a merge resolution or a hand edit, while
+     the database holds writes that never reached git): discard nothing
+     — `selftracked dump`, then `selftracked verify`. A `FAIL R1:
+     STATE.md does not match the database (stale projection); run
+     selftracked state` is part of the procedure, not a new failure: run
+     the `state` its message names and verify again. Then the
+     bookkeeping commit (`git add .selftracked/dump.sql STATE.md && git
+     commit`), without which the divergence is unresolved on the git
+     side.
+   - **Both sides hold unique work**: the two-writer accident PROMPT.md
+     names. Neither branch is safe — stop and reconcile deliberately.
+
+   Plain `load` refuses when a database already exists.
 2. **Backlog refinement** when `totals.triage > 0`: triage each
    NEEDS-TRIAGE task to `OPEN`, `IN-REVIEW`, park it, or `WONT-DO`. The
    `triage[]` list is capped (`prime_cap`), so when the queue is larger,

@@ -478,6 +478,50 @@ func TestImportMdTableRefusals(t *testing.T) {
 	}
 }
 
+// The empty-corpus refusal quotes `corpusSections` back at the author, so a
+// section the readers accept and that list omits would be a message telling
+// someone their correct heading is not a heading. The list is ordered (the
+// message needs a stable order) and `knownColumns` is not, so the two are
+// compared as sets here rather than the message deriving one from the other.
+func TestCorpusSectionsMatchColumns(t *testing.T) {
+	t.Parallel()
+	if len(corpusSections) != len(knownColumns) {
+		t.Fatalf("corpusSections has %d entries, knownColumns has %d", len(corpusSections), len(knownColumns))
+	}
+	for _, s := range corpusSections {
+		if _, ok := knownColumns[s]; !ok {
+			t.Errorf("corpusSections names %q, which no reader accepts", s)
+		}
+	}
+}
+
+// The two empty-corpus reasons are indistinguishable from the parsed rows —
+// both corpora are zero-valued — so this pins the discriminator itself over
+// both readers, at the unit level the txtar fixture cannot reach.
+func TestRecognizedSections(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, reader, doc string
+		want              int
+	}{
+		{"md-bare-table", formatMdTable, "| a | b |\n| --- | --- |\n| 1 | 2 |\n", 0},
+		{"md-prose-only", formatMdTable, "just prose, no heading and no table\n", 0},
+		{"md-empty-section", formatMdTable, "## tasks\n| title |\n| --- |\n", 1},
+		{"md-two-sections", formatMdTable, "## tasks\n\n## paths\n", 2},
+		{"json-empty-object", formatJSON, "{}", 0},
+		{"json-empty-array", formatJSON, `{"tasks":[]}`, 1},
+		{"json-two-keys", formatJSON, `{"tasks":[],"paths":[]}`, 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := recognizedSections([]byte(tc.doc), tc.reader); got != tc.want {
+				t.Fatalf("recognizedSections(%s) = %d, want %d", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 // ---- determinism (INV-264) ----
 
 func TestImportSourceMapDeterministic(t *testing.T) {

@@ -95,6 +95,32 @@ func TestGeneratedContentAssertions(t *testing.T) {
 		{"#25", "SKILL.md", "reconcile names load --force", "`selftracked load --force` replaces the local"},
 		{"#25", "PROMPT.md", "divergence reconcile names load --force", "`load --force` replaces the local database"},
 		{"#25", "PROMPT.md", "plain load refusal documented", "it refuses"},
+		// #45: the recovery is one of two opposite, irreversible moves, so
+		// each half of the decision is asserted separately — a text that
+		// kept only the dump-side branch would still satisfy #25 above.
+		{"#45", "PROMPT.md", "divergence has two directions", "two directions"},
+		{"#45", "PROMPT.md", "the wrong branch is total loss", "total loss in\nexactly one of them"},
+		{"#45", "PROMPT.md", "the git-log half of the test", "git log -1 --stat -- .selftracked/dump.sql"},
+		{"#45", "PROMPT.md", "the git-status half of the test", "git status --short .selftracked/dump.sql"},
+		{"#45", "PROMPT.md", "the rule that selects a branch", "the one holding\nwork that exists nowhere else"},
+		{"#45", "PROMPT.md", "the dump-is-good branch is labelled", "The tracked dump is the good side"},
+		{"#45", "PROMPT.md", "the database-is-good branch is labelled", "The local database is the good side"},
+		{"#45", "PROMPT.md", "the database-side recovery discards nothing", "Discard nothing; re-derive"},
+		{"#45", "PROMPT.md", "the database-side recovery re-derives the dump", "selftracked dump\nselftracked verify"},
+		{"#45", "PROMPT.md", "the expected R1 line is stated", "run selftracked state"},
+		{"#45", "PROMPT.md", "R1 red is part of the procedure", "part of this procedure, not\na new failure"},
+		{"#45", "PROMPT.md", "the recovery ends in a bookkeeping commit", "The commit is not optional"},
+		{"#45", "PROMPT.md", "the two-writer case stops the recipe", "Both sides hold unique work"},
+		{"#45", "SKILL.md", "divergence is a decision, not a command", "decision,\n   not a command"},
+		{"#45", "SKILL.md", "the wrong branch is total loss", "total loss\n     in exactly one of them"},
+		{"#45", "SKILL.md", "the git test that selects the branch", "git log -1 --stat -- .selftracked/dump.sql"},
+		{"#45", "SKILL.md", "the rule that selects a branch", "work that exists nowhere else"},
+		{"#45", "SKILL.md", "the database-is-good branch exists", "Local database is the good side"},
+		{"#45", "SKILL.md", "the database-side recovery", "`selftracked dump`, then `selftracked verify`"},
+		{"#45", "SKILL.md", "the expected R1 line is stated", "run\n     selftracked state"},
+		{"#45", "SKILL.md", "R1 red is part of the procedure", "part of the procedure, not a new failure"},
+		{"#45", "SKILL.md", "the recovery ends in a bookkeeping commit", "without which the divergence is unresolved"},
+		{"#45", "SKILL.md", "the two-writer case stops the loop", "Both sides hold unique work"},
 		{"INV-477", "SKILL.md", "backlog refinement re-prime", "re-`prime` between passes"},
 		{"INV-478", "SKILL.md", "the drift rule", "`create` + park, one command"},
 		{"INV-479", "SKILL.md", "the bookkeeping-commit rule", "bookkeeping commit"},
@@ -109,6 +135,91 @@ func TestGeneratedContentAssertions(t *testing.T) {
 			t.Errorf("%s (%s): %s — missing %q", c.inv, c.doc, c.want, c.text)
 		}
 	}
+	// #45: a branch's LABEL must be tied to the recovery printed under it.
+	// The rows above are independent whole-file `Contains` checks, so
+	// swapping the two labels — which makes the text prescribe `load
+	// --force` for the case where it destroys every unsynced local write —
+	// satisfies all of them. These cases read the segment BETWEEN one label
+	// and the next and assert what may and may not stand inside it: a swap
+	// then either strands the second label before the first or drags the
+	// wrong recovery into the segment, and fails. The `must` half doubles as
+	// the pin for each step of the recovery, so deleting the divergence
+	// recovery's own bookkeeping commit — a literal that also appears in the
+	// end-of-session instruction, and therefore survives in the file — fails
+	// here rather than passing a re-generated golden.
+	segment := func(doc, label, next string) string {
+		s := strings.Index(doc, norm(label))
+		if s < 0 {
+			t.Errorf("#45: branch label %q not found", label)
+			return ""
+		}
+		rest := doc[s+len(norm(label)):]
+		e := strings.Index(rest, norm(next))
+		if e < 0 {
+			t.Errorf("#45: branch %q is not followed by %q", label, next)
+			return ""
+		}
+		return rest[:e]
+	}
+	for _, b := range []struct {
+		doc, label, next string
+		must, mustNot    []string
+	}{
+		{
+			doc: "PROMPT.md", label: "**The tracked dump is the good side**",
+			next: "**The local database is the good side**",
+			must: []string{"selftracked load --force"},
+			mustNot: []string{
+				"selftracked dump", "selftracked verify",
+				"selftracked state", "git add .selftracked/dump.sql STATE.md",
+			},
+		},
+		{
+			doc: "PROMPT.md", label: "**The local database is the good side**",
+			next: "**Both sides hold unique work**",
+			must: []string{
+				"Discard nothing", "selftracked dump", "selftracked verify",
+				"run selftracked state",
+				`git add .selftracked/dump.sql STATE.md && git commit`,
+			},
+			mustNot: []string{"load --force"},
+		},
+		{
+			doc: "SKILL.md", label: "**Tracked dump is the good side**",
+			next: "**Local database is the good side**",
+			must: []string{"selftracked load --force"},
+			mustNot: []string{
+				"selftracked dump", "selftracked verify",
+				"selftracked state", "git add .selftracked/dump.sql STATE.md",
+			},
+		},
+		{
+			doc: "SKILL.md", label: "**Local database is the good side**",
+			next: "**Both sides hold unique work**",
+			must: []string{
+				"discard nothing",
+				"`selftracked dump`, then `selftracked verify`",
+				"run selftracked state",
+				`git add .selftracked/dump.sql STATE.md && git commit`,
+			},
+			mustNot: []string{"load --force"},
+		},
+	} {
+		seg := segment(docs[b.doc], b.label, b.next)
+		for _, want := range b.must {
+			if !strings.Contains(seg, norm(want)) {
+				t.Errorf("#45 (%s): the %q branch does not carry %q",
+					b.doc, b.label, want)
+			}
+		}
+		for _, bad := range b.mustNot {
+			if strings.Contains(seg, norm(bad)) {
+				t.Errorf("#45 (%s): the %q branch carries %q, which belongs to the other branch",
+					b.doc, b.label, bad)
+			}
+		}
+	}
+
 	// The rule file carries the no-raw-SQL and no-PO rules too (INV-471/473).
 	for _, want := range []string{
 		"run `sqlite3`", "answer a product-owner decision",
