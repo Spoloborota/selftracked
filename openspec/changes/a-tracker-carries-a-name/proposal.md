@@ -12,17 +12,19 @@ and with it `internal/scaffold/testdata/golden/.gitignore` and this
 repository's own `.gitignore:31-33` block. Fixtures and golden JSON.
 **No §14 amendment** — see below. No schema change; no `meta` row; no
 write verb's output changes.
-Status: **proposed** · raised 2026-07-26 by task #24 under epic
+Status: **accepted** · raised 2026-07-26 by task #24 under epic
 `adoption-contract`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-**this is a design fork the epic could not settle for itself; the branch
-below is the researched recommendation and the ratification is the
-owner's** · **revised 2026-07-26 against a critic round that refuted this
-proposal's first branch — the identity was a directory basename and is
-now an opaque digest; the basename is recorded as the rejected branch** ·
-**revised again the same day: the digest's preimage-oracle exposure was
-raised as a security-class escalation under the critic protocol, upheld
-by the owner, and the digest is now salted — the unsalted form is
-recorded as the rejected branch** · awaiting owner review
+**this was a design fork the epic could not settle for itself; the branch
+below is the researched recommendation** · **revised 2026-07-26 against a
+critic round that refuted this proposal's first branch — the identity was
+a directory basename and is now an opaque digest; the basename is
+recorded as the rejected branch** · **revised again the same day: the
+digest's preimage-oracle exposure was raised as a security-class
+escalation under the critic protocol, upheld by the owner, and the digest
+is now salted — the unsalted form is recorded as the rejected branch** ·
+the security-class question therefore carries the owner's own
+ratification; the remaining branch choice was ratified by the coordinating
+agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session · applied to the spec the same day
 
 ## Why
 
@@ -83,10 +85,23 @@ Getwd may return any one of them", so a logical basis makes one tracker
 report two different identities depending on how the session reached it —
 which breaks the single question the field answers.
 
-The **salt** half is a random per-machine value in
+The **salt** half is a random **per-tracker** value in
 `.selftracked/instance.salt`, **gitignored**, generated on first use when
-absent. It is what closes the preimage oracle documented below, and it is
+absent **from a cryptographic random source**. It is what closes the
+preimage oracle documented below, and it is
 the reason this proposal touches §9 and the shipped `.gitignore` at all.
+
+*Correction 2026-07-26 (security lens, applied at rev 3.42): the first
+draft said "per-machine" and named no random source. Both were wrong in
+the same direction — they described the salt as stronger and more shared
+than the design makes it. The file lives inside the tracker, so two
+trackers on one machine hold two independent salts; and the entire
+argument below is that the salt is not guessable, which a specification
+that never says where the randomness comes from leaves to the
+implementer, whose cheapest correct-looking choice is a non-cryptographic
+generator. Neither correction changes the design; both close a gap
+between what the design is and what the text promised.*
+
 It costs nothing in capability: the digest was already per-machine,
 because the absolute path differs on every machine, so cross-machine
 comparison was never on offer to lose. Copy-distinction survives intact —

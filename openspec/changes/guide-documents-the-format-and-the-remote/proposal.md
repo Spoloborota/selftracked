@@ -5,9 +5,10 @@ format's stated scope, the rehearsal-copy remote, and the closed-epic
 import seam) and §7's R16 row (one clause naming where an operator meets
 the seam); revision 3.34 → 3.35. `docs/migration-guide.md` §4, §6, §8 and
 a new subsection. No code change, no schema change, no verb change.
-Status: **proposed** · raised 2026-07-26 by tasks #41, #52 and #53 under
+Status: **accepted** · raised 2026-07-26 by tasks #41, #52 and #53 under
 epic `adoption-contract`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · awaiting owner review
+D-EP7) · ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session · applied to the spec and the
+migration guide the same day
 
 ## Why
 

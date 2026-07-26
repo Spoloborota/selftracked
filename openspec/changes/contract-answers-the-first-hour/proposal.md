@@ -10,9 +10,10 @@ repository's own `PROMPT.md` and `.claude/skills/selftracked/SKILL.md`,
 which are byte-identical copies of those templates (verified by `diff`
 2026-07-26). Content tests. No schema change, no behavioural change to
 any verb.
-Status: **proposed** · raised 2026-07-26 by tasks #54, #51, #56 and #26
+Status: **accepted** · raised 2026-07-26 by tasks #54, #51, #56 and #26
 under epic `adoption-contract`, story S1 · review tier **FULL** (plan §5,
-D-EP7) · awaiting owner review
+D-EP7) · ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session · applied to the spec the same
+day
 
 ## Why
 

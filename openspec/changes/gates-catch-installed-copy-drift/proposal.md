@@ -6,9 +6,9 @@ normatively — one step added); revision 3.40 → 3.41. `Makefile` — the
 comparison; a fixture proving it fails on a planted divergence. No spec
 change outside §16, no schema change, no verb change, no change to
 anything `init` installs.
-Status: **proposed** · raised 2026-07-26 by task #68 under epic
+Status: **accepted** · raised 2026-07-26 by task #68 under epic
 `adoption-contract`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-awaiting owner review
+ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session · applied to the spec the same day
 
 ## Why
 

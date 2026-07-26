@@ -6,9 +6,9 @@ one-directional) and §11.3 (the skill's loop step 1); revision 3.36 →
 paragraph; `internal/scaffold/templates/claude_skill.md` — loop step 1;
 this repository's byte-identical copies of both. Content tests. No schema
 change, no verb change, no new verb call in the recipe.
-Status: **proposed** · raised 2026-07-26 by task #45 under epic
+Status: **accepted** · raised 2026-07-26 by task #45 under epic
 `adoption-contract`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-awaiting owner review
+ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session · applied to the spec the same day
 
 ## Why
 

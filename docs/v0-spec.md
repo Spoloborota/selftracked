@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.33 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.42 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -87,9 +87,60 @@ condition as a typed `notices[]` entry instead of a bare counter, and the
 story tally stops hiding PLANNED
 (`prime-names-an-epic-that-cannot-receive-work`, rev 3.32); the generated
 contract says when new work is a task and when it is a story
-(`contract-says-where-new-work-goes`, rev 3.33) → this revision.
-Implementation has started; §5's schema and §3.1's connection posture are
-built.
+(`contract-says-where-new-work-goes`, rev 3.33) → epic
+`adoption-contract` opened on what an adopter's first hour costs when the
+installed materials, the migration guide and the refusals answer none of
+its questions, and its eight amendments were written proposal-first, two
+of them revised against critic rounds (one of those a security-class
+escalation the owner upheld), and applied together on 2026-07-26 under
+the owner's explicit 2026-07-26 grant of autonomy for that session — not
+plan D-EP14, whose standing pre-authorization covers the v0 bootstrap
+window only and lapsed when that epic closed: the generated
+contract carries where the binary lives, the terminal refusal class and
+its routes, and the language tracker content is written in — and
+`create`'s signature states its default (`contract-answers-the-first-hour`,
+rev 3.34); the md-table reader's scope and the remote a rehearsal copy
+inherits are documented, and R16 names the repeat import as its ordinary
+producer (`guide-documents-the-format-and-the-remote`, rev 3.35); an
+import that inserted no row of any kind refuses instead of exiting green,
+and the counts line names path-dictionary rows
+(`an-import-that-inserted-nothing-refuses`, rev 3.36); the divergence
+refusal names both recoveries and the test that selects between them,
+because one of them destroys unsynced work
+(`divergence-recipe-covers-both-directions`, rev 3.37); `prime` carries a
+salted, path-derived instance digest, and the read-verb contract gains
+its one named write (`a-tracker-carries-a-name`, rev 3.38); a verb run
+from a subdirectory names the root it found instead of advising `init`
+into a nested tracker (`resolution-names-the-root-it-found`, rev 3.39);
+the criterion field carries one name across the flag and the corpus, with
+the historical spelling accepted as an alias on both
+(`one-name-for-the-criterion-field`, rev 3.40); and `make gates` fails
+when this repository's installed copies drift from the templates it ships
+(`gates-catch-installed-copy-drift`, rev 3.41); and that subdirectory
+refusal drops the instance digest a critic round showed it could not
+carry — the digest's preimage is a file the same walk promises not to
+read, and only `prime` may create it (`resolution-names-the-root-it-found`,
+corrected, rev 3.42) — carrying with it three smaller corrections the same
+round produced: the salt is stated as **per-tracker** rather than
+per-machine and is required to come from a **cryptographic** random
+source, without which the unguessability its whole argument rests on is
+assumed rather than specified (`a-tracker-carries-a-name`, corrected);
+§14's rule is quoted where it is invoked instead of paraphrased wider than
+it reads; and **Instance** enters §2, which had gained a first-class noun
+without an entry → this revision.
+
+**Where this document runs ahead of the code.** v0 is built: the schema,
+the connection posture, the verbs, `verify`, `init`, `import` and the
+generated materials all ship. The **eight amendments of revisions
+3.34–3.42 are specified here and not yet implemented** — they were
+written proposal-first, and their code, fixtures and generated-text
+changes are the remaining stories of epic `adoption-contract`. They are
+stated in this document's ordinary normative voice, because that is what
+a specification is; a reader who needs to know what the binary does today
+runs it, and a reader who needs to know which obligations are outstanding
+reads the tracker. This notice is scoped to those revisions and is
+removed when the last of them lands; it makes no claim, either way, about
+how earlier revisions were sequenced against their code.
 
 Markers: **[DECIDED]** — settled by the owner. **[RESOLVED-BY-EVIDENCE]** —
 adopts the verdict of documented research (cited); owner can veto.
@@ -184,6 +235,7 @@ prose documents.
 | **WIP=1 per epic** | At most one story IN-PROGRESS per epic — a schema index, not a rule. The limit is deliberately per-epic; the *cross-epic* discipline (ideally one active goal at a time) is the skill's job and `prime` surfaces every sprint goal so nothing hides. |
 | **Backlog refinement** | The recurring triage loop (`prime` → triage queue → statuses/parking updated) — the skill names and drives it. |
 | **PO** | The human. Questions to the PO are tasks in `IN-REVIEW` (a lifecycle state, not a kind). |
+| **Instance** | One tracker — a `.selftracked/` directory and the working tree around it. Its **identity** is the salted, path-derived digest `prime` reports (§11.1); it names *which* tracker an output describes, and is never a stored token, so a copy never reports itself as its source. |
 
 ---
 
@@ -695,7 +747,65 @@ CREATE VIEW v_backlog AS
   → update `.selftracked/dump.hash` → `PRAGMA optimize`.
 - Read verbs: the same §8.6 version gate runs first and may escalate into a
   migration (which rewrites DB and dump — §8.6); the verb's own body then
-  runs `query_only`, no side effects on tracker state.
+  runs `query_only`, no side effects on tracker state — with **exactly one
+  named exception**: `prime` creates `.selftracked/instance.salt` when it
+  is absent (amendment `a-tracker-carries-a-name`). The file is
+  gitignored and never leaves the tracker, so the rule holds in substance — no
+  database, no dump, no `STATE.md`, nothing an adopter's `git status`
+  will show — and it is stated here rather than left inferable from
+  §11.1 because an exception a reader must reconstruct from another
+  section is one the next author removes as a bug. Generating the salt
+  at `init` instead was rejected: every tracker created before the
+  change would then permanently lack one, and the field would be absent
+  on exactly the installed base that most needs it.
+- **Where `.selftracked/` is resolved** (amendment
+  `resolution-names-the-root-it-found`): against the **process's working
+  directory**, as a bare relative path. A verb operates on the tracker
+  in the working directory or on none; it **may look upward only to
+  improve a refusal, never to choose a target**. Three cases, exhaustive:
+  a tracker in the working directory — today's behaviour, no walk, the
+  successful path pays nothing; **none here and one in an ancestor** —
+  the verb still refuses, exit 1, code `not-found`, and the message
+  **names that root** and **does not mention `init`**, since a reader
+  who follows that advice creates a second, nested tracker inside a
+  repository that already has one; **none anywhere up the tree** — the
+  present message stands verbatim, `init` advice included, because there
+  it is correct advice and this convention must not degrade the one case
+  that already works. The named root is expressed **relative to the
+  working directory** (`..`, `../..`), never absolute per §14, and
+  **carries no §11.1 instance digest**: the digest's preimage is a salt
+  **file** inside the found tracker, so printing it would be the
+  file-content read this walk forswears two sentences below, and
+  creating an absent salt is `prime`'s exception alone — against an
+  ancestor that has never been primed, every other verb would omit the
+  field anyway, making the refusal's content depend on a neighbouring
+  tracker's history. The relative path is unambiguous from where the
+  reader stands, and the digest exists to say which tracker produced
+  *state being read*, which a refusal that produced no state does not
+  raise. The walk is **physical** — the
+  distance it prints counts real parent directories, the same basis
+  §11.1 resolves its digest input on, so the two surfaces cannot
+  disagree about which directory they describe. A candidate the walk
+  **cannot read is treated as absent**: it stops at the first
+  unreadable ancestor and the present message stands, with no permission
+  error surfaced and no different exit code — a refusal contract that
+  varied with the permissions of an unrelated ancestor would depend on
+  the machine rather than on the tracker, and the cost (the old, worse
+  message in that configuration) is stated rather than hidden and is
+  strictly no worse than today. The walk stats candidates and stops at
+  the filesystem root: it opens no database, parses no dump, reads no
+  file content and writes nothing. Reading an ancestor at all is new —
+  every ancestor `Stat` is traversal the code does not perform today,
+  and a symlinked ancestor `.selftracked` is traversed by it — so the
+  claim made here is that the reading is bounded and harmless, not that
+  nothing new is read. Making verbs *operate* on an ancestor tracker,
+  git-style, is a **named deferral and not a refusal on merit**: every
+  filesystem consumer currently conflates the working directory with the
+  tracker root (the database and dump paths, the dictionary's roots and
+  R2/R3/R5's bases, the gate marker), so moving the write target alone
+  would write to the parent while resolving artifacts, roots and the
+  skip marker against the child — worse than the refusal it replaces,
+  because a refusal is loud and a mis-based artifact check is not.
 
 ### 6.2 Verb catalog
 
@@ -721,7 +831,7 @@ prefixed) — stated as an invariant the grammar must preserve.
 | Verb | Signature | Notes |
 |---|---|---|
 | `init` | `init [--force]` | §9 |
-| `create` | `create --title T [--status OPEN\|IN-REVIEW\|NEEDS-TRIAGE] [--note N] [--epic SLUG] [--label]` | Prints `#NN` (RETURNING). Terminal statuses at creation exist only via `import`. `--label` creates the LABEL marker row. |
+| `create` | `create --title T [--status OPEN\|IN-REVIEW\|NEEDS-TRIAGE (default NEEDS-TRIAGE)] [--note N] [--epic SLUG] [--label]` | Prints `#NN` (RETURNING). The status alternation **names its default in the signature** (amendment `contract-answers-the-first-hour`): bare `create` lands `NEEDS-TRIAGE` deliberately — an untriaged item's status is unknown and unknown is data — and an alternation that merely lists three statuses reads as if the first were the default, which it is not; the usage string this row is the normative source for carries the same parenthetical. Terminal statuses at creation exist only via `import`. `--label` creates the LABEL marker row. |
 | `show` | `show <ref>` | Any §4 ref; artifacts list their linked tasks/epics (reverse lookup); tasks and epics list their linked artifacts (forward lookup — also in `epic show`, text and `--json`): `class[@scope]:relpath (role)`, archived marked `(role, archived)`, ordered class → scope → relpath; stories show episodes (amendment `show-verbs-print-linked-artifacts`). |
 | `list` | `list [--status S] [--epic SLUG] [--parked] [--labels]` | |
 | `ready` | `ready [--epic SLUG]` | `v_ready` (OPEN, unparked, deps terminal, id order). |
@@ -732,13 +842,13 @@ prefixed) — stated as an invariant the grammar must preserve.
 | `rel` | `rel add <id> <depends\|relates\|supersedes> <id> [--note]` · `rel rm <id> <type> <id>` · `rel tree <id>` · `rel cycles` | No `duplicates` here (single writer of that fact is `set-status`). Refuses cycles and LABEL/DUPLICATE targets. `relates` queried undirected. |
 | `link` | `link <id\|epic:SLUG> <class[@scope]:relpath> --role R` · `unlink …` · `link archive <artifact-ref> [--force]` · `link unarchive <artifact-ref>` | Role from the closed vocabulary. File must exist (exit 1 refusal otherwise) unless class is ephemeral — ephemeral links are existence-exempt by design and `stale` ignores them (stated limitation). `archive` warns and requires `--force` when the artifact is a live `home`. `link` refuses a relpath that does not resolve inside its class(+scope) registered root (no `..` escapes) — root registration is what retention (`gc`, §17) and R3 reason about, so an escaping path would dodge both. |
 | `epic` | `epic create SLUG --goal G` · `activate` · `pause --why` · `dissolve --why` · `show` · `list [--active]` · `close` | Lifecycle per the §5.3 matrix; `close` works from ACTIVE or PAUSED (BACKLOG never ran — dissolve it instead). `dissolve` has close-grade preconditions: refuses while a story is IN-PROGRESS or a task in OPEN/IN-REVIEW/NEEDS-TRIAGE is homed to the epic; PLANNED/READY/BLOCKED stories are auto-DISSOLVED (each getting its DISSOLVED worklog row) in the same transaction. Blocker messages for parked tasks suggest unpark / `edit --detach`. |
-| `criteria` | `criteria add SLUG --text T` · `criteria met SLUG SEQ --evidence E` · `criteria check SLUG` | `check` EXECUTES every `$ `-prefixed criterion (cwd = repo root, inherited env, per-command timeout, stop at first failure), records pass/fail + timestamp as evidence, **flips `met` 1→0 on a failing re-run** (regressions cannot stay green), and exits 1 on any failure. On a **terminal** epic `check` runs and reports but records NOTHING — it prints that it did not — because persisting would overwrite the acceptance record the epic was closed on, which no verb can restore and the events trail does not copy (amendment `terminal-epics-refuse-reopening-writes`). `met` is for owner-attested (non-runnable) criteria only. Threat model: runnable criteria are shell commands from repo state — executing them is the same trust decision as running the repo's build/tests or its tracked hooks; a hostile branch already owns those surfaces, so criteria add no new one (§14). |
+| `criteria` | `criteria add SLUG --text\|--criterion T` · `criteria met SLUG SEQ --evidence E` · `criteria check SLUG` | **One field, one name** (amendment `one-name-for-the-criterion-field`): the criterion text is `text` on **both** doors — the flag and the import corpus's field — and `criterion`, the corpus's historical spelling, stays accepted as an alias on both. `criteria add` accepts `--text` and `--criterion` as **the same flag**, not as a better error: an undefined flag dies in the dispatcher's `flag.Parse` before any verb body runs, so the mistyped spelling cannot be given a message and can only be given a *meaning*. Supplying both with different values is a `usage` refusal, which on the corpus side is what obliges the two decoded fields to distinguish absent from present-and-empty. Both refusals — `criteria add` with neither flag, and the corpus's unknown-field refusal — name the other surface's spelling, for the reader who guesses a third. The column stays `epic_criteria.criterion` under either spelling: the dump's DDL is byte-equal before and after (§8.5), so no dump migrates and no schema version moves. `check` EXECUTES every `$ `-prefixed criterion (cwd = repo root, inherited env, per-command timeout, stop at first failure), records pass/fail + timestamp as evidence, **flips `met` 1→0 on a failing re-run** (regressions cannot stay green), and exits 1 on any failure. On a **terminal** epic `check` runs and reports but records NOTHING — it prints that it did not — because persisting would overwrite the acceptance record the epic was closed on, which no verb can restore and the events trail does not copy (amendment `terminal-epics-refuse-reopening-writes`). `met` is for owner-attested (non-runnable) criteria only. Threat model: runnable criteria are shell commands from repo state — executing them is the same trust decision as running the repo's build/tests or its tracked hooks; a hostile branch already owns those surfaces, so criteria add no new one (§14). |
 | `story` | `add SLUG --title T · ready SLUG SID · start · block --reason · unblock --resolution TEXT · done --commits RANGE --gate G [--review R] · dissolve --why` | The state-writing lifecycle verbs — `start`, `block`, `done`, `dissolve` — each append their worklog episode row (§5.7); `add`, `ready`, and `unblock` do not (no worklog state exists for those transitions) — `unblock`'s durable record is its `story` events row. `start`: READY + DoR + WIP. `done`: `--commits` and `--gate` are required (`--review` optional) — status flip + DONE row are one transaction (no non-atomic path exists). `unblock` requires `--resolution` — **what cleared the block**, recorded verbatim in the same transaction's events row (`event='story'`, detail = the resolution text): when the block was an owner question (the `[BLOCKED: PO decision]` convention), the resolution starts with the literal greppable prefix `PO:` and quotes the verdict — a provisional instruction («try X, revisit if wrong») IS a verdict and is quoted like one; a decision living only in chat does not exist. When the block was external (a dependency, an outage — `block --reason` is not owner-only, §11.3 uses it for any blocker), the resolution states the observed fact that cleared it, no prefix. The `PO:` prefix is an authoring convention (prompt-enforced) and applies wherever an owner verdict is recorded — resolutions, IN-REVIEW exit notes, question-task titles (§12 uses all three): the schema cannot distinguish verdicts from other text, so the prefix is what makes owner ratifications machine-findable in the trail afterward. The literal token is deliberately locale-fixed for greppability; a non-English crew adapts the literal in its prompt config, not per-use. Presence-of-text is verb-enforced only (enforcement map). |
 | `worklog` | `worklog add SLUG --story SID\|V-N --state ST [--corrects N] [--commits] [--gate] [--review] [--note]` | Manual appends are only: `V-N` rows (epic must be CLOSED) and `--corrects N` correction rows (any story; N names an original non-correction row — §5.7; state must match the corrected row; excluded from R6, R10-idle and close-rule-2 accounting — §5.7). Everything else is written by story verbs. Both refusals an agent meets here while trying to record work — the `usage` refusal of a non-`V` `--story` without `--corrects`, and the `not-closed` refusal of a `V-N` row on a non-CLOSED epic — **name the routes that apply in the epic's current state** (amendment `worklog-refusals-name-the-routes`): where a non-terminal story exists, the transition verb that reaches it; where none does (the dead zone), a new story — a **scope change and the owner's call** — or a standalone `create`. Normative about which routes are named, not about wording. No `--date`: rows are dated at append time by the binary — a correction happens when it happens, and a backdating flag would reopen the narrative-date drift class (§5) through a verb. The true historical date of a corrected FACT belongs in the row's `note` as content, sourced per the PROMPT.md provenance rules (git/mtime, never session narrative) — the row's own date stays the append date. |
 | `paths` | `paths ls` · `paths set CLASS[@SCOPE] ROOT [--ephemeral] [--note]` · `paths move CLASS[@SCOPE] NEWROOT [--with-files]` | `--with-files` performs the move via `git mv` when in a git repo (renames AND stages), else plain rename — no red window either way. `set` warns on overlapping roots of the same class only. |
 | `config` | `config ls` · `config set <production_globs\|idle_days\|prime_cap> VALUE` | The sanctioned editor for configuration keys (closed list in schema v1 — new keys arrive only with schema versions; values validated: `idle_days`/`prime_cap` positive integers, `production_globs` parseable globs; events-logged). System meta keys (§5.1) are not settable here. |
 | `stale` | `stale [--since REF] [--quiet]` | git-changed files ∩ resolved non-ephemeral artifact links of non-terminal work; output ordered path ASC (deterministic). |
-| `import` | `import --file F [--format md-table\|json] [--legacy]` | Batch creation (tasks, epics, stories, worklog). `--legacy`: synthesized timestamps (events-marked), `commits='legacy: …'` accepted, terminal states insertable. Timestamps are taken **per row from the best primary source, git first**: (1) the newest resolvable cited commit's git **author** date (author over committer — a rebase must not rewrite worklog chronology; "newest" because a multi-commit or `a..b` citation dates the increment by its finish); (2) else the row's explicit date field; (3) else the import time. Git outranks explicit dates deliberately — narrative-contaminated date fields are the §5 drift class, and imported narratives carry it too; when sources (1) and (2) both exist and disagree **on the calendar day (UTC)**, the importer warns and git wins, both values recorded (the modal contamination is exactly an adjacent-day midnight drift, which a "more than N days" threshold would sleep through; the recorded disagreement is the audit trail, not a correction). Best-effort honesty: plain rebases preserve author dates, squash-merges rewrite them — recovered dates are primary-source approximations. Non-sha placeholder tokens in a commits cell (prose like "see commit", template leftovers) resolve nothing and fall through, becoming `commits='legacy: …'`; an unresolvable sha-SHAPED token (a typo) is left verbatim instead — R5 flags it in full `verify`, and rewriting it to `legacy:` would mask the typo. The **per-epic** import events row (§10) carries a compact per-worklog-row source map (one short `seq:source` code per row, worklog seq order — deterministic, so two imports of the same file byte-agree), making date provenance auditable after the fact; a flat batch-time stamp is forbidden (real chronology recoverable from git must not be flattened into one synthetic epoch). Two stated scopes: import rows' `date` means "when the increment finished (best primary approximation)" while live rows mean "when recorded" — one column, two regimes, read uniformly downstream; and task rows have no commits cell at all, so task dates come from explicit fields or import time — task-level narrative contamination is out of git-first's reach in v0 — deriving those dates from the source file's git history was evaluated and rejected: a maintained markdown backlog gets renamed and reformatted, and each sweep resets the apparent age of the lines it touches. What the importer does instead is bound what it cannot derive: **a date later than the import moment is refused** (a future date is provably not an event date, and a session crossing midnight writing tomorrow's date all day is the documented failure this catches), and **a date earlier than the earliest commit touching the source file is reported, not refused** — an older record can legitimately be transcribed into a new file, but the bound it broke is stated rather than absorbed. Neither bound computes a date; they only reject impossible ones. The importer must append worklog rows in ascending per-epic order (the contiguity trigger fires on INSERT) and materialize stories for every referenced id. |
+| `import` | `import --file F [--format md-table\|json] [--legacy]` | Batch creation (tasks, epics, stories, worklog). `--legacy`: synthesized timestamps (events-marked), `commits='legacy: …'` accepted, terminal states insertable. Timestamps are taken **per row from the best primary source, git first**: (1) the newest resolvable cited commit's git **author** date (author over committer — a rebase must not rewrite worklog chronology; "newest" because a multi-commit or `a..b` citation dates the increment by its finish); (2) else the row's explicit date field; (3) else the import time. Git outranks explicit dates deliberately — narrative-contaminated date fields are the §5 drift class, and imported narratives carry it too; when sources (1) and (2) both exist and disagree **on the calendar day (UTC)**, the importer warns and git wins, both values recorded (the modal contamination is exactly an adjacent-day midnight drift, which a "more than N days" threshold would sleep through; the recorded disagreement is the audit trail, not a correction). Best-effort honesty: plain rebases preserve author dates, squash-merges rewrite them — recovered dates are primary-source approximations. Non-sha placeholder tokens in a commits cell (prose like "see commit", template leftovers) resolve nothing and fall through, becoming `commits='legacy: …'`; an unresolvable sha-SHAPED token (a typo) is left verbatim instead — R5 flags it in full `verify`, and rewriting it to `legacy:` would mask the typo. The **per-epic** import events row (§10) carries a compact per-worklog-row source map (one short `seq:source` code per row, worklog seq order — deterministic, so two imports of the same file byte-agree), making date provenance auditable after the fact; a flat batch-time stamp is forbidden (real chronology recoverable from git must not be flattened into one synthetic epoch). Two stated scopes: import rows' `date` means "when the increment finished (best primary approximation)" while live rows mean "when recorded" — one column, two regimes, read uniformly downstream; and task rows have no commits cell at all, so task dates come from explicit fields or import time — task-level narrative contamination is out of git-first's reach in v0 — deriving those dates from the source file's git history was evaluated and rejected: a maintained markdown backlog gets renamed and reformatted, and each sweep resets the apparent age of the lines it touches. What the importer does instead is bound what it cannot derive: **a date later than the import moment is refused** (a future date is provably not an event date, and a session crossing midnight writing tomorrow's date all day is the documented failure this catches), and **a date earlier than the earliest commit touching the source file is reported, not refused** — an older record can legitimately be transcribed into a new file, but the bound it broke is stated rather than absorbed. Neither bound computes a date; they only reject impossible ones. The importer must append worklog rows in ascending per-epic order (the contiguity trigger fires on INSERT) and materialize stories for every referenced id. **A corpus from which no row of any kind was inserted is refused** — `{"code":"format"}`, exit 1 (amendment `an-import-that-inserted-nothing-refuses`). The test is over **every** section the importer writes, path-dictionary rows included and not the four entity counters, so a legitimate paths-only corpus still imports green; the rule sits at the verb, not in a reader, because both readers produce the empty corpus (`md-table` with no recognized heading, `json` decoding `{}`) and a per-parser fix would leave the other standing. The message distinguishes the two reasons a corpus can be empty, since they call for different actions: **nothing recognized** — the file yielded no section the reader knows, so the message names the format used and the headings that format accepts, redirecting a reader who mis-cased a heading or wrote a bare table with none; and **recognized but no rows** — every section found was empty, which for a batch verb whose purpose is insertion is treated as a mistake. The counts line names all five kinds: `imported N path(s), N epic(s), N story(ies), N task(s), N worklog row(s) from F` — the path count is part of the same change because after the refusal lands, a paths-only import is the only remaining green exit whose counts line would otherwise be all zeros. |
 | `dump` / `load` | `dump [--stdout]` · `load [--force]` | §8. |
 | `verify` | `verify [--quiet] [--fast]` | §7. |
 | `prime` | `prime` | §11.1 contract. |
@@ -859,7 +969,7 @@ Stage 1:
 | R12 | Terminal-state ⇔ events-trail cross-check: every CLOSED/DISSOLVED epic and DONE/WONT-DO/DUPLICATE task must have a matching events row (or an `import` events row). A terminal state with no trail = the raw-SQL forgery signature (§1.1) — red |
 | R13 | Advisory: OPEN tasks with no **live** `home` link — an archived home is history, not a home: R3 stops checking an archived artifact's existence, so counting one here would let an OPEN task hold a home pointing at a deleted file with no signal anywhere (amendment `r13-counts-live-homes`) |
 | R15 | Advisory: pending `.selftracked/skip-pending` marker (unconverted gate skip) |
-| R16 | Advisory: a CLOSED epic no longer satisfies the conditions it was closed on — a non-terminal story, a task in OPEN/IN-REVIEW/NEEDS-TRIAGE homed to it, or a criterion with stored `met = 0`. Scoped to epics THIS tracker closed (an `epic` event carrying the close stamp): one that arrived CLOSED through `import` never passed the gate, so there is no claim to re-check. It re-executes nothing — `met` is read as stored, because reusing close condition (3)'s engine would run repo-state shell commands inside `verify`, which its read-only connection forbids and whose execution surface `verify` must not own (amendment `terminal-epic-conditions-stay-true`). **Every finding names its repair** (amendment `r16-reports-only-what-a-verb-can-clear`): the homed task → `edit <id> --detach` or set it terminal; the non-terminal story → `story dissolve <slug> <sid> --why …`, the carve-out §6.4 opens for exactly this; the unmet criterion → **no verb writes that state** on a verb-closed epic (`criteria add`/`met` refuse, `criteria check` is report-only, `import` refuses to re-declare an existing epic), so the clause is a raw-SQL signature of R12's family and says so |
+| R16 | Advisory: a CLOSED epic no longer satisfies the conditions it was closed on — a non-terminal story, a task in OPEN/IN-REVIEW/NEEDS-TRIAGE homed to it, or a criterion with stored `met = 0`. Scoped to epics THIS tracker closed (an `epic` event carrying the close stamp): one that arrived CLOSED through `import` never passed the gate, so there is no claim to re-check. It re-executes nothing — `met` is read as stored, because reusing close condition (3)'s engine would run repo-state shell commands inside `verify`, which its read-only connection forbids and whose execution surface `verify` must not own (amendment `terminal-epic-conditions-stay-true`). **Every finding names its repair** (amendment `r16-reports-only-what-a-verb-can-clear`): the homed task → `edit <id> --detach` or set it terminal; the non-terminal story → `story dissolve <slug> <sid> --why …`, the carve-out §6.4 opens for exactly this; the unmet criterion → **no verb writes that state** on a verb-closed epic (`criteria add`/`met` refuse, `criteria check` is report-only, `import` refuses to re-declare an existing epic), so the clause is a raw-SQL signature of R12's family and says so. The condition's **ordinary producer is a repeat or delta `import`** (amendment `guide-documents-the-format-and-the-remote`): a corpus that omits an epic from its `epics` list and merely references the slug from a story or a task inserts those children under an epic a verb has closed (a corpus that re-declares the epic is refused `epic-exists`, so the seam is exactly the children-only shape) — and because R16 is **advisory**, the operator's only notice is a line `verify` prints and no commit ever fails on. The migration guide states this where an operator meets it |
 
 Every rule ships with a red fixture; a gate that cannot fail is decoration.
 The one textual matcher among the rules (R11) additionally ships a **variant
@@ -965,10 +1075,38 @@ mechanically, not by hope:
   the tracked file, the mismatch is residue of a crash between dump write and
   sidecar update — the verb heals the sidecar and proceeds. If they differ,
   the tracked dump changed under us (a `git pull`, a checkout) and writing
-  would clobber it with stale-DB-derived content — the verb **refuses**,
-  naming the fix: `selftracked load --force` (replace the local DB with the
-  tracked dump — the §8.3 discard floor, which prints what it discards
-  first), then re-apply unsynced local writes through verbs. A missing
+  would clobber it with stale-DB-derived content — the verb **refuses**.
+  Which recovery is correct is not a fact the verb owns: divergence has
+  **two directions**, and they call for opposite, irreversible moves
+  (amendment `divergence-recipe-covers-both-directions`). If the tracked
+  dump is the good side — another machine's newer state arrived by a
+  `git pull` and the local database is stale — the recovery is
+  `selftracked load --force` (replace the local DB with the tracked dump
+  — the §8.3 discard floor, which prints what it discards first), then
+  re-apply unsynced local writes through verbs. If the **local
+  database** is the good side — the working-tree dump was clobbered by a
+  checkout, a merge resolution or a hand edit, while the database holds
+  writes that never reached git — the recovery discards nothing and
+  re-derives the dump from the database: `selftracked dump`, then
+  `selftracked verify`, whose R1 names its own repair when `STATE.md`
+  was clobbered alongside the dump, then the bookkeeping commit that
+  stages the tracked pair (until that lands, the divergence is
+  unresolved on the git side). Taking the wrong branch is total loss in
+  exactly one direction — `load --force` on a good database destroys
+  every unsynced local write — so the refusal **names both recoveries
+  and the test that selects between them** rather than naming one fix.
+  The test needs no new surface: `git log -1 --stat --
+  .selftracked/dump.sql` and `git status --short .selftracked/dump.sql`
+  say whether the tracked dump moved because another commit arrived or
+  because this working tree changed it, and `prime` — read-only, safe
+  while diverged — says what the database holds. The rule applied to
+  those facts is that **the good side is the one holding work that
+  exists nowhere else.** The choice is the **operator's**, deliberately:
+  a legitimate `load --force` discards rows on purpose, so no row-count
+  comparison can decide it, and the measured defect was never a wrong
+  recovery but a reader who was never told a decision existed. When both
+  sides hold unique work, that is the two-writer accident below, and the
+  recipe stops there rather than presenting either branch as safe. A missing
   sidecar is treated as divergent (safe default; fresh
   clones run `load` once). The sidecar (SHA-256) is written by `init`, by
   every write verb's dump-regeneration tail, and by `dump` and `load`. The
@@ -1114,11 +1252,19 @@ wrapping conflicts with `foreign_keys=OFF` exactly where rebuilds need it.
 │   ├── db.sqlite       # gitignored
 │   ├── dump.hash       # gitignored — divergence sidecar (§8.4)
 │   ├── skip-pending    # gitignored — gate-skip marker (transient)
+│   ├── instance.salt   # gitignored — per-tracker identity salt (§11.1)
 │   └── hooks/          # tracked — generated git hooks
 ├── docs/decisions/  docs/research/  work/  work/runs/  work/reports/
 ├── STATE.md            # GENERATED (deterministic; R14)
 └── PROMPT.md           # agent instruction generated by init
 ```
+
+The tree's `<repo>/` is the **process's working directory** — the
+precondition the diagram has always implied and never stated (amendment
+`resolution-names-the-root-it-found`). `.selftracked/` is resolved
+against it as a bare relative path, so a verb run from a subdirectory
+finds no tracker; §6.1 states what it does then, and why it names the
+root it found instead of advising `init`.
 
 No config file: configuration is `meta` rows edited via `config`. `init`
 creates every seeded root (fresh `init` ⇒ `verify` green), class-contract
@@ -1137,7 +1283,52 @@ the cleanup expectation for ephemeral classes (manual until `gc` ships —
 docs recommend periodic `git repack` — a rewritten multi-MB dump leaves one
 full blob per commit between repacks (long-horizon research doc).
 
-Beyond the verb catalog and the §11.2 rule, PROMPT.md carries three
+PROMPT.md also carries three **operating sections**, each answering a
+question a fresh agent otherwise pays for in its first hour (amendment
+`contract-answers-the-first-hour`):
+
+- **Running the tool** — the binary is `selftracked` (alias `strk`,
+  §6.1) and is expected on `PATH`; when it is not, the two invocations
+  that work without one — a repo-local build output and an absolute
+  install path — are stated **as shapes and never as literal paths**,
+  because §14's rule — "selftracked's own verbs never write hostnames,
+  usernames, or absolute paths" — reaches this text too: `init` is a verb
+  and `PROMPT.md` is what it writes. The section also names the one-line check that
+  replaces probing the environment: `selftracked prime` either answers
+  or names its refusal.
+- **When a verb refuses because the epic is closed** — the terminal
+  refusal class named by its code (`terminal`), what produces it (any
+  write that would re-open one of §6.4's close conditions), and the
+  sanctioned routes **quoted from §6.4's post-close closed list rather
+  than paraphrased**, so that list keeps one home: the asymmetry it
+  carries (`story dissolve`'s carve-out is CLOSED-only) is stated once,
+  and so is the route that is not a route — there is no `epic reopen`,
+  ever (§17), a revived goal being a new epic. The exposure is largest
+  immediately after an import, where terminal epics arrive in bulk,
+  which is exactly the adopter's first hour. The class belongs in the
+  contract rather than in each guarded verb's usage string: it spans
+  more call sites and more verb paths than a usage string can track
+  without drifting, it has already been amended twice, and the refusals
+  themselves already name the applicable routes at the point of failure
+  (§6.2) — what the contract adds is the agent's ability to know the
+  class exists *before* meeting it.
+- **The language of what you write** — tracker content (titles, notes,
+  goals, DoD, `consumes`/`produces`, worklog notes, resolutions,
+  criteria text) is written in **one language, chosen once per
+  repository, and English is the default** the generated contract
+  ships with. The reasons are properties of this artifact rather than
+  general advocacy: `dump.sql` is published and permanent (§14), the
+  `PO:` token is already locale-fixed for greppability (§6.2) so a
+  mixed-language tracker splits its own greppability, and a reader of a
+  published dump should not need a second language to follow one
+  repository. A crew that chooses otherwise records the choice in its
+  own project memory and applies it uniformly: this is a **default, not
+  a prohibition**, and it is ungated by construction — no verb refuses
+  a non-English title, a text-language check is not mechanically sound
+  (identifiers, quoted output, proper nouns), and none is proposed.
+
+Beyond the verb catalog, the §11.2 rule and those three sections,
+PROMPT.md carries three
 **durable-doc authoring rules**, each distilled from a documented
 parent-project drift incident. Honest status: these are authoring guidance
 in a generated instruction file, not gated conventions — prose files are a
@@ -1259,6 +1450,27 @@ migration guide (a v0 deliverable, written generically per the charter):
   blocking closure forever. Import may insert terminal states directly
   (matrices gate the UPDATE path only); every import writes events rows, so
   R12 stays green.
+- **The importer's vocabulary is the tool's vocabulary** (amendment
+  `one-name-for-the-criterion-field`): a field the importer accepts
+  carries **the same name as the flag that writes it**, and where
+  history has left two names for one field, the importer accepts both
+  and both surfaces' refusals name both. Stated as a rule rather than as
+  one field's fix because the same defect exists in other fields
+  (per-verb ref-prefix conventions, flags accepted but ignored), and a
+  rule is what makes them findable. Aliases are a permanent cost and
+  accumulate; a second one is the point at which "the vocabulary is
+  per-tool" needs a stronger mechanism than goodwill.
+- **The two readers do not carry the same corpus** (amendment
+  `guide-documents-the-format-and-the-remote`). `--format json` carries
+  every section the importer writes; `--format md-table` carries five
+  sections — `paths`, `epics`, `stories`, `tasks`, `worklog` — whose
+  headings are lower-case and exact, and **no `criteria` section at
+  all**: epic acceptance criteria are JSON-only, so an adopter who
+  chooses md-table loses them by choosing the format. That is an
+  importer property, not a guide detail, which is why it is stated here;
+  the guide states it again at the point where the reader picks a
+  format, because that is where the trade-off (criteria versus authoring
+  convenience) is decided.
 - **Importer obligations** (enforced by the schema, so stated plainly):
   worklog rows append in ascending per-epic order; ledger rows that bundle
   several increments are split; a story row is materialized for every S-id
@@ -1272,7 +1484,12 @@ migration guide (a v0 deliverable, written generically per the charter):
   "slated as a future increment" map to epic homing, not to `park`; source
   inconsistencies (e.g. a closed epic whose cards were never flipped) are
   resolved *before* import — the close gates here are stricter than hand-kept
-  files, and that strictness is the point.
+  files, and that strictness is the point; and **an import that inserted
+  nothing is a refusal, not a green exit** (amendment
+  `an-import-that-inserted-nothing-refuses`) — a batch verb's exit 0 is a
+  claim that the batch landed, and the operator's next step is driven by
+  that exit code, so a warning printed beside it is the condition this
+  obligation exists to remove rather than a substitute for it.
 - **What does not migrate into the tracker**: prose registries, narrative
   planning documents, per-file status headers and their index-sync gates —
   the prose layer and its future lint core (§17). Pointers to non-file
@@ -1281,6 +1498,20 @@ migration guide (a v0 deliverable, written generically per the charter):
   they import as task/epic notes, not as unblock events (there is no block
   row to resolve). The migration is partial *by design*; the guide
   says exactly where the boundary is so nothing is lost by surprise.
+- **A rehearsal copy inherits what it was made from, and the two ways of
+  making one differ** (amendment
+  `guide-documents-the-format-and-the-remote`). A local `git clone` sets
+  the copy's `origin` to the **source path**, so a stray push out of it
+  lands in the local repository it was cloned from and reaches no live
+  project. A `cp`-class copy — the copy-on-write copy the guide
+  recommends per attempt — duplicates `.git` wholesale and therefore
+  inherits the source's configured remote **verbatim**, which on a
+  machine with cached git credentials is one stray push away from
+  publishing rehearsal state to whatever that remote addresses.
+  Severing the inherited remote is therefore the first act on such a
+  copy, before `init` and before the corpus; the two shapes get two
+  different instructions because one instruction covering both would
+  teach a wrong model of what `git clone` does.
 
 ---
 
@@ -1308,7 +1539,10 @@ upgrade path) is all the session sees — the typed
 `dump_requires_newer_binary` field exists only when a readable DB lets
 `prime` run.
 
-`prime` JSON (stable contract): `epics_active[]` (slug, goal, stories
+`prime` JSON (stable contract): `instance` (the tracker identity —
+**first field of the payload struct**, immediately before
+`epics_active[]`; amendment `a-tracker-carries-a-name`),
+`epics_active[]` (slug, goal, stories
 {done, in_progress, planned, ready[], blocked[]}, criteria_unmet — a
 **count**, never criterion text; `planned` joined the tally with amendment
 `prime-names-an-epic-that-cannot-receive-work` — without it an epic holding
@@ -1361,6 +1595,81 @@ never rides in `prime` (fetched per entity via `show`/`log`); that exclusion
 is part of what keeps `prime` output O(active), never O(history), at any
 repo age (D15).
 
+**The `instance` identity** (amendment `a-tracker-carries-a-name`). No
+verb used to say which tracker it was operating on, and the failure that
+demands one is two trackers on one machine — a coordinating repository
+and a sandbox host — where a wrong working directory lands a write in
+the wrong database with nothing in any output carrying a cue. The
+identity is a **12-hex digest**, the leading 48 bits of the SHA-256 of
+`salt || path`:
+
+- the **path** half is the absolute path of the directory containing
+  `.selftracked/`, **physically resolved** (symbolic links evaluated),
+  with no trailing separator. The physical basis is normative because
+  `os.Getwd` may return any one of several paths reaching a directory
+  through symlinks, and a logical basis would make one tracker report
+  two identities depending on how the session reached it;
+- the **salt** half is a random **per-tracker** value in
+  `.selftracked/instance.salt` — gitignored, generated on first use
+  (§6.1's one read-verb exception) **from a cryptographic random
+  source**, since the whole argument below is that the salt is not
+  guessable, and a predictable one restores the oracle it removes.
+  Per-tracker rather than per-machine because the file lives inside the
+  tracker: two trackers on one machine hold two independent salts, which
+  costs nothing here — the path half already separates them — and is
+  stated so a reader does not take it for a shared machine secret. It is
+  **never a `meta` row**: `meta`
+  is serialized into the tracked dump, so a salt stored there would be
+  published beside the digest it salts, and §6.2 admits new `meta` keys
+  only with a schema version.
+
+Twelve hex because §9's `as of dump <sha12>` is the project's one
+truncation convention and a second length would be a second convention;
+the threat model is confusion among a handful of trackers on one
+machine, not adversarial collision. The digest is **salted** because an
+unsalted digest of an absolute path is a low-entropy preimage oracle:
+`prime` output is pasted into notes, the modal adopter path ends in a
+repository name already public on their remote, and the remaining
+unknown is typically the user's own name — which one hash would then
+confirm. The salt costs no capability, since the path half already made
+the value per-machine; and a `cp`-class copy carrying the salt changes
+nothing, because the path half still differs, which is exactly why a
+*stored* identity token was rejected (a copy would report itself as its
+source).
+
+**Two failure modes, both resolving to an omitted field**: an
+unresolvable path, and a salt that cannot be read or written (a
+read-only checkout, a permission error, a full filesystem). The field is
+specifically **not** computed from an unresolved path and **not** fallen
+back to an unsalted digest — a silent downgrade would appear exactly
+where the environment is unusual, be indistinguishable from the salted
+form, and get published. Consumers therefore treat `instance` as
+optional. In the human digest (outside this stable contract) it is the
+first token of the first line, before `active epics:` — the subject of a
+payload belongs before its predicates, and an agent that reads the state
+before learning whose state it is has already formed the model the field
+exists to correct.
+
+The field is **not prose**: twelve characters from the fixed alphabet
+`[0-9a-f]`, emitted by the code that computes it and never written by a
+user, so it is an identifier by construction and the rule that `goal`
+and `title` are this contract's only prose-class payload holds
+unchanged. **It needs no §14 exception**: a one-way digest emits no path,
+no user name and no host name, so that section's rule — selftracked's own
+verbs never write hostnames, usernames, or absolute paths — holds
+literally. Stated limits, because the field is half an answer and must not be
+read as more: it is **opaque** and **retrospective** — `prime` has no
+memory, so a lone digest at session start has nothing to be compared
+against and becomes informative only once a reader holds two of them; it
+answers "is this the same tracker I saw before?", never "which project
+is this?", which is the working-directory-relative root path §6.1's
+resolution refusals print; it does not catch a mid-session write to the
+wrong tracker, since write verbs are unchanged; and it is stable neither
+under a move or rename of the repository directory nor across a second
+clone of the same project on one machine (a fresh clone has no salt and
+generates one) — two working copies are two working trackers with two
+databases that can diverge, which is the question this field answers.
+
 ### 11.2 Rule
 
 State only through verbs; never `sqlite3` against the DB, never hand-edit
@@ -1387,7 +1696,11 @@ A schematic link is a named deferral (§17).
 
 ### 11.3 Skill
 
-The working loop: `prime` → if `dump_divergence`: stop, reconcile first → 
+The working loop: `prime` → if `dump_divergence`: stop and reconcile
+first — **which side is authoritative is a decision, not a command**
+(amendment `divergence-recipe-covers-both-directions`), so the loop
+points at the generated contract's two branches and §8.4's test rather
+than reaching for `load --force` → 
 **backlog refinement** when `totals.triage > 0` (triage → OPEN /
 IN-REVIEW / park / WONT-DO; when the queue exceeds the capped `triage[]`
 slice, re-`prime` between passes until `totals.triage` reaches 0) → pick
@@ -1411,6 +1724,14 @@ drift rule governs work discovered **while a story is in progress**
 (capture it, do not pivot); the classification governs work being **taken
 up now**, when no story holds it — because left unscoped they answer the
 same trigger differently.
+**Terminal-epic branch** (amendment `contract-answers-the-first-hour`):
+when the work in hand touches an epic `prime` reports as neither active
+nor paused — for a **terminal** one, which appears in none of `prime`'s
+epic lists at all — the writes that would re-open one of §6.4's close
+conditions refuse `{"code":"terminal"}`. The loop names that class where
+an agent meets it and **points at the generated contract's section** for
+the sanctioned routes instead of restating them, so the route list has
+one statement in one place.
 **PO-absent branch**: every remaining story blocked and `in_review`
 non-empty → stop; ensure each open question is an IN-REVIEW task (they
 surface in every future `prime`); if an in-progress story is what blocks,
@@ -1569,6 +1890,34 @@ Open: none.
   git fixtures generated in-script (real objects for hook/divergence/R5
   tests), golden `cmp` on dumps and JSON, exit codes asserted; from schema
   version 2 on, the golden old-dump migration corpus (§8.6).
+- **Installed-copy drift step** (amendment
+  `gates-catch-installed-copy-drift`): `make gates` fails when any of
+  this repository's installed generated documents differs from the
+  template it ships. It runs inside `gates`, not as a separate ritual —
+  a check nobody is obliged to run is not a gate. Three properties are
+  normative. (1) The comparison is **byte-for-byte**; the failure class
+  is a template edit that did not propagate, and any tolerance is a hole
+  shaped like the next incident. (2) The **pair list is data**,
+  enumerated in the step itself — `PROMPT.md`,
+  `.claude/skills/selftracked/SKILL.md` and `.claude/rules/selftracked.md`
+  against their `internal/scaffold/templates/` counterparts — and the
+  step **names what it does not compare and why**, `.claude/settings.json`
+  by name: it legitimately differs from its template because this
+  repository's settings carry local configuration an adopter's scaffold
+  has no business receiving, and without that sentence "the drift gate
+  is green" would read as "every generated file matches", which is
+  false. A later decision to guard a further pair adds a row, not a code
+  path. (3) A **red fixture proves it fails**: a planted one-character
+  divergence exits non-zero, identity exits 0 — this section's standing
+  rule that a gate which cannot fail is decoration. The step is a check
+  on *this repository's* discipline rather than on the tool's behaviour,
+  the first entry of that kind in this battery; it does not make `init`
+  overwrite anything (the non-overwrite property is what makes `init`
+  safe to re-run on a live repository), ships no sync command (copying a
+  template over an installed file invites running it without reading the
+  diff, and either side can be the right one), and runs on no adopted
+  repository — the drift it catches is the drift of the project that
+  ships the templates, the only place both sides exist.
 - Implementation-phase re-verification of research-pass findings before
   reliance (each currently documented, with method, in
   `docs/research/2026-07-18-sqlite-advanced-features.md`): driver

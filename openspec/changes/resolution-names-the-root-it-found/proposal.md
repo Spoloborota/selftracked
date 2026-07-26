@@ -6,14 +6,14 @@ it cannot tell) and §9 (the layout paragraph states the
 working-directory contract it has always assumed); revision 3.38 → 3.39.
 Five refusal sites, enumerated below. New fixtures. No schema change;
 **no verb changes which database it operates on.**
-Status: **proposed** · raised 2026-07-26 by task #47 under epic
+Status: **accepted** · raised 2026-07-26 by task #47 under epic
 `adoption-contract`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-**this is a design fork the epic could not settle for itself; the branch
-below is the researched recommendation and the ratification is the
-owner's** · **revised 2026-07-26 against a critic round: the refusal
-inventory was incomplete, the permission-error class was unnamed, the
-symlink claim was unproven, and ADR 0001 was cited as governing
-precedent when it does not govern this** · awaiting owner review
+**this was a design fork the epic could not settle for itself; the branch
+below is the researched recommendation** · **revised 2026-07-26 against a
+critic round: the refusal inventory was incomplete, the permission-error
+class was unnamed, the symlink claim was unproven, and ADR 0001 was cited
+as governing precedent when it does not govern this** · ratified by the
+coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session (recorded in the trail as task #74) · applied to the spec the same day · **corrected the same day, revision 3.41 → 3.42**, after a delta-fidelity critic round found the instance-digest clause contradicted this amendment's own no-file-content guarantee and unsatisfiable for every verb but `prime` — the digest leaves this refusal; see "Correction 2026-07-26" below
 
 ## Why
 
@@ -83,9 +83,9 @@ on a tracker it found above.**
 - **None here, one in an ancestor**: the verb still refuses, exit 1, code
   `not-found`. The message **names that root** and **does not mention
   `init`**. The root is expressed **relative to the working directory**
-  (`..`, `../..`, `../../..`) — never absolute, per §14 — and is
-  accompanied by the instance digest that `a-tracker-carries-a-name`
-  defines, so the refusal answers *where* and *which one* together.
+  (`..`, `../..`, `../../..`) — never absolute, per §14. It prints **no
+  instance digest**; see the correction below, which records why the
+  first draft of this bullet did.
 - **None anywhere up the tree**: **the present message stands, verbatim**,
   `init` advice included. There it is correct advice, and this change
   must not degrade the one case that already works.
@@ -174,19 +174,62 @@ said.
 prints. The dependency is one-directional and is stated so this proposal
 reads as a record rather than as half of one:
 
-- **Both accepted** (the intent): the refusal reads as *where* plus
-  *which one* — a relative path to the root, and the digest identifying
-  it.
+- **Both accepted** (the first draft's intent): the refusal reads as
+  *where* plus *which one* — a relative path to the root, and the digest
+  identifying it. **This branch was withdrawn; see the correction below.**
 - **Only this one accepted**: the refusal names the root by relative path
   and prints no digest. Every other clause here is unaffected — the
   walk, the `init`-advice removal, the permission rule and the physical
-  basis all stand. The message is weaker, not broken.
+  basis all stand. The message is weaker, not broken. **This is the
+  branch that stands.**
 - **Only the identity accepted**: `prime` carries the digest and the
   subdirectory refusal keeps advising `init`. The nested-tracker hazard
   is untouched, which is the outcome to avoid.
 
 The identity is defined once, there; nothing about it is restated here,
 so the two cannot drift into two definitions.
+
+### Correction 2026-07-26: the digest leaves this refusal
+
+The first draft chose the both-accepted branch, and the applied §6.1 text
+carried it. A delta-fidelity critic round found it incoherent on two
+counts, both verified against the applied text before this correction was
+written:
+
+1. **It contradicts this amendment's own safety claim.** The clause
+   promising the digest and the clause promising the walk "opens no
+   database, parses no dump, reads no file content and writes nothing"
+   sit three sentences apart in the same §6.1 paragraph. The digest's
+   preimage is `salt || path`, and the salt is a **file** in the found
+   tracker (`a-tracker-carries-a-name`), so printing it is exactly the
+   file-content read the neighbouring sentence forswears. One of the two
+   had to go, and the no-read guarantee is the load-bearing one: it is
+   the entire basis on which walking into ancestor directories was
+   accepted as harmless.
+2. **It could not hold for the verbs that need it.** Creating an absent
+   salt is §6.1's *one named exception*, scoped to `prime` alone. A
+   subdirectory refusal is met by `create`, `list`, `verify`, `dump`,
+   `load` and `gate` — none of which may create it. Against an ancestor
+   whose salt does not exist yet, the digest is omitted by §11.1's own
+   failure rule, so "answers *where* and *which one* together" would be
+   false in the ordinary case and true only by accident, depending on
+   whether some earlier `prime` happened to run there. A message whose
+   content varies with a neighbouring tracker's history is worse than a
+   message that never carries the field.
+
+Widening the exception so any verb may write a salt into a tracker it has
+just promised not to operate on was considered and is not recorded as a
+close call: it would have a refusal path write to a directory outside the
+working directory, which is a larger capability than the feature it
+serves.
+
+**What is lost is small and was already measured here**: the relative
+path is itself unambiguous from where the reader stands, and the digest
+exists (§11.1) to say which tracker produced *state being read* — a
+question a refusal that produced no state does not raise. The branch
+above already called this message "weaker, not broken", written before
+there was any reason to prefer it; that assessment is what this
+correction adopts.
 
 ## Alternative considered and rejected — recorded as a deferral, not a refutation
 

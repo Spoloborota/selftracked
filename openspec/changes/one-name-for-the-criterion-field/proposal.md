@@ -6,9 +6,12 @@ Target: `docs/v0-spec.md` §6.2 (the `criteria` row's signature) and §10
 refusals; `internal/verb/import.go:71-72` — the corpus field, or its
 alias; `docs/migration-guide.md` §4's JSON example. Fixtures. No schema
 change — the column is `epic_criteria.criterion` either way.
-Status: **proposed** · raised 2026-07-26 by task #62 under epic
+Status: **accepted** · raised 2026-07-26 by task #62 under epic
 `adoption-contract`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-awaiting owner review
+ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session, which also settled the direction fork
+below on the proposal's own recommendation — the corpus field becomes
+`text` and `criterion` stays an accepted alias · applied to the spec and
+the migration guide the same day
 
 ## Why
 

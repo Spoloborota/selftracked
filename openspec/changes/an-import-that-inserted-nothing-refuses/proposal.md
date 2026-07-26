@@ -6,9 +6,10 @@ counts line's scope) and §10 (the importer-obligations bullet); revision
 `internal/verb/import.go` — the empty-corpus refusal, placed so it covers
 both readers; `internal/verb/import_mdtable.go` — no parser change is
 required and none is proposed. New red fixtures. No schema change.
-Status: **proposed** · raised 2026-07-26 by task #39 under epic
+Status: **accepted** · raised 2026-07-26 by task #39 under epic
 `adoption-contract`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-awaiting owner review
+ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session · applied to the spec and the migration
+guide the same day
 
 ## Why
 

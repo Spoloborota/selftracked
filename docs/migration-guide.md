@@ -4,7 +4,22 @@ This is the generic guide for adopting selftracked on a repository that
 already tracks its work in prose — backlog tables, epic files, campaign
 documents. It is written against the `import` verb as shipped in v0 and
 was walked against the importer's own fixture corpus; the field names and
-behaviors below are the ones the code accepts, not an aspiration.
+behaviors below are the ones the code accepts, not an aspiration —
+**except for the two named here**, which the specification carries at
+revision 3.42 and the binary does not have yet:
+
+- the criteria corpus field is spelled **`criterion`** by the shipped
+  importer, not `text` as the JSON example in §4 shows. `text` becomes
+  the name and `criterion` an accepted alias; until then a corpus using
+  `text` is refused as an unknown field.
+- the import summary prints **four** counts (epics, stories, tasks,
+  worklog rows), not the five shown in §7 — the path-dictionary count is
+  not among them; and a corpus from which nothing was inserted currently
+  **exits 0** rather than refusing.
+
+Both are stories of the epic that produced this revision of the guide.
+This notice goes away with them; if you are reading it, they have not
+landed.
 
 The one-line summary: **derive a corpus from your prose, rehearse the
 import against a disposable clone until `verify` is green, then install
@@ -87,9 +102,12 @@ Two authoring constraints found in real rehearsals:
 
 ## 4. The corpus
 
-`import --file corpus.json --format json [--legacy]` (md-table is the
-other reader). The JSON shape, exactly as the fixture corpus exercises
-it:
+`import --file corpus.json --format json [--legacy]`. There are two
+readers and they do not carry the same corpus — **md-table has no
+`criteria` section, so epic acceptance criteria are JSON-only** and an
+adopter who authors in md-table loses them by choosing the format.
+Section 4.1 states the md-table shape in full; the JSON shape, exactly
+as the fixture corpus exercises it, is:
 
 ```json
 {
@@ -97,7 +115,7 @@ it:
   "epics": [{
     "slug": "demo", "goal": "demonstrate the backfill",
     "status": "CLOSED", "close_sweep": "2026-01-05",
-    "criteria": [{"criterion": "owner attests the migration",
+    "criteria": [{"text": "owner attests the migration",
                   "met": true, "evidence": "owner noted"}]
   }],
   "stories": [
@@ -121,6 +139,35 @@ warning is corpus-audit material. An explicit `date` field is an
 ordinary source for any import. Cite only strings that actually resolve
 as commits in the repository: a sha-shaped string that does not resolve
 imports silently and fails later at `verify` (R5).
+
+### 4.1 The md-table corpus
+
+`import --file corpus.md --format md-table [--legacy]`. Decide this
+first: **md-table carries no `criteria` section.** Epic acceptance
+criteria cannot be expressed in it at all, and nothing warns you — the
+import simply lands an epic with no criteria rows. If your epics carry
+criteria, author in JSON.
+
+What md-table does carry is five sections, one markdown table each,
+each introduced by a `## ` heading. The headings are **lower-case and
+exact**: `## Tasks` is not a spelling variant, it is refused with
+`unknown section "Tasks"`. A heading may appear at most once — a
+repeated section is refused as a duplicate — and a known section that is
+blank or omitted is fine. The column names are the JSON field names:
+
+| Section heading | Columns |
+|---|---|
+| `## paths` | class, scope, root, ephemeral, note |
+| `## epics` | slug, goal, status, status_note, close_sweep, created_at |
+| `## stories` | epic, id, title, status, dod, consumes, produces |
+| `## tasks` | title, status, note, epic, date, dup_of, future_increment, pointer_note, owner_steer |
+| `## worklog` | epic, story, state, commits, gate, review, date, note, legacy_reason |
+
+A column outside its section's list is refused, as is a data row whose
+cell count does not match its header. Section 3's two authoring
+constraints apply here rather than being restated — the md-table-specific
+one of the pair is that a bundled increment cannot be expressed, so such
+rows are split per increment or authored in JSON.
 
 ## 5. `--legacy` — the three relaxations
 
@@ -156,6 +203,14 @@ selftracked import --file ../corpus.json --format json --legacy
 selftracked verify        # the round's gate: 0 violations
 ```
 
+A local `git clone` sets the new repository's `origin` to the **source
+path** — the directory you cloned from, not whatever remote that
+directory pushes to. So a stray push out of a rehearsal clone lands in a
+local repository and publishes nothing; the exposure it does have is
+that the clone holds a full copy of your project's history, which is why
+it lives under a gitignored path and is deleted when the rehearsal ends.
+A copy made any other way does not have this property — see section 8.
+
 Repeat — delete `.selftracked/`, re-init, re-import — until `verify` is
 green and the advisories are ones you have read and accepted. Importer
 refusals during rehearsal are findings: file them, fix the corpus (or
@@ -181,6 +236,29 @@ satisfied. From here on, state changes go through verbs only — `prime`
 is the session-start read, and the generated `PROMPT.md` carries the
 working contract.
 
+### 7.1 Importing again, into a tracker that already has closed epics
+
+A repeat import — a delta round, a second pass after the corpus moved —
+can insert rows under an epic a verb has already closed. The importer
+accepts it **by design**: it inserts rows and evaluates no close
+condition, so a corpus that omits an epic from its `epics` list and
+merely references the slug from a story, a task or a worklog row lands
+those children under the closed epic and exits 0. (A corpus that
+re-declares the epic is refused `epic-exists`; the seam is exactly the
+children-only shape.)
+
+The result is an **R16 advisory** — a CLOSED epic no longer satisfying
+the conditions it was closed on. Two consequences worth stating
+plainly:
+
+- An advisory does not stop a commit and does not fail `verify`'s exit
+  code. The person who must notice is whoever runs `verify` after the
+  import, which is where the section 8 advisory census belongs.
+- Every R16 finding names its own repair: a homed task in
+  OPEN/IN-REVIEW/NEEDS-TRIAGE clears with `edit <id> --detach` or by
+  going terminal, and a non-terminal story clears with
+  `story dissolve <slug> <sid> --why …`.
+
 ## 8. The adaptation handoff — agent-executed onboarding
 
 `init` is deliberately mechanical; everything after it — chaining into
@@ -193,12 +271,20 @@ instruction** the agent executes. Rehearsed handoffs share a shape:
 - **One fresh copy per attempt.** Each rehearsal starts from a pristine
   copy of the host (a copy-on-write clone takes the whole tree, uncommitted
   prose included, at near-zero cost where the filesystem supports it) and is thrown away, never repaired.
+- **Severing the copy's inherited remote is the first act on it** —
+  before `init`, before the corpus. A `cp`-class copy duplicates `.git`
+  wholesale, so unlike the section 6 clone it inherits the *source's*
+  configured remote verbatim; on a machine with cached git credentials
+  that is one stray push away from publishing rehearsal state to a live
+  remote. The step and its expectation, in the same form as every other
+  step here: `git -C <copy> remote remove origin` exits 0, and
+  `git -C <copy> remote -v` then prints nothing.
 - **Exact chaining lines with their positions and the why.** The host's
   own gates keep running first in pre-commit (they own the repo);
   selftracked's post-commit line goes at the top because a host
   post-commit may exit early. Quote the guarded lines `init` printed.
-- **An expectation at every step**: exit codes, the `imported N epic(s),
-  …` counts line, and the advisory census `verify` should print — class
+- **An expectation at every step**: exit codes, the `imported N path(s),
+  N epic(s), …` counts line, and the advisory census `verify` should print — class
   and count ("N × R13 and nothing else"). A silent-on-success host gate is
   stated as such, or the executing agent will report its silence as a
   deviation. Any output outside the stated expectation is a finding, not
