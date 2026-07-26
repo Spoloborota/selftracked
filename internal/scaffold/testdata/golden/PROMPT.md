@@ -5,6 +5,38 @@ deterministically to `.selftracked/dump.sql` (the one tracked, reviewed,
 synced surface) and projected to `STATE.md`. You interact with it through a
 fixed set of verbs — never by touching the database or the dump directly.
 
+## Running the tool
+
+The binary is `selftracked`; `strk` is the same binary under its short
+name, and every command in this file works under either. It is expected
+on `PATH`, installed once per machine and from outside this repository.
+
+When it is not on `PATH`, two invocations still work. They are given
+here **as shapes, never as literal paths**, because this file is written
+by a verb — `init` — and selftracked's own verbs never write hostnames,
+usernames, or absolute paths into a file the repository tracks:
+
+- **A repo-local build output** — a checkout of selftracked built in
+  place and called by its path relative to the repository root
+  (`./bin/selftracked` when the build writes to `bin/`).
+- **An absolute install path** — the binary wherever it was installed,
+  called in full. Type it at the call site: it names one machine, so it
+  belongs in neither this file, nor a commit message, nor a tracker row.
+
+One line settles which of the three cases you are in, and it replaces
+probing the environment:
+
+```sh
+selftracked prime
+```
+
+`prime` either **answers** — it is the session-start read — or **names
+its refusal**: a binary that is not on `PATH` is the shell saying
+`command not found`, a tracker that is not in the working directory is
+`not-found` naming the root it did find instead, and a schema this
+binary cannot serve is the version gate saying so. Read what came back
+and act on it; do not go looking for the database.
+
 ## The working loop
 
 **Start every session with `prime`** — the session-start read: active
@@ -221,6 +253,66 @@ no config file.
   story per epic.
 - **Epics:** `BACKLOG` → `ACTIVE` → `CLOSED`, plus `PAUSED` and
   `DISSOLVED`.
+
+## When a verb refuses because the epic is closed
+
+An epic that is `CLOSED` or `DISSOLVED` is **terminal**, and a terminal
+epic refuses every write that would re-open one of the conditions it was
+closed on: `criteria add`, `criteria met`, `story add`, every story
+transition, `create --epic`, `edit --epic`, `reopen` of a task homed
+there, and `edit` of the epic's goal or of a story's fields. Each of
+them refuses with `{"code":"terminal"}`, exit 1. That refusal is the
+design and not an obstacle to route around; you meet it most often right
+after an `import`, when terminal epics arrive in bulk.
+
+What stays open after a close is a **closed list** — deliberately
+unnumbered, because it has grown twice already:
+
+- **`V-n` rows** — `worklog add SLUG --story V-N …`, post-close
+  validation on a `CLOSED` epic. This is where post-close work goes.
+- **`--corrects` correction rows** — `worklog add … --corrects N`, the
+  append-only correction of an earlier row, on any story.
+- **Artifact links** — `link` on an `epic:` target: a retrospective
+  attached to a closed epic breaks no condition.
+- **`edit --detach`** — un-homing a task. It removes a violation rather
+  than creating one, and it is the repair the `reopen` refusal names.
+- **`story dissolve SLUG SID --why …` of a non-terminal story, on a
+  `CLOSED` epic only.** `DISSOLVED` is the one story target that
+  *satisfies* a close condition instead of breaking it, so like `edit
+  --detach` it removes a violation. The restriction is the asymmetry
+  worth remembering: a `DISSOLVED` epic never passed a close gate, so it
+  holds no claim to restore and this carve-out does not reach it. By the
+  same reasoning it does not reach an epic that arrived `CLOSED` through
+  `import` either — the gate it never passed is this tracker's own.
+
+And the route that is not a route: **there is no `epic reopen`, ever.**
+A goal that revives becomes a new epic; the closed one keeps its record.
+
+## The language of what you write
+
+Tracker content — titles, notes, epic goals, story DoD, `consumes` /
+`produces`, worklog notes, resolutions, criteria text — is written in
+**one language, chosen once for the repository**, and **English is the
+default this contract ships with**. The reasons are properties of this
+artifact, not general advocacy:
+
+- `dump.sql` is published and permanent: it carries every title, note
+  and verdict into git, where append-only history makes them permanent
+  and redaction tooling is deferred.
+- The `PO:` token above is already locale-fixed for greppability, so a
+  half-and-half tracker splits its own greppability — the marker stays
+  findable while the ruling beside it stops being so.
+- A reader of a published dump should not need a second language to
+  follow one repository end to end.
+
+This is a **default, not a prohibition**. A crew that chooses another
+language records that choice in its own project memory and applies it
+uniformly; what a mixed tracker costs is what the three reasons
+describe, and it is paid whether the mixture was chosen or drifted into.
+It is ungated by construction: no verb refuses a non-English title and
+none is proposed, because a text-language check is not mechanically
+sound — identifiers, quoted output and proper nouns all defeat it. As
+with the durable-doc rules below, unenforced is not optional.
 
 ## Durable-doc authoring rules
 

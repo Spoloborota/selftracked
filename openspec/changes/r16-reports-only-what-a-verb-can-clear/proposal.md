@@ -15,7 +15,15 @@ against a five-lens critic round (the carve-out was narrowed from
 CLOSED-or-DISSOLVED to CLOSED, and the shared `moveStory` call site named)
 · ratified by the owner
 2026-07-25, who chose the carve-out over the message-only alternative
-recorded below · applied to the spec the same day
+recorded below · applied to the spec the same day · **§6.4's sentence
+completed 2026-07-26, rev 3.42 → 3.43**: the carve-out is scoped by
+**provenance** — an epic that arrived `CLOSED` through `import` is
+excluded as a DISSOLVED one is — which this proposal's reasoning stated
+and the implementation enforces, but §6.4 recorded only the status half.
+Surfaced by the story writing the generated contract, which had to
+describe the guard and found the specification the less precise of the
+two. No behaviour changed; the specification caught up with what it had
+already ratified.
 
 ## Why
 

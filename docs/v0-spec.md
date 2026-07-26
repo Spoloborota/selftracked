@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.42 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.43 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -127,7 +127,14 @@ source, without which the unguessability its whole argument rests on is
 assumed rather than specified (`a-tracker-carries-a-name`, corrected);
 §14's rule is quoted where it is invoked instead of paraphrased wider than
 it reads; and **Instance** enters §2, which had gained a first-class noun
-without an entry → this revision.
+without an entry; then §6.4's `story dissolve` carve-out is stated as
+what the guard enforces — scoped by **provenance**, not by status, so an
+epic that arrived `CLOSED` through `import` is excluded exactly as a
+DISSOLVED one is. That qualifier was always in
+`r16-reports-only-what-a-verb-can-clear`'s reasoning and in the code; only
+this paragraph lacked it, and it surfaced when the story writing the
+generated contract had to describe the guard and found the specification
+the less precise of the two (rev 3.43) → this revision.
 
 **Where this document runs ahead of the code.** v0 is built: the schema,
 the connection posture, the verbs, `verify`, `init`, `import` and the
@@ -917,7 +924,16 @@ appends satisfies (2), and conditions (4)–(6) do not involve story
 status — so, like `edit --detach`, it removes a violation rather than
 creating one, and it is the repair R16's story finding names. A
 DISSOLVED epic is excluded: it never passed a close gate, so it holds no
-claim to restore. The gate is transition-time by
+claim to restore. **By that same test the carve-out is scoped by
+provenance, not by status**: an epic that arrived `CLOSED` through
+`import` never passed this tracker's close gate either, so
+`story dissolve` refuses there exactly as it does on a DISSOLVED epic
+(`internal/verb/terminal_epic.go` consults `rules.EpicClosedByVerb`).
+That qualifier was carried by the amendment's own reasoning — it is why
+R16 exempts the same population — but this paragraph stated only the
+status half until revision 3.43, which is how a generated document came
+to describe the guard more precisely than the specification did. The
+gate is transition-time by
 construction, so R16 (§7) re-checks the claim for state that arrives by
 `import` or raw SQL, which no verb guard can see.
 

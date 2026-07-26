@@ -53,6 +53,12 @@ description: The selftracked working loop — how to prime, refine the backlog, 
    loud first — `prime`'s `no-workable-story` notice names the epic-scoped
    case. This branch is for work you are **taking up now**; work you merely
    *notice* while a story is in progress is the drift rule below.
+   **Work touching an epic `prime` reports as neither active nor paused**
+   may be homed to a terminal one (`CLOSED` or `DISSOLVED`), whose writes
+   refuse with `{"code":"terminal"}`, exit 1. Do not re-shape the write
+   until you have read PROMPT.md's "When a verb refuses because the epic
+   is closed": it holds the closed list of what stays open after a close,
+   and that list has one home.
 4. **Execute:** `story start` → do the work → commit with `#NN` and/or the
    epic slug in the message → `story done --commits … --gate …`.
 5. **At epic end:** `epic close` (it runs the criteria, sweeps the stories,

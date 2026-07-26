@@ -2,11 +2,63 @@ package scaffold
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+// absPathToken matches a word that begins an absolute path — a leading
+// slash followed by a letter, or the home prefix that becomes one when the
+// shell expands it — at a position where it is a path rather than
+// punctuation: start of line, or after whitespace, a quote, a backtick, or
+// an opening bracket. A URL does not match (the character before its slashes
+// is a colon), nor does a repo-relative path such as `./bin/selftracked` or
+// `.selftracked/dump.sql`.
+var absPathToken = regexp.MustCompile("(?m)(^|[\\s\"'`(\\[<])(/[A-Za-z]|~/)")
+
+// TestGeneratedDocsCarryNoAbsolutePaths enforces section 14's rule —
+// "selftracked's own verbs never write hostnames, usernames, or absolute
+// paths" — over the prose init writes. `init` is a verb and these files are
+// what it writes, so the rule reaches them; PROMPT.md's "Running the tool"
+// section is the passage most exposed to it, because a literal install path
+// is exactly what a well-meaning edit would substitute for the shape stated
+// there. Scoped to .md files: a generated shell hook may legitimately carry
+// an interpreter path, and this rule is about the documents.
+func TestGeneratedDocsCarryNoAbsolutePaths(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := writeScaffold(context.Background(), root, false); err != nil {
+		t.Fatal(err)
+	}
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Ext(p) != ".md" {
+			return nil
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return err
+		}
+		for line := range strings.SplitSeq(string(b), "\n") {
+			if absPathToken.MatchString(line) {
+				t.Errorf("%s carries what reads as an absolute path, which no generated document may: %q", rel, line)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestGeneratedContentAssertions gives each review-class inventory row a
 // concrete check: the required text is present in the generated file. The
@@ -126,6 +178,41 @@ func TestGeneratedContentAssertions(t *testing.T) {
 		{"INV-479", "SKILL.md", "the bookkeeping-commit rule", "bookkeeping commit"},
 		{"#19", "SKILL.md", "explicit staging for the bookkeeping commit", "git add .selftracked/dump.sql STATE.md"},
 		{"INV-480", "SKILL.md", "the PO-absent branch", "never answer the PO"},
+		// #54/#51/#56: the three operating sections. The heading of each is
+		// asserted here so a deleted section fails on its own row as well as
+		// on the segment lookups below.
+		{"#54", "PROMPT.md", "the invocation section exists", "## Running the tool"},
+		{"#54", "PROMPT.md", "the binary and its alias are named", "The binary is `selftracked`; `strk`"},
+		{"#54", "PROMPT.md", "PATH is where the binary is expected", "It is expected on `PATH`"},
+		{"#54", "PROMPT.md", "the invocations are shapes, not paths", "as shapes, never as literal paths"},
+		{"#54", "PROMPT.md", "the rule that makes them shapes", "never write hostnames, usernames, or absolute paths"},
+		{"#54", "PROMPT.md", "the one-line check that replaces probing", "replaces\nprobing the environment"},
+		{"#54", "PROMPT.md", "prime answers or names its refusal", "either **answers**"},
+		{"#51", "PROMPT.md", "the terminal-refusal section exists", "## When a verb refuses because the epic is closed"},
+		{"#51", "PROMPT.md", "the class is named by its code", `{"code":"terminal"}`},
+		{"#51", "PROMPT.md", "the post-close vocabulary is a closed list", "a **closed list**"},
+		{"#51", "PROMPT.md", "there is no epic reopen", "there is no `epic reopen`, ever"},
+		{"#51", "SKILL.md", "the loop meets the class where prime shows it", "neither active nor paused"},
+		{"#51", "SKILL.md", "the loop names the code", `{"code":"terminal"}`},
+		{
+			"#51", "SKILL.md", "the loop points at PROMPT.md rather than restating",
+			`PROMPT.md's "When a verb refuses because the epic`,
+		},
+		{"#56", "PROMPT.md", "the language section exists", "## The language of what you write"},
+		{"#56", "PROMPT.md", "one language, chosen once", "one language, chosen once for the repository"},
+		{"#56", "PROMPT.md", "English is the default", "**English is the\ndefault this contract ships with**"},
+		{"#56", "PROMPT.md", "the dump-is-permanent reason", "published and permanent"},
+		{"#56", "PROMPT.md", "the greppability reason", "splits its own greppability"},
+		{"#56", "PROMPT.md", "the one-repository-one-language reason", "should not need a second language"},
+		{"#56", "PROMPT.md", "a default, not a prohibition", "a **default, not a prohibition**"},
+		{
+			"#56", "PROMPT.md", "the choice is recorded and applied uniformly",
+			"records that choice in its own project memory and applies it\nuniformly",
+		},
+		{
+			"#56", "PROMPT.md", "the default is ungated by construction",
+			"no verb refuses a non-English title and\nnone is proposed",
+		},
 	}
 	docs := map[string]string{
 		"PROMPT.md": prompt, "AGENTS.md": agents, "work/README.md": work, "SKILL.md": skill,
@@ -147,16 +234,20 @@ func TestGeneratedContentAssertions(t *testing.T) {
 	// recovery's own bookkeeping commit — a literal that also appears in the
 	// end-of-session instruction, and therefore survives in the file — fails
 	// here rather than passing a re-generated golden.
+	// Used by the #45 branch cases below and by the #54/#51/#56 operating
+	// sections after them, which have the same failure mode: a statement
+	// that is present in the file but has drifted out of the passage it
+	// governs. The error prefix is neutral because the helper is shared.
 	segment := func(doc, label, next string) string {
 		s := strings.Index(doc, norm(label))
 		if s < 0 {
-			t.Errorf("#45: branch label %q not found", label)
+			t.Errorf("segment: label %q not found", label)
 			return ""
 		}
 		rest := doc[s+len(norm(label)):]
 		e := strings.Index(rest, norm(next))
 		if e < 0 {
-			t.Errorf("#45: branch %q is not followed by %q", label, next)
+			t.Errorf("segment: %q is not followed by %q", label, next)
 			return ""
 		}
 		return rest[:e]
@@ -216,6 +307,125 @@ func TestGeneratedContentAssertions(t *testing.T) {
 			if strings.Contains(seg, norm(bad)) {
 				t.Errorf("#45 (%s): the %q branch carries %q, which belongs to the other branch",
 					b.doc, b.label, bad)
+			}
+		}
+	}
+
+	// #54/#51/#56: the three operating sections, each read as the passage
+	// between its own heading and the next one. The rows above assert that
+	// the mandated sentences exist SOMEWHERE in PROMPT.md; these assert that
+	// they still stand inside the section that governs them — the failure
+	// the #45 round found, where a statement survives the file while the
+	// passage it qualifies has lost it. Deleting a whole section fails the
+	// lookup itself, so each section is pinned twice over.
+	for _, b := range []struct {
+		name, doc, label, next string
+		must, mustNot          []string
+	}{
+		{
+			name: "#54 Running the tool",
+			doc:  "PROMPT.md", label: "## Running the tool", next: "## The working loop",
+			must: []string{
+				"`strk`", "on `PATH`",
+				"as shapes, never as literal paths",
+				"A repo-local build output", "An absolute install path",
+				"selftracked prime",
+			},
+			// The section's whole point is that the two invocations are
+			// shapes; a machine-specific literal substituted for either is
+			// the mutation it must not survive. The absolute-path forms are
+			// caught wholesale by TestGeneratedDocsCarryNoAbsolutePaths; a
+			// home-relative one is caught here, where it would read as a
+			// plausible "shape" and is not one.
+			mustNot: []string{"~/", "$HOME"},
+		},
+		{
+			name:  "#51 terminal refusal",
+			doc:   "PROMPT.md",
+			label: "## When a verb refuses because the epic is closed",
+			next:  "## The language of what you write",
+			must: []string{
+				`{"code":"terminal"}`, "exit 1",
+				"a **closed list**",
+				"worklog add SLUG --story V-N",
+				"worklog add … --corrects N",
+				"`link` on an `epic:` target",
+				"`edit --detach`",
+				"`story dissolve SLUG SID --why …` of a non-terminal story",
+				"there is no `epic reopen`, ever",
+			},
+			// The one route that does not exist must not be described as one
+			// anywhere in the section.
+			mustNot: []string{"`epic reopen SLUG`"},
+		},
+		{
+			// The carve-out and its restriction must live in the same
+			// bullet: "CLOSED epic only" stated anywhere else in the section
+			// leaves the bullet itself reading as unrestricted.
+			name:  "#51 the dissolve carve-out keeps its restriction",
+			doc:   "PROMPT.md",
+			label: "**`story dissolve SLUG SID --why …` of a non-terminal story,",
+			next:  "And the route that is not a route",
+			must: []string{
+				"on a `CLOSED` epic only",
+				"a `DISSOLVED` epic never passed a close gate",
+				// The guard is narrower than section 6.4's sentence: it also
+				// requires that THIS tracker's `epic close` produced the
+				// CLOSED status (internal/verb/terminal_epic.go's
+				// refuseTerminalEpicExcept consults rules.EpicClosedByVerb).
+				// An epic that arrived CLOSED by import is exactly the case
+				// this section's reader has in front of them, so a text that
+				// promised the route there would be read at the worst moment.
+				"arrived `CLOSED` through `import`",
+			},
+		},
+		{
+			name: "#56 the language of what you write",
+			doc:  "PROMPT.md", label: "## The language of what you write",
+			next: "## Durable-doc authoring rules",
+			must: []string{
+				"one language, chosen once for the repository",
+				"**English is the default this contract ships with**",
+				"a **default, not a prohibition**",
+				"no verb refuses a non-English title and none is proposed",
+				"records that choice in its own project memory",
+			},
+			// A default restated as a rule is the mutation this section is
+			// most exposed to: it reads like a tightening, and it would make
+			// the contract claim an enforcement no verb performs.
+			mustNot: []string{
+				"must be written in English",
+				"only English", "English only",
+			},
+		},
+		{
+			name: "#51 the skill meets the class and points home",
+			doc:  "SKILL.md", label: "**Work touching an epic `prime` reports as",
+			next: "## Drift rule",
+			must: []string{
+				`{"code":"terminal"}`,
+				`PROMPT.md's "When a verb refuses because the epic is closed"`,
+			},
+			// One statement, one place: the skill names the class and sends
+			// the reader to PROMPT.md; it does not carry a second copy of
+			// the closed list, which would be the next thing to go stale.
+			mustNot: []string{
+				"worklog add SLUG --story V-N", "--corrects N",
+				"edit --detach", "story dissolve",
+			},
+		},
+	} {
+		seg := segment(docs[b.doc], b.label, b.next)
+		for _, want := range b.must {
+			if !strings.Contains(seg, norm(want)) {
+				t.Errorf("%s (%s): the section under %q does not carry %q",
+					b.name, b.doc, b.label, want)
+			}
+		}
+		for _, bad := range b.mustNot {
+			if strings.Contains(seg, norm(bad)) {
+				t.Errorf("%s (%s): the section under %q carries %q, which it must not",
+					b.name, b.doc, b.label, bad)
 			}
 		}
 	}

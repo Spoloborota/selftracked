@@ -22,6 +22,14 @@ stderr 'mutually exclusive'
 expectexit 0 selftracked create --title noted --status OPEN --note 'why it exists'
 grep 'why it exists' .selftracked/dump.sql
 
+# #26: the usage line names the status default. Bare `create` lands
+# NEEDS-TRIAGE, but an alternation that merely lists three statuses reads as
+# if the first were the default — two agents in a row assumed OPEN. The
+# parenthetical is asserted here, at the surface an agent actually reads at
+# the moment of the call, and section 6.2's `create` row is what it implements.
+expectexit 0 selftracked create -h
+stdout '--status OPEN\|IN-REVIEW\|NEEDS-TRIAGE \(default NEEDS-TRIAGE\)'
+
 # No verb accepts a caller-supplied date (INV-055): unknown flag, exit 2.
 expectexit 2 selftracked create --title x --date 2020-01-01
 stderr 'usage'

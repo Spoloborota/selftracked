@@ -120,7 +120,12 @@ func createVerb() cli.Verb {
 	var label bool
 	return cli.Verb{Name: "create", Subs: []cli.Sub{{
 		Arity: 0,
-		Usage: "create --title T [--status OPEN|IN-REVIEW|NEEDS-TRIAGE] [--note N] [--epic SLUG] [--label] [--json]",
+		// The alternation names its default (§6.2's `create` row, amendment
+		// `contract-answers-the-first-hour`): three statuses listed bare read
+		// as if the first were the default, and it is not — bare `create`
+		// lands NEEDS-TRIAGE.
+		Usage: "create --title T [--status OPEN|IN-REVIEW|NEEDS-TRIAGE (default NEEDS-TRIAGE)]" +
+			" [--note N] [--epic SLUG] [--label] [--json]",
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&title, "title", "", "the task title (required)")
 			fs.StringVar(&status, "status", "", "initial status")
