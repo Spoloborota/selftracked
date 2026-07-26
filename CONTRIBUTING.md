@@ -38,7 +38,9 @@ this project's normal mode. The conditions:
 
 - `make gates` runs everything a change needs to pass: build, vet,
   tests (race detector on), lint, modern-idiom check, vulnerability
-  scan, pin checks, and the working binaries.
+  scan, pin checks, the installed-copy drift check (this repository's
+  generated documents against the templates it ships), and the working
+  binaries.
 - Tests live next to what they test; e2e scenarios are testscript
   `.txtar` files under `internal/cli/testdata/`.
 - Documentation, code, comments and commit messages are English.

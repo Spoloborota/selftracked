@@ -17,7 +17,7 @@ BIN     := bin/selftracked
 
 .PHONY: help
 help: ## List the targets
-	@awk 'BEGIN {FS = ":.*## "} /^[a-z][a-z-]*:.*## / {printf "  \033[1m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-z][a-z-]*:.*## / {printf "  \033[1m%-13s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 .PHONY: build
 build: ## Compile every package
@@ -63,6 +63,15 @@ fuzz: ## Run the fuzz corpora briefly (seeds only until a target exists)
 check-pins: ## Verify the toolchain and dependency pins
 	./scripts/check-pins.sh
 
+# The fixture runs first, in the same step: it proves the comparison can fail
+# before the comparison reports that it did not. A red fixture kept behind its
+# own target is a check nobody is obliged to run, which is the thing this gate
+# exists to stop. It builds its own scratch tree — no tracked file is touched.
+.PHONY: check-copies
+check-copies: ## Fail when an installed generated document drifts from its template
+	./scripts/check-installed-copies-fixture.sh
+	./scripts/check-installed-copies.sh
+
 .PHONY: probe-gofix
 probe-gofix: ## Re-prove the undocumented `go fix -diff` exit-code behaviour
 	./scripts/probe-gofix.sh
@@ -74,7 +83,7 @@ probe-gofix: ## Re-prove the undocumented `go fix -diff` exit-code behaviour
 # SessionStart hook run bin/selftracked off PATH, and a gates run is the
 # natural moment the working binary must match the code it just proved.
 .PHONY: gates
-gates: build vet test lint fix-check vuln check-pins binaries ## Everything a stage close needs
+gates: build vet test lint fix-check vuln check-pins check-copies binaries ## Everything a stage close needs
 
 .PHONY: clean
 clean: ## Remove build output

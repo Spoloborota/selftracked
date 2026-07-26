@@ -8,7 +8,7 @@ change outside §16, no schema change, no verb change, no change to
 anything `init` installs.
 Status: **accepted** · raised 2026-07-26 by task #68 under epic
 `adoption-contract`, story S1 · review tier **FULL** (plan §5, D-EP7) ·
-ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session · applied to the spec the same day
+ratified by the coordinating agent 2026-07-26 under the owner's explicit 2026-07-26 grant of autonomy for this session (recorded in the trail as task #74) · applied to the spec the same day · **corrected the same day** after the implementation critic round: this text claimed the guarded/unguarded boundary was "measured" and that two unguarded pairs existed, where the source says ten — no §16 change, since the spec asserts no count
 
 ## Why
 
@@ -159,8 +159,26 @@ because §16's other entries are about the built artifact, and a reader
 should know the section now carries both kinds rather than assuming a
 misfile.
 
-Three pairs are guarded and the rest of the scaffold is not, and the
-boundary is not arbitrary — it is measured. Two more pairs exist:
+Three pairs are guarded and the rest of the scaffold is not.
+
+*Correction 2026-07-26, after an implementation critic round: the
+sentence that stood here claimed the boundary was "measured" and that
+"two more pairs exist". The count was wrong and the word was unearned.
+Counted from the source rather than from memory —
+`internal/scaffold/scaffold.go`'s `staticFiles` holds 11 entries and
+`hookFiles` holds 2 — `init` installs **13** files from templates, so
+**ten** pairs are unguarded, not two. The two walked below are the two
+that were considered; the other eight (README stubs, the ADR template,
+and the two generated git hooks, which `writeHooks` rewrites on every
+`init` rather than protecting like the generated documents) were never
+examined. Leaving three guarded is still the right call for the reason
+each bullet gives — those three are the contract #55 was about — but the
+claim to have measured the boundary was false, and this project has been
+burned by exactly that: a number published because it sounded like one
+that had been counted. The gate's own printed note is corrected with
+this text so the two cannot say different things.*
+
+Two candidates were considered:
 
 - `AGENTS.md` vs `internal/scaffold/templates/AGENTS.md` — **currently
   identical** (`diff -q`, 2026-07-26). It is a candidate for the list; it
