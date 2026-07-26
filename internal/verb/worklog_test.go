@@ -1,11 +1,13 @@
 package verb
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
 	"unicode"
 
+	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/rules"
 )
 
@@ -89,10 +91,12 @@ func TestDeadZoneClause(t *testing.T) {
 }
 
 // TestRouteClausesEscapeHostileIdentifiers: neither a slug nor a story id
-// is shape-constrained enough to trust. `epics.slug` carries no CHECK,
-// `stories.id`'s CHECK is `GLOB 'S[0-9]*'` (unconstrained after the first
-// digit), and `import` screens text only for control runes -- so both can
-// carry bidi and format characters into a message another agent reads.
+// is shape-constrained enough to trust at this layer. `epics.slug` carries
+// no CHECK, `stories.id`'s CHECK is `GLOB 'S[0-9]*'` (unconstrained after
+// the first digit), and `load` replays a dump into those tables under the
+// schema's CHECKs alone -- so both can carry bidi and format characters
+// into a message another agent reads even though `epic create` and `import`
+// now apply the section 4 grammar on the way in.
 // Every interpolation is %q, which renders them as escapes.
 //
 // The property asserted is the one that matters to the reader of the
@@ -128,5 +132,32 @@ func TestRouteClausesEscapeHostileIdentifiers(t *testing.T) {
 			!strings.Contains(got, strconv.Quote(hostileID)) {
 			t.Errorf("%s contains neither identifier in its quoted form: %+q", name, got)
 		}
+	}
+}
+
+// TestWorklogAddScreensPositionalSlug: SLUG is an argument like any other —
+// it reaches `worklog.epic` and the refusal messages — and it was the one
+// `worklog add` passed to the write path without §8.1's control-character
+// gate (task #63). The assertion is on the CODE, not merely on failure:
+// without the gate the call still errors (the seeded instance holds no such
+// epic), so `err != nil` alone would pass on a revert while `control-chars`
+// would not.
+func TestWorklogAddScreensPositionalSlug(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	seedInstance(t, dir)
+
+	e := &cli.Env{Stdout: &strings.Builder{}, Stderr: &strings.Builder{}}
+	// A newline in a stored value would break the dump's one-line-per-row
+	// grammar; the rune is built rather than written so this file does not
+	// carry the byte it exists to prove is refused.
+	err := worklogAdd(e, "wl"+string(rune(0x0a))+"injected", "V-1", storyDone, "", "", "", "", 0)
+
+	var coded *cli.CodedError
+	if !errors.As(err, &coded) || coded.Code != codeControlChars {
+		t.Fatalf("a control character in SLUG must refuse with control-chars, got %v", err)
+	}
+	if !strings.Contains(coded.Message, "SLUG") {
+		t.Errorf("the refusal must name the offending argument: %q", coded.Message)
 	}
 }

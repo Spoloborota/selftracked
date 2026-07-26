@@ -62,9 +62,18 @@ Source inconsistencies must be resolved in the corpus **before** import,
 not imported as-is: a closed epic whose cards were never flipped, a
 duplicate pointing at a task that is itself a duplicate, a story status
 your prose contradicts. The importer refuses what it can detect (dup
-chains, unknown statuses, out-of-bounds dates); what it cannot detect
-becomes tracker state you will be correcting through verbs later —
-reconciling first is cheaper.
+chains, unknown statuses, out-of-bounds dates, malformed identifiers);
+what it cannot detect becomes tracker state you will be correcting
+through verbs later — reconciling first is cheaper.
+
+Identifiers are the class worth renaming ahead of time. Every epic slug
+must be kebab-case and every story id `S<number>` (`V-<number>` for a
+post-close worklog row) — on the identifiers your corpus declares and on
+the ones it only references from a story, a task or a worklog row. A
+legacy tool's `Auth_2024` is refused by name and left alone: import
+never rewrites an identifier for you, because a silently kebab-cased
+slug is your data changed without your say. This is not one of the three
+relaxations in section 5, and `--legacy` does not admit it.
 
 Two authoring constraints found in real rehearsals:
 

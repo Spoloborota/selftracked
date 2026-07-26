@@ -752,6 +752,10 @@ func unparkVerb() cli.Verb {
 // dump, the full old value in the prior committed dump.
 const editPrefix = 40
 
+// bounded is the project's one truncation. Besides the edit events above it
+// bounds the values `import`'s identifier refusals quote back (task #63):
+// same reason, a different sink — a message an agent reads rather than a row
+// it stores.
 func bounded(s string) string {
 	if len(s) <= editPrefix {
 		return s

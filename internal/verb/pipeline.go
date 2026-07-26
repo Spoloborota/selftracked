@@ -36,6 +36,8 @@ const (
 	codeDiverged = "diverged"
 	// codeNotFound marks a missing local instance.
 	codeNotFound = "not-found"
+	// codeControlChars marks every §8.1 text-hygiene refusal.
+	codeControlChars = "control-chars"
 )
 
 // stateRender is the pipeline's STATE.md slot (the §6.1 order is
@@ -338,7 +340,7 @@ func validateText(flagName, s string) error {
 	for _, r := range s {
 		if r < 0x20 || r == 0x7f {
 			return &cli.CodedError{
-				Code: "control-chars",
+				Code: codeControlChars,
 				Message: fmt.Sprintf(
 					"%s contains a control character (0x%02x); dump rows are one line each",
 					flagName, r),

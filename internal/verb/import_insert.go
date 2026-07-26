@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -21,12 +22,18 @@ var (
 )
 
 // validate runs the pre-write checks that do not depend on git: text
-// hygiene (§8.1) on every stored string, and — without --legacy — the
-// terminal-state refusal. The other two relaxations (synthesized dates,
-// legacy: commits) are gated inside date resolution; all three answer to the
-// single legacy bool (INV-439).
+// hygiene (§8.1) on every stored string, §4's identifier grammar on every
+// slug and story id, and — without --legacy — the terminal-state refusal.
+// The other two relaxations (synthesized dates, legacy: commits) are gated
+// inside date resolution; all three answer to the single legacy bool
+// (INV-439). Identifier shape is NOT among them: the migration guide §5
+// lists exactly three relaxations and shape is not one, so the grammar check
+// sits above the legacy branch and runs on both paths.
 func (c *corpus) validate(legacy bool) error {
 	if err := c.validateText(); err != nil {
+		return err
+	}
+	if err := c.validateIdentifiers(); err != nil {
 		return err
 	}
 	if err := c.validateFutureIncrement(); err != nil {
@@ -48,6 +55,106 @@ func (c *corpus) validateFutureIncrement() error {
 		}
 	}
 	return nil
+}
+
+// The §4 identifier shapes the import door checks. An epic slug reuses
+// `slugOK`, the very predicate `epic create` gates the front door with; a
+// story id is `S<number>`; a worklog row may reference `V-<number>` instead
+// — a post-close validation row, not a story. None of this can live in the
+// schema as it stands: `epics.slug` carries no shape CHECK at all, and
+// `stories.id`'s `GLOB 'S[0-9]*'` admits anything after the first digit
+// (`S1a`, `S1.5`, `S1-x`). §1.1 puts exactly this at the verb layer —
+// schema teeth stop accidents, the verbs state the grammar.
+var (
+	storyIDShape = regexp.MustCompile(`^S[0-9]+$`)
+	vRowShape    = regexp.MustCompile(`^V-[0-9]+$`)
+)
+
+const (
+	slugRule     = `kebab-case: lowercase letters and digits joined by single dashes, as in "token-rotation"`
+	storyIDRule  = `S<number>, as in "S12"`
+	storyRefRule = `S<number>, or V-<number> for a post-close validation row, as in "S12" or "V-1"`
+)
+
+// validateIdentifiers enforces §4's grammar on every identifier the corpus
+// introduces — the ones it DECLARES in epics[] and stories[], and the ones it
+// merely REFERENCES from a story, a task or a worklog row. References count
+// because they reach the same columns: `insertExplicitStories` writes the
+// story's epic, `materializeStories` writes a whole story row for a
+// worklog-referenced id, and a task's epic lands in `tasks.epic`.
+//
+// It refuses rather than normalizes. Silently kebab-casing an adopter's
+// identifier would rewrite their data, and the refusal names the offending
+// value and the rule so the corpus gets fixed instead of guessed at.
+func (c *corpus) validateIdentifiers() error {
+	for i, e := range c.Epics {
+		if err := checkEpicSlug(fmt.Sprintf("epics[] row %d", i+1), e.Slug); err != nil {
+			return err
+		}
+	}
+	for i, s := range c.Stories {
+		where := fmt.Sprintf("stories[] row %d", i+1)
+		if err := checkEpicSlug(where, s.Epic); err != nil {
+			return err
+		}
+		if !storyIDShape.MatchString(s.ID) {
+			return refuseIdentifier(where, "story id", s.ID, storyIDRule)
+		}
+	}
+	for i, t := range c.Tasks {
+		if t.Epic == "" {
+			continue // a task with no home names no slug
+		}
+		// The row INDEX locates the row; the title only helps the reader
+		// recognise it. Titles are not unique — two malformed rows sharing one
+		// would otherwise produce the same location twice.
+		where := fmt.Sprintf("tasks[] row %d (task %q)", i+1, bounded(t.Title))
+		if err := checkEpicSlug(where, t.Epic); err != nil {
+			return err
+		}
+	}
+	return c.validateWorklogIdentifiers()
+}
+
+// validateWorklogIdentifiers is the reference-only path: a corpus carrying
+// nothing but worklog rows still reaches `epics.slug` and `stories.id`
+// through them.
+func (c *corpus) validateWorklogIdentifiers() error {
+	for i, w := range c.Worklog {
+		where := fmt.Sprintf("worklog[] row %d", i+1)
+		if err := checkEpicSlug(where, w.Epic); err != nil {
+			return err
+		}
+		if !storyIDShape.MatchString(w.Story) && !vRowShape.MatchString(w.Story) {
+			return refuseIdentifier(where, "story reference", w.Story, storyRefRule)
+		}
+	}
+	return nil
+}
+
+func checkEpicSlug(where, slug string) error {
+	if slugOK(slug) {
+		return nil
+	}
+	return refuseIdentifier(where, "epic slug", slug, slugRule)
+}
+
+// refuseIdentifier is the shape all three grammar refusals share: where it
+// was found, what it is, the offending value, the rule it broke.
+//
+// The value is BOUNDED and then rides %q. Both halves are load-bearing and
+// neither replaces the other: %q escapes bidi and format runes so a hostile
+// identifier cannot re-render the message, and `bounded` — the same 40-byte
+// cut the events trail uses for the same reason — stops the message from
+// echoing an arbitrary payload into the context of the agent that reads the
+// refusal. §6 of the migration guide has an operator rehearsing imports and
+// reading exactly these lines, so a corpus author has a channel here whether
+// or not the import commits. The row index carries the location, so the
+// value only has to be recognisable, not complete.
+func refuseIdentifier(where, what, value, rule string) error {
+	return refuse("usage",
+		"%s: %s %q is not %s; fix the corpus — import refuses an identifier rather than rewriting it",
+		where, what, bounded(value), rule)
 }
 
 // validateTerminal is the without-legacy relaxation gate: a terminal epic,

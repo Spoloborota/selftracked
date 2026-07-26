@@ -42,7 +42,7 @@ func worklogAdd(e *cli.Env, slug, story, state, commits, gate, review, note stri
 	if story == "" || state == "" {
 		return refuse("usage", "worklog add requires --story and --state")
 	}
-	if err := validateWorklogText(story, state, commits, gate, review, note); err != nil {
+	if err := validateWorklogText(slug, story, state, commits, gate, review, note); err != nil {
 		return err
 	}
 	isV := strings.HasPrefix(story, "V-")
@@ -72,8 +72,13 @@ func worklogAdd(e *cli.Env, slug, story, state, commits, gate, review, note stri
 	return nil
 }
 
-func validateWorklogText(story, state, commits, gate, review, note string) error {
+// validateWorklogText screens every string this verb stores, the positional
+// SLUG included: it is an argument like any other, it reaches `worklog.epic`
+// and the refusal messages, and leaving it out was the one hole in §8.1's
+// write-time gate on this verb.
+func validateWorklogText(slug, story, state, commits, gate, review, note string) error {
 	for _, f := range [][2]string{
+		{"SLUG", slug},
 		{"--story", story},
 		{"--state", state},
 		{"--commits", commits},
@@ -201,12 +206,15 @@ func deadZoneClause(slug string) string {
 // that mutates state and into a `wip` refusal.
 //
 // Every slug and story id is interpolated with %q, including inside the
-// suggested commands. Neither is shape-constrained enough to trust: `epics
-// .slug` has no CHECK at all, `stories.id`'s CHECK is `GLOB 'S[0-9]*'`
-// (anything after the first digit), and `import` validates text only for
-// control runes — so an id or slug can carry bidi and format characters
-// into a message another agent reads. %q renders those as escapes and
-// still yields a copy-pasteable CLI token.
+// suggested commands. Neither is shape-constrained enough to trust at this
+// layer: `epics.slug` has no CHECK at all and `stories.id`'s CHECK is `GLOB
+// 'S[0-9]*'` (anything after the first digit), so the writing verbs are the
+// only thing between a hostile identifier and this message. `epic create`
+// and `import` (task #63) both apply §4's grammar now, but `load` replays a
+// dump straight into the tables under the schema's CHECKs alone — so an id
+// or slug can still carry bidi and format characters into a message another
+// agent reads. %q renders those as escapes and still yields a
+// copy-pasteable CLI token.
 func storyRouteClause(slug string, s rules.Story) string {
 	head := fmt.Sprintf("; story %q of epic %q is %s", s.ID, slug, s.Status)
 	switch s.Status {
