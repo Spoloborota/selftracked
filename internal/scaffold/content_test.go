@@ -10,23 +10,57 @@ import (
 	"testing"
 )
 
-// absPathToken matches a word that begins an absolute path — a leading
-// slash followed by a letter, or the home prefix that becomes one when the
-// shell expands it — at a position where it is a path rather than
-// punctuation: start of line, or after whitespace, a quote, a backtick, or
-// an opening bracket. A URL does not match (the character before its slashes
-// is a colon), nor does a repo-relative path such as `./bin/selftracked` or
-// `.selftracked/dump.sql`.
-var absPathToken = regexp.MustCompile("(?m)(^|[\\s\"'`(\\[<])(/[A-Za-z]|~/)")
+// absPathToken matches a token that begins an absolute path, at a position
+// where it is a path rather than punctuation. Four shapes are absolute:
+//
+//   - `/` followed by a letter — a POSIX absolute path;
+//   - `~` followed by a letter or a slash — `~/x` and the tilde-username
+//     form `~name/x`, both of which the shell expands to an absolute path;
+//   - a drive letter, a colon and a separator followed by a letter
+//     (`C:\Users\…`, `C:/Users/…`) — a Windows absolute path, which this
+//     project's Windows CI job would run against;
+//   - two backslashes followed by a letter (`\\server\share`) — a UNC path.
+//
+// The preceding character decides whether the token is a path at all:
+// start of line, whitespace, a quote, a backtick, a bracket, or one of the
+// separators that glue a path to what names it (`=`, `:`, `|`, `,`, `;`) —
+// `PATH=/x`, `see:/x`, a `|/x|` table cell. `>` is deliberately NOT in that
+// class: `2>/dev/null` in the generated settings file is a shell
+// redirection to a device, not a machine-identifying path.
+//
+// What must keep passing: a URL (`https://x` — the slash after the colon is
+// followed by another slash, and the scheme is more than one letter, so
+// neither the POSIX nor the Windows shape fires), and a repo-relative path
+// such as `./bin/selftracked`, `.selftracked/dump.sql` or `docs/research/`
+// (the character before the slash is a letter or a dot).
+var absPathToken = regexp.MustCompile(`(?m)(^|[\s"'` + "`" + `(\[<=:|,;])` +
+	`(/[A-Za-z]|~[A-Za-z/]|[A-Za-z]:[\\/][A-Za-z]|\\\\[A-Za-z])`)
+
+// settingsRel is the one non-.md file this check covers; see the scope note
+// on TestGeneratedDocsCarryNoAbsolutePaths.
+var settingsRel = filepath.Join(".claude", "settings.json")
 
 // TestGeneratedDocsCarryNoAbsolutePaths enforces section 14's rule —
 // "selftracked's own verbs never write hostnames, usernames, or absolute
-// paths" — over the prose init writes. `init` is a verb and these files are
+// paths" — over the text init writes. `init` is a verb and these files are
 // what it writes, so the rule reaches them; PROMPT.md's "Running the tool"
 // section is the passage most exposed to it, because a literal install path
 // is exactly what a well-meaning edit would substitute for the shape stated
-// there. Scoped to .md files: a generated shell hook may legitimately carry
-// an interpreter path, and this rule is about the documents.
+// there.
+//
+// Scope, stated rather than implied by a file extension — section 14's rule
+// is not scoped by one. Checked: every generated `.md` document, plus
+// `.claude/settings.json`, which init writes from a template and which
+// carries commands that an edit could pin to one machine. Excluded, each
+// for a reason:
+//
+//   - `.selftracked/hooks/pre-commit` and `post-commit` — a generated shell
+//     hook may legitimately carry an interpreter path;
+//   - `.gitignore` — its lines are ignore patterns, and a leading slash
+//     there means "repository root", not "filesystem root";
+//   - `.selftracked/dump.sql`, `dump.hash`, `db.sqlite` — derived database
+//     surfaces, not authored text: what they may contain is governed by the
+//     verbs that write the rows, not by a template review.
 func TestGeneratedDocsCarryNoAbsolutePaths(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -37,14 +71,17 @@ func TestGeneratedDocsCarryNoAbsolutePaths(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || filepath.Ext(p) != ".md" {
+		if d.IsDir() {
 			return nil
 		}
-		b, err := os.ReadFile(p)
+		rel, err := filepath.Rel(root, p)
 		if err != nil {
 			return err
 		}
-		rel, err := filepath.Rel(root, p)
+		if filepath.Ext(p) != ".md" && rel != settingsRel {
+			return nil
+		}
+		b, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
@@ -199,7 +236,10 @@ func TestGeneratedContentAssertions(t *testing.T) {
 			`PROMPT.md's "When a verb refuses because the epic`,
 		},
 		{"#56", "PROMPT.md", "the language section exists", "## The language of what you write"},
-		{"#56", "PROMPT.md", "one language, chosen once", "one language, chosen once for the repository"},
+		// Quoted from §9, preposition included: the spec says "chosen once
+		// per repository" and asks this clause to be quoted rather than
+		// paraphrased, so the wording is pinned as the spec writes it.
+		{"#56", "PROMPT.md", "one language, chosen once", "one language, chosen once per repository"},
 		{"#56", "PROMPT.md", "English is the default", "**English is the\ndefault this contract ships with**"},
 		{"#56", "PROMPT.md", "the dump-is-permanent reason", "published and permanent"},
 		{"#56", "PROMPT.md", "the greppability reason", "splits its own greppability"},
@@ -238,19 +278,33 @@ func TestGeneratedContentAssertions(t *testing.T) {
 	// sections after them, which have the same failure mode: a statement
 	// that is present in the file but has drifted out of the passage it
 	// governs. The error prefix is neutral because the helper is shared.
+	//
+	// Both anchors must be UNAMBIGUOUS, and an ambiguous one is a failure
+	// rather than a first-match guess. A first-match lookup is exploitable:
+	// a decoy copy of a heading inserted earlier in the document widens the
+	// computed window until it spans decoy AND real section, and every
+	// `must` string is then satisfied by bait text inside the decoy while
+	// the real section underneath is corrupted — a green suite over a
+	// broken contract. So a label that does not occur exactly once in the
+	// document, or a `next` anchor that does not occur exactly once after
+	// it, fails here.
 	segment := func(doc, label, next string) string {
-		s := strings.Index(doc, norm(label))
-		if s < 0 {
-			t.Errorf("segment: label %q not found", label)
+		l, n := norm(label), norm(next)
+		if c := strings.Count(doc, l); c != 1 {
+			t.Errorf("segment: label %q occurs %d times, want exactly 1 — "+
+				"an ambiguous anchor cannot delimit a section", label, c)
 			return ""
 		}
-		rest := doc[s+len(norm(label)):]
-		e := strings.Index(rest, norm(next))
-		if e < 0 {
-			t.Errorf("segment: %q is not followed by %q", label, next)
+		rest := doc[strings.Index(doc, l)+len(l):]
+		if c := strings.Count(rest, n); c != 1 {
+			t.Errorf("segment: the anchor %q occurs %d times after label %q, "+
+				"want exactly 1 — an ambiguous anchor cannot delimit a section",
+				next, c, label)
 			return ""
 		}
-		return rest[:e]
+		// The count above is 1, so this index is never -1.
+		end := strings.Index(rest, n)
+		return rest[:end]
 	}
 	for _, b := range []struct {
 		doc, label, next string
@@ -311,6 +365,14 @@ func TestGeneratedContentAssertions(t *testing.T) {
 		}
 	}
 
+	// confined pins a token that a section may name only inside one
+	// sanctioned phrase. A `mustNot` on a single literal is the wrong tool
+	// for a route that does not exist: it forbids one surface form and
+	// leaves every other phrasing free to present the route as available,
+	// which is the dangerous direction — a contract promising what the code
+	// refuses. Confinement is the assertion that matches the claim: EVERY
+	// occurrence of the token in the section is part of the negation.
+	type confined struct{ token, within string }
 	// #54/#51/#56: the three operating sections, each read as the passage
 	// between its own heading and the next one. The rows above assert that
 	// the mandated sentences exist SOMEWHERE in PROMPT.md; these assert that
@@ -321,6 +383,7 @@ func TestGeneratedContentAssertions(t *testing.T) {
 	for _, b := range []struct {
 		name, doc, label, next string
 		must, mustNot          []string
+		confined               []confined
 	}{
 		{
 			name: "#54 Running the tool",
@@ -355,8 +418,33 @@ func TestGeneratedContentAssertions(t *testing.T) {
 				"there is no `epic reopen`, ever",
 			},
 			// The one route that does not exist must not be described as one
-			// anywhere in the section.
-			mustNot: []string{"`epic reopen SLUG`"},
+			// anywhere in the section — in ANY phrasing, not merely the one
+			// a literal `mustNot` would pin. A bullet reading "**`epic
+			// reopen`** — reopening a closed epic to correct a mistaken
+			// close" contradicts the section's own closing sentence while
+			// dodging any single literal; it does not dodge this.
+			confined: []confined{{
+				token:  "epic reopen",
+				within: "there is no `epic reopen`, ever",
+			}},
+		},
+		{
+			// #51: the two carve-outs sit in adjacent bullets and each is a
+			// carve-out for its OWN reason — detach removes a homing, dissolve
+			// satisfies a close condition. Asserting both justifications over
+			// the whole section passes when they are swapped between the
+			// bullets, which leaves each route explained by the other's
+			// reasoning. So each bullet is read alone.
+			name:  "#51 the detach carve-out keeps its own justification",
+			doc:   "PROMPT.md",
+			label: "**`edit --detach`**",
+			next:  "**`story dissolve SLUG SID --why …` of a non-terminal story,",
+			must: []string{
+				"un-homing a task",
+				"removes a violation rather than creating one",
+				"the repair the `reopen` refusal names",
+			},
+			mustNot: []string{"`DISSOLVED` is the one story target"},
 		},
 		{
 			// The carve-out and its restriction must live in the same
@@ -368,6 +456,10 @@ func TestGeneratedContentAssertions(t *testing.T) {
 			next:  "And the route that is not a route",
 			must: []string{
 				"on a `CLOSED` epic only",
+				// This bullet's own justification, asserted here rather than
+				// over the section, so a swap with the `edit --detach`
+				// bullet's reasoning fails on both sides.
+				"`DISSOLVED` is the one story target that *satisfies* a close condition",
 				"a `DISSOLVED` epic never passed a close gate",
 				// The guard is narrower than section 6.4's sentence: it also
 				// requires that THIS tracker's `epic close` produced the
@@ -378,17 +470,26 @@ func TestGeneratedContentAssertions(t *testing.T) {
 				// promised the route there would be read at the worst moment.
 				"arrived `CLOSED` through `import`",
 			},
+			// The other bullet's justification, for the same reason.
+			mustNot: []string{"the repair the `reopen` refusal names"},
 		},
 		{
 			name: "#56 the language of what you write",
 			doc:  "PROMPT.md", label: "## The language of what you write",
 			next: "## Durable-doc authoring rules",
 			must: []string{
-				"one language, chosen once for the repository",
+				"one language, chosen once per repository",
 				"**English is the default this contract ships with**",
 				"a **default, not a prohibition**",
 				"no verb refuses a non-English title and none is proposed",
 				"records that choice in its own project memory",
+				// The rule is asymmetric — English needs no declaration, any
+				// other choice is recorded — so the section says which of its
+				// own reasons actually argue for English. Dropping that
+				// sentence leaves a public contract whose stated grounds
+				// overreach what they support.
+				"the first and the third argue for *one* language",
+				"only the second — the locale-fixed `PO:` token — argues for English",
 			},
 			// A default restated as a rule is the mutation this section is
 			// most exposed to: it reads like a tightening, and it would make
@@ -426,6 +527,27 @@ func TestGeneratedContentAssertions(t *testing.T) {
 			if strings.Contains(seg, norm(bad)) {
 				t.Errorf("%s (%s): the section under %q carries %q, which it must not",
 					b.name, b.doc, b.label, bad)
+			}
+		}
+		for _, c := range b.confined {
+			tok, within := norm(c.token), norm(c.within)
+			// The sanctioned phrase must itself name the token exactly once,
+			// or the arithmetic below means nothing.
+			if n := strings.Count(within, tok); n != 1 {
+				t.Errorf("%s (%s): the sanctioned phrase %q names %q %d times, want exactly 1",
+					b.name, b.doc, c.within, c.token, n)
+				continue
+			}
+			sanctioned := strings.Count(seg, within)
+			if sanctioned == 0 {
+				t.Errorf("%s (%s): the section under %q does not carry %q",
+					b.name, b.doc, b.label, c.within)
+				continue
+			}
+			if total := strings.Count(seg, tok); total != sanctioned {
+				t.Errorf("%s (%s): the section under %q names %q %d times but only %d "+
+					"are part of %q — every mention must be the negation, in any phrasing",
+					b.name, b.doc, b.label, c.token, total, sanctioned, c.within)
 			}
 		}
 	}

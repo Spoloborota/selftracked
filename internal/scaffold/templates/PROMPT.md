@@ -194,8 +194,8 @@ its signature. Wherever a signature says `<ref>`, the grammar is: `NN` or
 The catalog, with signatures:
 
 - **Tasks:**
-  - `create --title T [--status OPEN|IN-REVIEW|NEEDS-TRIAGE] [--note N]
-    [--epic SLUG] [--label]` — default status is `NEEDS-TRIAGE`.
+  - `create --title T [--status OPEN|IN-REVIEW|NEEDS-TRIAGE (default
+    NEEDS-TRIAGE)] [--note N] [--epic SLUG] [--label]`
   - `edit <ref> [--title T] [--note N] [--goal G] [--dod D] [--consumes C]
     [--produces P] [--epic SLUG|--detach]`
   - `set-status <id> <STATUS> [--note N] [--dup-of ID]` — targets are the
@@ -292,7 +292,7 @@ A goal that revives becomes a new epic; the closed one keeps its record.
 
 Tracker content — titles, notes, epic goals, story DoD, `consumes` /
 `produces`, worklog notes, resolutions, criteria text — is written in
-**one language, chosen once for the repository**, and **English is the
+**one language, chosen once per repository**, and **English is the
 default this contract ships with**. The reasons are properties of this
 artifact, not general advocacy:
 
@@ -304,6 +304,12 @@ artifact, not general advocacy:
   findable while the ruling beside it stops being so.
 - A reader of a published dump should not need a second language to
   follow one repository end to end.
+
+Note what those reasons do and do not carry: the first and the third
+argue for *one* language, whichever it is, and only the second — the
+locale-fixed `PO:` token — argues for English in particular. So English
+is the default because a literal this tool already ships in English is
+the thing a second language would split, and for no reason beyond that.
 
 This is a **default, not a prohibition**. A crew that chooses another
 language records that choice in its own project memory and applies it
