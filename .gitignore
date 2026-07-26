@@ -31,3 +31,4 @@ __pycache__/
 /.selftracked/db.sqlite*
 /.selftracked/dump.hash
 /.selftracked/skip-pending
+/.selftracked/instance.salt

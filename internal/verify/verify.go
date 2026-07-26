@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/rules"
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
@@ -60,7 +61,7 @@ func Run(ctx context.Context, dir string, fast bool) (Report, error) {
 	rep := Report{Fast: fast}
 	dbPath := filepath.Join(dir, dbFile)
 	if _, err := os.Stat(dbPath); err != nil {
-		return rep, &notFoundError{path: dbPath}
+		return rep, &notFoundError{msg: instance.NotFoundMessage(dbPath)}
 	}
 	db, err := schema.OpenRead(dbPath)
 	if err != nil {
@@ -164,9 +165,11 @@ func stage1(ctx context.Context, db *sql.DB, dir string, rep *Report, fast bool)
 	return nil
 }
 
-// notFoundError is verify's one refusal: no tracker here.
-type notFoundError struct{ path string }
+// notFoundError is verify's one refusal: no tracker here. Its message is
+// composed at the refusal site so it carries §6.1's resolution form —
+// verify is the pre-commit gate and the verb an operator runs by hand,
+// which is exactly why the amendment names this site as the one a
+// pipeline-only fix would miss.
+type notFoundError struct{ msg string }
 
-func (e *notFoundError) Error() string {
-	return "no " + e.path + " here; run selftracked init first"
-}
+func (e *notFoundError) Error() string { return e.msg }

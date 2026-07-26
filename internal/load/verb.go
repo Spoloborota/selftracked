@@ -10,6 +10,7 @@ import (
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
+	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/schema"
 	"github.com/Spoloborota/selftracked/internal/verb"
 )
@@ -38,6 +39,19 @@ func Verb() cli.Verb {
 	}
 }
 
+// noDumpMessage is §6.1's resolution refusal with this site's own first
+// clause: a missing DUMP is a different fact from a missing database, and
+// this message never advised `init` — but run from a subdirectory it still
+// owes the reader the root the walk found (amendment
+// `resolution-names-the-root-it-found`).
+func noDumpMessage(dumpPath string) string {
+	msg := "no " + dumpPath + " to load"
+	if root := instance.AncestorTracker(); root != "" {
+		msg += "; a tracker exists at " + root + " — run selftracked from that directory"
+	}
+	return msg
+}
+
 func run(e *cli.Env, force bool) error {
 	dir := instanceDir
 	dumpPath := filepath.Join(dir, dumpFile)
@@ -45,7 +59,7 @@ func run(e *cli.Env, force bool) error {
 	text, err := os.ReadFile(dumpPath)
 	if err != nil {
 		const refusal = 1
-		return &cli.CodedError{Code: "not-found", Message: "no " + dumpPath + " to load", Status: refusal}
+		return &cli.CodedError{Code: "not-found", Message: noDumpMessage(dumpPath), Status: refusal}
 	}
 
 	ctx := context.Background()

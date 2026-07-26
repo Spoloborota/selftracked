@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
+	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
@@ -51,7 +52,7 @@ func run(e *cli.Env, stdout bool) error {
 	if _, err := os.Stat(dbPath); err != nil {
 		return &cli.CodedError{
 			Code:    "not-found",
-			Message: "no " + dbPath + " here; run selftracked init first", Status: 1,
+			Message: instance.NotFoundMessage(dbPath), Status: 1,
 		}
 	}
 	db, err := schema.OpenRead(dbPath)

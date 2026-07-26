@@ -133,12 +133,16 @@ stderr 'no epic \\"ghost\\"'
 # consequently reach the agent before it: both name the real problem, and
 # both are pinned here so the ordering is asserted rather than incidental.
 
-# No tracker in this directory at all: not-found, naming init.
+# No tracker in this directory: not-found — and since this subdirectory
+# sits under the scenario's tracker, §6.1's resolution names that root
+# instead of advising `init` into a nested second tracker (amendment
+# resolution-names-the-root-it-found; resolution.txtar owns the full
+# matrix, this pins only that the pipeline refusal fires before the verb's).
 mkdir bare
 cd bare
 expectexit 1 selftracked worklog add wl --story S1 --state IN-PROGRESS
 stderr '"code":"not-found"'
-stderr 'no \.selftracked/db\.sqlite here; run selftracked init first'
+stderr 'no \.selftracked/db\.sqlite here; a tracker exists at \.\.'
 ! stderr 'belong to the story verbs'
 cd ..
 

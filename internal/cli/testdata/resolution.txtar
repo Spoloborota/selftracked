@@ -1,0 +1,63 @@
+# §6.1 resolution (amendment resolution-names-the-root-it-found): run from
+# a subdirectory of a tracked repository, a verb refuses by NAMING the root
+# it found — relative to the working directory, never absolute — and never
+# advises `init`, whose follower would create a second, nested tracker.
+# All five refusal sites the amendment inventories are exercised; this is
+# the DoD's proof that the subdirectory case cannot produce nesting advice.
+
+# Nothing anywhere up the tree FIRST (before any init lands a tracker at
+# $WORK): the historical message stands verbatim, `init` advice included —
+# there it is correct advice, and this fixture proves the change did not
+# degrade the one case that already worked.
+mkdir bare/sub
+cd bare/sub
+expectexit 1 selftracked list
+stderr '"code":"not-found"'
+stderr 'no \.selftracked/db\.sqlite here; run selftracked init first'
+expectexit 1 selftracked gate skip-mark
+stderr 'no \.selftracked here; run selftracked init first'
+expectexit 1 selftracked load
+stderr 'no \.selftracked/dump\.sql to load'
+! stderr 'tracker exists'
+cd $WORK
+
+exec git init
+expectexit 0 selftracked init
+
+mkdir sub/deep
+cd sub/deep
+
+# Site 1 — the shared pipeline (every verb through it): exit 1, code
+# not-found, the root named as ../.., no init anywhere in the refusal.
+expectexit 1 selftracked list
+stderr '"code":"not-found"'
+stderr 'no \.selftracked/db\.sqlite here; a tracker exists at \.\./\.\. — run selftracked from that directory'
+! stderr 'init'
+
+# Site 2 — dump (its own copy of the stat, not the pipeline's).
+expectexit 1 selftracked dump
+stderr 'a tracker exists at \.\./\.\.'
+! stderr 'init'
+
+# Site 3 — verify: the pre-commit gate and the hand-run verb, the site the
+# amendment names as the one a pipeline-only fix would miss.
+expectexit 1 selftracked verify
+stderr 'a tracker exists at \.\./\.\.'
+! stderr 'init'
+
+# Site 4 — gate skip-mark: stats the directory, not the database, and its
+# first clause keeps saying so; the advice half walks like every site.
+expectexit 1 selftracked gate skip-mark
+stderr 'no \.selftracked here; a tracker exists at \.\./\.\.'
+! stderr 'init'
+
+# Site 5 — load: its own first clause (a missing DUMP is a different fact
+# from a missing database) plus the same named root.
+expectexit 1 selftracked load
+stderr 'no \.selftracked/dump\.sql to load; a tracker exists at \.\./\.\.'
+! stderr 'init'
+
+# One level up the distance shrinks with the reader: from sub it is "..".
+cd ..
+expectexit 1 selftracked list
+stderr 'a tracker exists at \.\. — run selftracked from that directory'

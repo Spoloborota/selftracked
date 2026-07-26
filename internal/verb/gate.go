@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
+	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
@@ -50,10 +51,17 @@ func GateVerb() cli.Verb {
 // meaningless) but never opens the database: the point of the marker is to
 // defer the DB write out of the commit boundary.
 func gateSkipMark(e *cli.Env) error {
+	// The refusal is §6.1's resolution message, reconciled with the other
+	// sites in the same pass DELIBERATELY (the amendment names this site's
+	// divergent string and asks for an explicit choice): the first clause
+	// still states this verb's own missing artifact — the directory, since
+	// skip-mark never opens the database — and the advice half walks like
+	// every other site, because `gate skip-mark` from a subdirectory
+	// advising `init` is exactly the nested-tracker hazard.
 	if _, err := os.Stat(instanceDir); err != nil {
 		return &cli.CodedError{
 			Code:    codeNotFound,
-			Message: "no " + instanceDir + " here; run selftracked init first",
+			Message: instance.NotFoundMessage(instanceDir),
 			Status:  refusal,
 		}
 	}

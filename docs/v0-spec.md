@@ -1,6 +1,6 @@
 # selftracked v0 — Specification
 
-Status: **DRAFT, revision 3.43 — for owner review.** Revision history: rev 1 →
+Status: **DRAFT, revision 3.44 — for owner review.** Revision history: rev 1 →
 five-lens adversarial critic round + paper-migration fit analysis + two
 research passes (see `docs/research/`) → rev 2 → second critic round with
 empirical schema testing + delta fit analysis → rev 3 → third (convergence)
@@ -134,24 +134,11 @@ DISSOLVED one is. That qualifier was always in
 `r16-reports-only-what-a-verb-can-clear`'s reasoning and in the code; only
 this paragraph lacked it, and it surfaced when the story writing the
 generated contract had to describe the guard and found the specification
-the less precise of the two (rev 3.43) → this revision.
-
-**Where this document runs ahead of the code.** v0 is built: the schema,
-the connection posture, the verbs, `verify`, `init`, `import` and the
-generated materials all ship. Of the eight amendments written
-proposal-first at revisions 3.34–3.42, **two remain specified here and
-not yet implemented**: `a-tracker-carries-a-name` (rev 3.38) and
-`resolution-names-the-root-it-found` (revs 3.39 and 3.42), whose code and
-fixtures are the last outstanding story of epic `adoption-contract`. The
-other six have landed. Naming the two rather than counting them is
-deliberate: a count here goes stale on the day a story closes, and this
-sentence already did once. They are
-stated in this document's ordinary normative voice, because that is what
-a specification is; a reader who needs to know what the binary does today
-runs it, and a reader who needs to know which obligations are outstanding
-reads the tracker. This notice is scoped to those revisions and is
-removed when the last of them lands; it makes no claim, either way, about
-how earlier revisions were sequenced against their code.
+the less precise of the two (rev 3.43) → story S4 landed the last two of
+the eight amendments — `a-tracker-carries-a-name` and
+`resolution-names-the-root-it-found` — in code and fixtures, and with
+them the temporary "where this document runs ahead of the code" notice
+came out, as that notice itself promised (rev 3.44) → this revision.
 
 Markers: **[DECIDED]** — settled by the owner. **[RESOLVED-BY-EVIDENCE]** —
 adopts the verdict of documented research (cited); owner can veto.

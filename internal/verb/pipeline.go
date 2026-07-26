@@ -20,6 +20,7 @@ import (
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
+	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
@@ -112,13 +113,16 @@ func versionGate(ctx context.Context) error {
 	return nil
 }
 
-// requireInstance says whether a database exists here.
+// requireInstance says whether a database exists here. Its refusal is
+// §6.1's resolution message: from a subdirectory of a tracked repository
+// it names the root it found instead of advising `init` into a nested
+// tracker (amendment `resolution-names-the-root-it-found`).
 func requireInstance() (string, error) {
 	dbPath := filepath.Join(instanceDir, dbFile)
 	if _, err := os.Stat(dbPath); err != nil {
 		return "", &cli.CodedError{
 			Code:    codeNotFound,
-			Message: "no " + dbPath + " here; run selftracked init first",
+			Message: instance.NotFoundMessage(dbPath),
 			Status:  refusal,
 		}
 	}

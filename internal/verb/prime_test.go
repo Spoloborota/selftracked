@@ -233,6 +233,11 @@ func TestPrimeTotalsAndNoProseScan(t *testing.T) {
 		// chosen from a closed set by the code that emits it, never written
 		// by a user, so §11.1's "goal and title are the only prose" holds.
 		"code": true,
+		// instance: twelve characters from the fixed alphabet [0-9a-f],
+		// emitted by the code that computes it, never written by a user —
+		// an identifier by construction (amendment `a-tracker-carries-a-name`),
+		// so §11.1's two-prose-fields rule holds unchanged.
+		"instance": true,
 		// the ONLY two prose fields (INV-469):
 		"goal": true, "title": true,
 	}

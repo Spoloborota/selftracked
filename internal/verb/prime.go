@@ -16,6 +16,7 @@ import (
 
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
+	"github.com/Spoloborota/selftracked/internal/instance"
 	"github.com/Spoloborota/selftracked/internal/ref"
 	"github.com/Spoloborota/selftracked/internal/rules"
 	"github.com/Spoloborota/selftracked/internal/schema"
@@ -29,6 +30,15 @@ const defaultPrimeCap = 20
 // are the contract; the two naming fields (epic goal, story title) are the
 // only prose-class payload — nothing else carries free text (INV-469/470).
 type primeOutput struct {
+	// Instance is the §11.1 tracker identity (amendment
+	// `a-tracker-carries-a-name`): 12 hex characters, the leading 48 bits
+	// of SHA-256(salt || physically-resolved path). FIRST field of the
+	// payload — the subject of a payload belongs before its predicates.
+	// Omitted (never downgraded to an unsalted form) when the path cannot
+	// be resolved or the salt cannot be read or created; consumers treat
+	// it as optional.
+	Instance string `json:"instance,omitempty"`
+
 	EpicsActive  []activeEpic `json:"epics_active"`
 	EpicsPaused  []string     `json:"epics_paused"`
 	EpicsBacklog []string     `json:"epics_backlog"`
@@ -144,6 +154,13 @@ func primeRun(e *cli.Env) error {
 	})
 	if err != nil {
 		return err
+	}
+	// The identity is computed only once the tracker in the working
+	// directory answered — creating the salt on first use is §6.1's one
+	// named read-verb exception, scoped to prime alone. A failed
+	// computation omits the field (§11.1); it never sinks prime.
+	if id, ok := instance.Digest(instanceDir); ok {
+		out.Instance = id
 	}
 	if e.JSON {
 		return printJSON(e, out)
@@ -551,7 +568,15 @@ func ensureEmpty(out *primeOutput) {
 // count-oriented summary. The machine contract is the --json form; this is a
 // convenience, not part of the stable contract.
 func printPrimeDigest(e *cli.Env, out *primeOutput) {
-	_, _ = fmt.Fprintf(e.Stdout, "active epics: %d\n", len(out.EpicsActive))
+	// The instance identity is the first token of the first line (§11.1):
+	// an agent that reads the state before learning whose state it is has
+	// already formed the model the field exists to correct. Absent when
+	// the field is omitted — the line then opens with the counter as before.
+	prefix := ""
+	if out.Instance != "" {
+		prefix = out.Instance + " "
+	}
+	_, _ = fmt.Fprintf(e.Stdout, "%sactive epics: %d\n", prefix, len(out.EpicsActive))
 	for _, ep := range out.EpicsActive {
 		_, _ = fmt.Fprintf(e.Stdout, "  %s — %s (unmet criteria: %d)\n", ep.Slug, ep.Goal, ep.CriteriaUnmet)
 	}

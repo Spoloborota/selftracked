@@ -6,7 +6,19 @@ exec git init
 expectexit 0 selftracked init
 
 # A fresh tracker: the stable contract shape, all lists empty, no divergence.
+# The §11.1 instance identity (amendment a-tracker-carries-a-name) is the
+# FIRST field of the payload: 12 hex characters, never prose.
 expectexit 0 selftracked prime --json
+stdout '^\{"instance":"[0-9a-f]{12}","epics_active":'
+cp stdout prime.first
+# First use created the tracker's salt — gitignored by the shipped
+# .gitignore, so an adopter's status stays clean.
+exists .selftracked/instance.salt
+exec git status --porcelain
+! stdout 'instance\.salt'
+# A second run reads the same salt and reports the same identity.
+expectexit 0 selftracked prime --json
+cmp stdout prime.first
 stdout '"epics_active":\[\]'
 stdout '"ready":\[\]'
 stdout '"triage":\[\]'
@@ -25,8 +37,11 @@ expectexit 0 selftracked prime --json
 stdout '"triage":\["#1"\]'
 ! stdout 'triage this'
 
-# prime without --json is a human digest, not the contract.
+# prime without --json is a human digest, not the contract. The instance
+# identity is the first token of its first line, before `active epics:` —
+# the subject of a payload belongs before its predicates.
 expectexit 0 selftracked prime
+stdout '^[0-9a-f]{12} active epics: 0'
 stdout 'triage: 1'
 
 # §11.1's notices[]: an ACTIVE epic with no story that can receive work is
