@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Spoloborota/selftracked/internal/cli"
@@ -68,10 +69,46 @@ type pathRow struct {
 	Note      string `json:"note"`
 }
 
+// The criterion text carries one name on both doors and one historical
+// alias (§6.2 "One field, one name", amendment
+// `one-name-for-the-criterion-field`): `text` is the name the `criteria
+// add` flag and the corpus field share, `criterion` is the spelling the
+// corpus shipped with and keeps accepting. The column stays
+// `epic_criteria.criterion` under either — this is a vocabulary change,
+// not a schema one.
+const (
+	criterionName  = "text"
+	criterionAlias = "criterion"
+)
+
+// criterionRow declares BOTH spellings because the decoder runs
+// `DisallowUnknownFields` (parseJSON), which accepts only declared keys.
+// They are `*string` rather than `string` because §6.2 makes a row that
+// carries both with DIFFERENT values a `usage` refusal, and that refusal
+// has to tell an absent key from a key present with an empty value —
+// `{"text":"","criterion":"x"}` is a contradiction, `{"criterion":"x"}`
+// is not, and two plain strings render the two cases identically.
 type criterionRow struct {
-	Criterion string `json:"criterion"`
-	Met       bool   `json:"met"`
-	Evidence  string `json:"evidence"`
+	Text      *string `json:"text"`
+	Criterion *string `json:"criterion"`
+	Met       bool    `json:"met"`
+	Evidence  string  `json:"evidence"`
+}
+
+// text returns the criterion under whichever spelling carried it.
+// `validateCriteriaSpelling` has already refused a row carrying both with
+// different values, so the first non-nil pointer is the whole answer.
+// Neither present yields the empty string, which the schema's non-empty
+// CHECK on `epic_criteria.criterion` refuses — the same refusal an absent
+// `criterion` key produced before the alias existed.
+func (cr criterionRow) text() string {
+	if cr.Text != nil {
+		return *cr.Text
+	}
+	if cr.Criterion != nil {
+		return *cr.Criterion
+	}
+	return ""
 }
 
 type epicRow struct {
@@ -300,7 +337,127 @@ func parseJSON(data []byte) (corpus, error) {
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&c); err != nil {
+		if field, ok := unknownJSONField(err); ok && criteriaOnlyKey(data, field) {
+			// §6.2: the corpus's unknown-field refusal names BOTH accepted
+			// spellings, for the reader who guessed a third. The generic
+			// stdlib message names only the key it rejected, which is the
+			// one thing the author already knows.
+			//
+			// The rejected key is BOUNDED before it rides %q. A JSON key has
+			// no character-class restriction and no length limit, and this
+			// refusal is read by an agent, not only by a person: an unbounded
+			// echo lets a corpus paste an arbitrary payload into that agent's
+			// context. Same helper, same reason, as the identifier refusals
+			// in `refuseIdentifier`.
+			return corpus{}, refuse("format",
+				"invalid import JSON: unknown criteria field %q; the criterion text is %q — "+
+					"the same name `criteria add --%s` writes it under — and %q, the corpus's "+
+					"historical spelling, is still accepted",
+				bounded(field), criterionName, criterionName, criterionAlias)
+		}
+		if field, ok := unknownJSONField(err); ok {
+			// The redirect above did not apply — the key is not unique to
+			// criteria objects — but the flood door is the same one. The
+			// stdlib's message embeds the rejected key whole, so a corpus
+			// carrying a 300 KB key anywhere the redirect does not reach
+			// still pastes 300 KB into the reader's context; measured at
+			// 300086 bytes before this branch existed. Only the
+			// unknown-field shape is rebuilt: every other decode error is
+			// short and names an offset, and truncating those would cost a
+			// diagnostic to buy nothing.
+			return corpus{}, refuse("format", "invalid import JSON: unknown field %q", bounded(field))
+		}
 		return corpus{}, refuse("format", "invalid import JSON: %v", err)
 	}
 	return c, nil
+}
+
+// unknownFieldPrefix is encoding/json's wording for the error
+// `DisallowUnknownFields` produces. It is matched as text because the
+// stdlib returns a bare `*errors.errorString` there — no typed error, no
+// field path — and `TestUnknownJSONFieldMatchesStdlib` pins the wording, so
+// a toolchain that reworded it fails a test instead of silently dropping
+// the criterion redirect back to the generic message.
+const unknownFieldPrefix = `json: unknown field `
+
+// unknownJSONField recovers the rejected key's name from that error.
+func unknownJSONField(err error) (string, bool) {
+	_, quoted, found := strings.Cut(err.Error(), unknownFieldPrefix)
+	if !found {
+		return "", false
+	}
+	name, uerr := strconv.Unquote(quoted)
+	if uerr != nil {
+		return "", false
+	}
+	return name, true
+}
+
+// criteriaKeyPath is the one place in the corpus the criterion redirect is
+// about, written as the key path a generic walk reaches it by, array indices
+// elided: an object at `epics[].criteria[]`.
+const criteriaKeyPath = "epics.criteria"
+
+// criteriaOnlyKey reports whether `field` — the key encoding/json rejected —
+// is carried by some `epics[].criteria[]` object AND by nothing else in the
+// document. That conjunction is what scopes the criterion redirect honestly.
+//
+// Both halves are load-bearing, because the stdlib error carries the rejected
+// key's NAME and not its path (see `unknownJSONField`), so the name is the
+// only evidence there is. A name that also sits on a task, a story or a
+// worklog row does not say which occurrence was rejected — a `titel` typo on
+// a task, in a corpus whose criteria rows happen to carry a `titel` too,
+// would otherwise be answered with a lecture about the criterion's spellings.
+// Where the scope cannot be established the plain refusal is the honest one.
+//
+// It reads the document GENERICALLY rather than into a criteria-shaped
+// value. A shaped decode fails on any unrelated malformation anywhere — one
+// epic whose `criteria` entry is a string rather than an object, say — and
+// would then drop the redirect from a genuine criteria typo in a different
+// epic, which is a defect no reader could attribute to its cause.
+func criteriaOnlyKey(data []byte, field string) bool {
+	// An accepted spelling that was rejected as unknown was rejected
+	// somewhere the criteria vocabulary does not apply — a task row, say —
+	// and "unknown criteria field `criterion` … and `criterion` is still
+	// accepted" is a sentence that cannot be made true. The plain message is
+	// the only correct one here whatever else the document carries.
+	if field == criterionName || field == criterionAlias {
+		return false
+	}
+	var doc any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return false
+	}
+	var inCriteria, elsewhere bool
+	scanForKey(doc, "", field, &inCriteria, &elsewhere)
+	return inCriteria && !elsewhere
+}
+
+// scanForKey walks a decoded JSON document and records where `field` occurs
+// as an object key: inside an `epics[].criteria[]` object, or anywhere else.
+// `path` is the dotted key path of the node being visited, with array levels
+// transparent, so every criteria object — and only those — is visited at
+// `criteriaKeyPath`.
+func scanForKey(node any, path, field string, inCriteria, elsewhere *bool) {
+	switch v := node.(type) {
+	case map[string]any:
+		if _, ok := v[field]; ok {
+			if path == criteriaKeyPath {
+				*inCriteria = true
+			} else {
+				*elsewhere = true
+			}
+		}
+		for key, child := range v {
+			next := key
+			if path != "" {
+				next = path + "." + key
+			}
+			scanForKey(child, next, field, inCriteria, elsewhere)
+		}
+	case []any:
+		for _, child := range v {
+			scanForKey(child, path, field, inCriteria, elsewhere)
+		}
+	}
 }

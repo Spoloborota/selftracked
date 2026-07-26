@@ -2,7 +2,10 @@ package schema_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -95,6 +98,96 @@ func TestAFreshDatabaseHasNothingTheDDLDidNotAskFor(t *testing.T) {
 	for _, name := range extra {
 		t.Errorf("a fresh database has %q, which the schema does not declare", name)
 	}
+}
+
+// TestDDLIsByteStable is the pin the schema's own package owed and did not
+// have. Before it, adding a column to a table passed every test in this
+// package, in internal/verb and in internal/cli; the only thing that noticed
+// was internal/scaffold's TestInitGolden, incidentally, because its golden
+// fixture happens to embed the DDL text — three packages away from the file
+// that changed, reported as a stale fixture rather than as a schema change.
+//
+// What makes an accidental edit expensive is §8.5: `load` compares a dump's
+// DDL block against this text BYTE for byte, so any edit at all makes every
+// existing dump unloadable and moves the schema version. That is a decision,
+// and a decision has to be made rather than slipped into.
+func TestDDLIsByteStable(t *testing.T) {
+	t.Parallel()
+
+	sum := sha256.Sum256([]byte(schema.DDL()))
+	got := hex.EncodeToString(sum[:])
+	if got != wantDDLDigest {
+		t.Errorf("the compiled-in DDL changed: sha256 %s, pinned %s.\n"+
+			"§8.5 compares the DDL block byte for byte, so this migrates every dump and "+
+			"moves the schema version. If the change is deliberate, update wantDDLDigest "+
+			"(and wantColumns, and the schema version) in the same change; if it is not, "+
+			"the edit to ddl.sql is the bug.", got, wantDDLDigest)
+	}
+}
+
+// TestEveryTableCarriesExactlyThePinnedColumns names what the digest can
+// only say changed. It reads a live database, so it also re-proves that the
+// DDL text and the tables SQLite builds from it still agree.
+func TestEveryTableCarriesExactlyThePinnedColumns(t *testing.T) {
+	t.Parallel()
+
+	db := fresh(t)
+	rows, err := db.QueryContext(t.Context(),
+		`SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+	if err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	live := map[string]bool{}
+	for rows.Next() {
+		var table string
+		if err = rows.Scan(&table); err != nil {
+			t.Fatalf("scan table name: %v", err)
+		}
+		live[table] = true
+		want, pinned := wantColumns[table]
+		if !pinned {
+			t.Errorf("table %q is not in wantColumns; a new table is pinned deliberately", table)
+			continue
+		}
+		if got := tableColumns(t, db, table); fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("%s columns = %v, want %v", table, got, want)
+		}
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatalf("iterate tables: %v", err)
+	}
+	for table := range wantColumns {
+		if !live[table] {
+			t.Errorf("wantColumns pins %q, which a fresh database does not have", table)
+		}
+	}
+}
+
+// tableColumns reads one table's columns in declaration order.
+func tableColumns(t *testing.T, db *sql.DB, table string) []string {
+	t.Helper()
+
+	rows, err := db.QueryContext(t.Context(),
+		`SELECT name FROM pragma_table_info(?) ORDER BY cid`, table)
+	if err != nil {
+		t.Fatalf("read %s columns: %v", table, err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var cols []string
+	for rows.Next() {
+		var col string
+		if err = rows.Scan(&col); err != nil {
+			t.Fatalf("scan column: %v", err)
+		}
+		cols = append(cols, col)
+	}
+	if err = rows.Err(); err != nil {
+		t.Fatalf("iterate %s columns: %v", table, err)
+	}
+	return cols
 }
 
 func TestFreshDatabaseCarriesItsIdentityAndVersion(t *testing.T) {

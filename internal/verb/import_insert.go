@@ -30,6 +30,15 @@ var (
 // lists exactly three relaxations and shape is not one, so the grammar check
 // sits above the legacy branch and runs on both paths.
 func (c *corpus) validate(legacy bool) error {
+	// First, because every later reader of a criterion calls `text()`, which
+	// picks one of the two spellings — and picking is only defensible once a
+	// row carrying both with different values has been refused.
+	if err := c.validateCriteriaSpelling(); err != nil {
+		return err
+	}
+	if err := c.validateCriterionText(); err != nil {
+		return err
+	}
 	if err := c.validateText(); err != nil {
 		return err
 	}
@@ -43,6 +52,56 @@ func (c *corpus) validate(legacy bool) error {
 		return nil
 	}
 	return c.validateTerminal()
+}
+
+// validateCriteriaSpelling refuses a criterion row carrying BOTH accepted
+// spellings of its text with different values (§6.2). The two names are one
+// field, so two different values are two claims about it and no rule picks
+// between them; identical values are redundant, not contradictory, and pass.
+// It sits above the --legacy branch: the relaxations are three named
+// historical ones (guide §5), and a corpus contradicting itself is not
+// history, it is an authoring mistake in the file being written now.
+func (c *corpus) validateCriteriaSpelling() error {
+	for _, e := range c.Epics {
+		for i, cr := range e.Criteria {
+			if cr.Text == nil || cr.Criterion == nil || *cr.Text == *cr.Criterion {
+				continue
+			}
+			return refuse("usage",
+				"epic %q criterion %d carries both %q and %q with different values; "+
+					"they are one field under two names, so supply either one",
+				e.Slug, i+1, criterionName, criterionAlias)
+		}
+	}
+	return nil
+}
+
+// validateCriterionText refuses a criteria row that carries no criterion
+// text at all: neither key, either key present as `null`, or a key present
+// and empty. All four shapes resolve to the empty string through
+// `criterionRow.text()`, and the schema's non-empty CHECK on
+// `epic_criteria.criterion` would refuse them at the INSERT — as a
+// `constraint` refusal quoting SQLite, which names neither the row in the
+// corpus nor either accepted spelling.
+//
+// The verb door already refuses the identical defect cleanly (`criteria add
+// requires --text (or --criterion …)`, a `usage` refusal). The two doors
+// state one field's rules, so the corpus door refuses it in the same class,
+// before the transaction, and names where in the corpus it sits — the same
+// `epics[] row N` locating the identifier refusals use.
+func (c *corpus) validateCriterionText() error {
+	for ei, e := range c.Epics {
+		for i, cr := range e.Criteria {
+			if cr.text() != "" {
+				continue
+			}
+			return refuse("usage",
+				"epics[] row %d (epic %q) criteria[] row %d carries no criterion text; "+
+					"supply %q, or %q, the corpus's historical spelling",
+				ei+1, bounded(e.Slug), i+1, criterionName, criterionAlias)
+		}
+	}
+	return nil
 }
 
 // validateFutureIncrement requires a future_increment task to name the epic it
@@ -212,7 +271,7 @@ func (c *corpus) validateEpicsText() error {
 			return err
 		}
 		for _, cr := range e.Criteria {
-			if err := validateAll("criterion", cr.Criterion, cr.Evidence); err != nil {
+			if err := validateAll("criterion", cr.text(), cr.Evidence); err != nil {
 				return err
 			}
 		}
@@ -402,7 +461,7 @@ func (im *importer) insertCriteria(ctx context.Context, tx *sql.Tx, e epicRow) e
 		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO epic_criteria (epic, seq, criterion, met, evidence) VALUES (?, ?, ?, ?, ?)`,
-			e.Slug, i+1, cr.Criterion, met, cr.Evidence); err != nil {
+			e.Slug, i+1, cr.text(), met, cr.Evidence); err != nil {
 			return err //nolint:wrapcheck // the met/evidence CHECK speaks through the mapper
 		}
 	}

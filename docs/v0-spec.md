@@ -138,10 +138,14 @@ the less precise of the two (rev 3.43) → this revision.
 
 **Where this document runs ahead of the code.** v0 is built: the schema,
 the connection posture, the verbs, `verify`, `init`, `import` and the
-generated materials all ship. The **eight amendments of revisions
-3.34–3.42 are specified here and not yet implemented** — they were
-written proposal-first, and their code, fixtures and generated-text
-changes are the remaining stories of epic `adoption-contract`. They are
+generated materials all ship. Of the eight amendments written
+proposal-first at revisions 3.34–3.42, **two remain specified here and
+not yet implemented**: `a-tracker-carries-a-name` (rev 3.38) and
+`resolution-names-the-root-it-found` (revs 3.39 and 3.42), whose code and
+fixtures are the last outstanding story of epic `adoption-contract`. The
+other six have landed. Naming the two rather than counting them is
+deliberate: a count here goes stale on the day a story closes, and this
+sentence already did once. They are
 stated in this document's ordinary normative voice, because that is what
 a specification is; a reader who needs to know what the binary does today
 runs it, and a reader who needs to know which obligations are outstanding

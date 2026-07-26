@@ -4,17 +4,7 @@ This is the generic guide for adopting selftracked on a repository that
 already tracks its work in prose — backlog tables, epic files, campaign
 documents. It is written against the `import` verb as shipped in v0 and
 was walked against the importer's own fixture corpus; the field names and
-behaviors below are the ones the code accepts, not an aspiration —
-**except for the one named here**, which the specification carries at
-revision 3.42 and the binary does not have yet:
-
-- the criteria corpus field is spelled **`criterion`** by the shipped
-  importer, not `text` as the JSON example in §4 shows. `text` becomes
-  the name and `criterion` an accepted alias; until then a corpus using
-  `text` is refused as an unknown field.
-
-It is a story of the epic that produced this revision of the guide. This
-notice goes away with it; if you are reading it, it has not landed.
+behaviors below are the ones the code accepts, not an aspiration.
 
 The one-line summary: **derive a corpus from your prose, rehearse the
 import against a disposable clone until `verify` is green, then install

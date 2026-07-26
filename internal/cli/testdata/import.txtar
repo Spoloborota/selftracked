@@ -41,7 +41,7 @@ stderr 'tomorrow task'
 {
   "paths": [{"class":"src","scope":"web","root":"web/src"}],
   "epics": [{"slug":"demo","goal":"demonstrate the backfill","status":"CLOSED","close_sweep":"2026-01-05",
-             "criteria":[{"criterion":"owner attests the migration","met":true,"evidence":"owner noted"}]}],
+             "criteria":[{"text":"owner attests the migration","met":true,"evidence":"owner noted"}]}],
   "stories": [{"epic":"demo","id":"S1","title":"first story","status":"DONE"},
               {"epic":"demo","id":"S2","title":"second story","status":"DONE"}],
   "tasks": [{"title":"a backfilled task","status":"DONE","note":"closed: shipped in the backfill","epic":"demo"}],

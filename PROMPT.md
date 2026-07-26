@@ -222,8 +222,8 @@ The catalog, with signatures:
     `story dissolve SLUG SID --why TEXT`
   - `worklog add SLUG --story SID|V-N --state ST [--corrects N]
     [--commits] [--gate] [--review] [--note]`
-  - `criteria add SLUG --text T` · `criteria met SLUG SEQ --evidence E` ·
-    `criteria check SLUG`
+  - `criteria add SLUG --text|--criterion T` ·
+    `criteria met SLUG SEQ --evidence E` · `criteria check SLUG`
 - **Paths & config:**
   - `paths ls` · `paths set CLASS[@SCOPE] ROOT [--ephemeral] [--note N]` ·
     `paths move CLASS[@SCOPE] NEWROOT [--with-files]`

@@ -1,0 +1,67 @@
+# Amendment `one-name-for-the-criterion-field` (spec §6.2): the criterion
+# text has ONE name on both doors — `--text` on the flag, `text` in the
+# import corpus — and the corpus's historical `criterion` stays accepted as
+# an alias on both. This fixture is the verb door; the corpus door is
+# import-criterion-name.txtar.
+#
+# `--criterion` is an accepted FLAG rather than a diagnosed typo because a
+# diagnosis is not available: an undefined flag dies in the dispatcher's
+# flag.Parse before any verb body runs, so the spelling an adopter learned
+# from the corpus can be given a meaning but never a message. Before this
+# change `criteria add --criterion x` exited 2 with Go's `flag provided but
+# not defined` — a message that knows nothing about the corpus it came from.
+
+seeddb
+expectexit 0 selftracked epic create door-a --goal g
+expectexit 0 selftracked epic create door-b --goal g
+
+# ONE flag under two names: the identical text through each door produces the
+# identical row — same seq, same stored text, same met, same evidence.
+# Asserted as the whole row rather than as two independent "it exited 0"
+# checks, because a spelling that decoded and then wrote something else would
+# pass those.
+expectexit 0 selftracked criteria add door-a --text 'the same criterion'
+expectexit 0 selftracked criteria add door-b --criterion 'the same criterion'
+grep 'VALUES \(.door-a., 1, .the same criterion., 0, ..\);' .selftracked/dump.sql
+grep 'VALUES \(.door-b., 1, .the same criterion., 0, ..\);' .selftracked/dump.sql
+
+# Both flags with the SAME value: redundant, not contradictory, so it lands.
+expectexit 0 selftracked criteria add door-a --text 'twice over' --criterion 'twice over'
+grep 'VALUES \(.door-a., 2, .twice over., 0, ..\);' .selftracked/dump.sql
+
+# Both flags with DIFFERENT values: two claims about one field and no rule
+# picks between them, so it is a `usage` refusal (§6.2) and NOTHING lands.
+expectexit 1 selftracked criteria add door-a --text 'one value' --criterion 'another value'
+stderr '"code":"usage"'
+stderr 'one flag under two names'
+! grep 'one value' .selftracked/dump.sql
+! grep 'another value' .selftracked/dump.sql
+
+# `--text ''` is PRESENT, not absent. The resolution reads which flags were
+# supplied (fs.Visit), not whether their values are empty; a resolution that
+# tested the strings against "" would see only `--criterion` here and import
+# the alias's value silently instead of refusing the contradiction.
+expectexit 1 selftracked criteria add door-a --text '' --criterion 'smuggled through'
+stderr 'different values'
+! grep 'smuggled through' .selftracked/dump.sql
+
+# Neither flag: the refusal names BOTH spellings, so a reader who arrived
+# with the corpus's word is redirected instead of guessing a third.
+expectexit 1 selftracked criteria add door-a
+stderr '"code":"usage"'
+stderr 'requires --text'
+stderr '--criterion'
+
+# The alias carries the runnable prefix like the primary name: `criteria
+# check` executes what `--criterion` wrote, so the alias is the same field
+# all the way to execution and not a look-alike that only reaches storage.
+expectexit 0 selftracked epic create door-run --goal g
+expectexit 0 selftracked criteria add door-run --criterion '$ true'
+expectexit 0 selftracked criteria check door-run
+stdout 'criterion 1: PASS'
+
+# The alias is a spelling of one flag, not a second argument slot: a bare
+# positional after it is still the dispatcher's unexpected-argument refusal,
+# so `--criterion` opened no new way to pass the text.
+expectexit 2 selftracked criteria add door-a --criterion 'a' 'b'
+stderr 'unexpected argument'

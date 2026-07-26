@@ -54,15 +54,21 @@ func firstLine(s string) string {
 
 // CriteriaVerbs returns the S6 `criteria` catalog entry.
 func CriteriaVerbs() []cli.Verb {
-	var text, evidence string
+	var text, criterion, evidence string
 	return []cli.Verb{{Name: "criteria", Subs: []cli.Sub{
 		{
-			Name: subAdd, Arity: 1, Usage: "criteria add SLUG --text T [--json]",
+			Name: subAdd, Arity: 1, Usage: "criteria add SLUG --text|--criterion T [--json]",
 			Flags: func(fs *flag.FlagSet) {
-				fs.StringVar(&text, "text", "", "the criterion (prefix '$ ' makes it runnable)")
+				fs.StringVar(&text, criterionName, "", "the criterion (prefix '$ ' makes it runnable)")
+				fs.StringVar(&criterion, criterionAlias, "",
+					"the same flag as --text, under the corpus's historical spelling")
 			},
-			Run: func(e *cli.Env, pos []string, _ *flag.FlagSet) error {
-				return criteriaAdd(e, pos[0], text)
+			Run: func(e *cli.Env, pos []string, fs *flag.FlagSet) error {
+				value, flagName, err := criterionFlag(fs, text, criterion)
+				if err != nil {
+					return err
+				}
+				return criteriaAdd(e, pos[0], value, flagName)
 			},
 		},
 		{
@@ -81,11 +87,59 @@ func CriteriaVerbs() []cli.Verb {
 	}}}
 }
 
-func criteriaAdd(e *cli.Env, slug, text string) error {
-	if text == "" {
-		return refuse("usage", "criteria add requires --text")
+// criterionFlag resolves `criteria add`'s two spellings of ONE flag (§6.2,
+// amendment `one-name-for-the-criterion-field`). `--criterion` is an
+// accepted flag rather than a diagnosed typo because a diagnosis is not
+// available here: the dispatcher parses flags in `parseFlags`
+// (internal/cli/dispatch.go) and an unknown one dies in `fs.Parse` before
+// any verb body runs, so the spelling an adopter learned from the import
+// corpus can be given a meaning but never a message.
+//
+// `fs.Visit` — not the empty string — answers which were supplied: it walks
+// only the flags actually set, so a `--text` given an empty value stays
+// distinguishable from an absent `--text`, and the both-given refusal below
+// fires on a real contradiction rather than on a default. It returns the
+// resolved text and the flag name it arrived under, in that order.
+func criterionFlag(fs *flag.FlagSet, text, criterion string) (string, string, error) {
+	var gotText, gotCriterion bool
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case criterionName:
+			gotText = true
+		case criterionAlias:
+			gotCriterion = true
+		}
+	})
+	switch {
+	case gotText && gotCriterion:
+		if text != criterion {
+			return "", "", refuse("usage",
+				"criteria add: --%s and --%s are one flag under two names, "+
+					"and they were given different values; supply either one",
+				criterionName, criterionAlias)
+		}
+		return text, "--" + criterionName, nil
+	case gotCriterion:
+		return criterion, "--" + criterionAlias, nil
+	default:
+		return text, "--" + criterionName, nil
 	}
-	if err := validateText("--text", text); err != nil {
+}
+
+// criteriaAdd takes the resolved text and the flag name it arrived under, so
+// the §8.1 control-character refusal quotes the spelling the operator typed
+// rather than the one the code prefers.
+func criteriaAdd(e *cli.Env, slug, text, flagName string) error {
+	if text == "" {
+		// Names both spellings (§6.2): the reader who reached an empty
+		// `criteria add` from the corpus side is looking for `--criterion`,
+		// and a refusal that mentions only `--text` sends them guessing a
+		// third name.
+		return refuse("usage",
+			"criteria add requires --%s (or --%s, the same flag under the corpus's "+
+				"historical spelling)", criterionName, criterionAlias)
+	}
+	if err := validateText(flagName, text); err != nil {
 		return err
 	}
 	err := Write(context.Background(), func(tx *sql.Tx) ([]Event, error) {

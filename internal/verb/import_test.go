@@ -3,6 +3,8 @@ package verb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -423,6 +425,348 @@ func assertEventsPerTerminal(t *testing.T, db *sql.DB) {
 	if got := queryString(t, db,
 		`SELECT detail FROM events WHERE event='import' AND entity='epic:live-epic'`); got != "1:e" {
 		t.Fatalf("INV-447: live-epic source map mismatch, got %q", got)
+	}
+}
+
+// ---- one field, one name (amendment `one-name-for-the-criterion-field`) ----
+
+// TestImportCriterionSpellingsAgree drives both accepted corpus spellings to
+// the column and compares the STORED values against each other and against
+// the input. Two independent "it imported" checks would pass against a
+// decoder that accepted the alias and wrote something else — the failure
+// mode this test exists for is a spelling that decodes and then drifts.
+func TestImportCriterionSpellingsAgree(t *testing.T) {
+	const want = "owner attests the migration"
+	stored := func(slug, criteria string) string {
+		t.Helper()
+		dir := gitRepo(t)
+		body := `{"epics":[{"slug":"` + slug + `","goal":"g","criteria":[` + criteria + `]}]}`
+		if err := importFile(t, dir, body, true); err != nil {
+			t.Fatalf("import %s: %v", body, err)
+		}
+		return queryString(t, openInstance(t, dir),
+			`SELECT criterion FROM epic_criteria WHERE epic='`+slug+`'`)
+	}
+	byName := stored("a", `{"text":"`+want+`"}`)
+	byAlias := stored("b", `{"criterion":"`+want+`"}`)
+	byBoth := stored("c", `{"text":"`+want+`","criterion":"`+want+`"}`)
+	if byName != want {
+		t.Fatalf("the tool-wide name must reach the column intact: got %q, want %q", byName, want)
+	}
+	if byAlias != byName {
+		t.Fatalf("the alias must store what the name stores: alias %q vs name %q", byAlias, byName)
+	}
+	if byBoth != byName {
+		t.Fatalf("both keys with one value must store that value once: got %q vs %q", byBoth, byName)
+	}
+}
+
+// TestImportCriterionBothSpellingsRefused pins §6.2's `usage` refusal AND the
+// distinction that forces the decoded fields to be pointers: `"text": ""` is
+// a value that contradicts a non-empty `criterion`, while an omitted `text`
+// is not. A pair of plain strings renders those two corpora identically, so
+// this test is what fails if the representation is flattened back.
+func TestImportCriterionBothSpellingsRefused(t *testing.T) {
+	cases := []struct {
+		name, criteria string
+		wantRefusal    bool
+	}{
+		{"different-values", `{"text":"one claim","criterion":"another claim"}`, true},
+		{"present-empty-contradicts", `{"text":"","criterion":"a value"}`, true},
+		{"absent-does-not-contradict", `{"criterion":"a value"}`, false},
+		{"same-value-is-redundant-not-contradictory", `{"text":"v","criterion":"v"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := gitRepo(t)
+			err := importFile(t, dir,
+				`{"epics":[{"slug":"e","goal":"g","criteria":[`+tc.criteria+`]}]}`, true)
+			if !tc.wantRefusal {
+				if err != nil {
+					t.Fatalf("%s must import, got %v", tc.criteria, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("%s must be refused", tc.criteria)
+			}
+			var coded *cli.CodedError
+			if !errors.As(err, &coded) || coded.Code != "usage" {
+				t.Fatalf("§6.2 makes this a `usage` refusal, got %v", err)
+			}
+			// Both spellings are named, and looked for QUOTED: the refusal's
+			// own prose carries the word "criterion" (it numbers the row),
+			// so a bare substring check passes against a message that names
+			// only one of the two keys.
+			for _, name := range []string{criterionName, criterionAlias} {
+				if !strings.Contains(err.Error(), `"`+name+`"`) {
+					t.Fatalf("the refusal must name %q, got %q", name, err.Error())
+				}
+			}
+		})
+	}
+}
+
+// TestImportCriterionUnknownSpelling pins the redirect and its scope: an
+// unknown key inside a criteria row names BOTH accepted spellings, and an
+// unknown key anywhere else does not — the criterion's two names have
+// nothing to say about a mistyped task column, and a hint pasted onto every
+// unknown-field refusal would be noise that a reader learns to skip.
+func TestImportCriterionUnknownSpelling(t *testing.T) {
+	t.Parallel()
+	inCriteria := `{"epics":[{"slug":"e","goal":"g","criteria":[{"criterion_text":"x"}]}]}`
+	_, err := parseJSON([]byte(inCriteria))
+	if err == nil {
+		t.Fatal("an unknown criteria key must be refused")
+	}
+	// The two accepted names are looked for QUOTED, and the redirect's own
+	// framing separately. Bare `text` and `criterion` are both substrings of
+	// the rejected key `criterion_text`, so the plain stdlib message contains
+	// them and an unquoted check passes against a redirect that was never
+	// emitted — measured, not supposed: dropping the redirect leaves this
+	// test green when the names are matched bare.
+	msg := err.Error()
+	for _, want := range []string{
+		"unknown criteria field", `"criterion_text"`,
+		`"` + criterionName + `"`, `"` + criterionAlias + `"`,
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("the criteria redirect must carry %s; got %q", want, msg)
+		}
+	}
+
+	elsewhere := `{"tasks":[{"titel":"x"}]}`
+	_, err = parseJSON([]byte(elsewhere))
+	if err == nil {
+		t.Fatal("an unknown task key must be refused")
+	}
+	// Scope, asserted on the redirect's substance rather than on one literal:
+	// neither the criteria framing nor either accepted spelling appears.
+	other := err.Error()
+	if strings.Contains(other, "criteria") || strings.Contains(other, criterionAlias) ||
+		strings.Contains(other, "accepted") {
+		t.Fatalf("an unknown key outside criteria must get the plain refusal, got %q", other)
+	}
+	if !strings.Contains(other, `"titel"`) {
+		t.Fatalf("the plain refusal must still name the rejected key, got %q", other)
+	}
+}
+
+// redirectFraming are the phrases only the criteria redirect emits. A scope
+// assertion looks for these rather than for `text` or `criterion`, which are
+// substrings of plenty of legitimately rejected keys.
+var redirectFraming = []string{"unknown criteria field", "historical spelling", "still accepted"}
+
+// TestImportCriterionRedirectScopeIsProvable pins what the redirect may NOT
+// claim. `encoding/json` reports the rejected key's name and not its path, so
+// the name is the only evidence the scope decision has; wherever that name
+// could have come from somewhere other than a criteria row, the redirect
+// would be asserting something unproven and the plain refusal is what an
+// author gets.
+func TestImportCriterionRedirectScopeIsProvable(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, corpus string
+		wantKey      string
+		wantRedirect bool
+	}{{
+		// An ACCEPTED spelling, rejected because it sits on a task. The
+		// redirect's sentence would call the same key unknown and still
+		// accepted at once, and would point at a row that is not the
+		// defective one.
+		name: "accepted-spelling-rejected-elsewhere",
+		corpus: `{"tasks":[{"title":"x","status":"OPEN","criterion":"stray"}],` +
+			`"epics":[{"slug":"e","goal":"g","criteria":[{"criterion":"valid"}]}]}`,
+		wantKey: criterionAlias,
+	}, {
+		// A typo on a task whose name a criteria row happens to carry too.
+		// Nothing about it concerns the criterion's two spellings.
+		name: "ambiguous-name-also-outside-criteria",
+		corpus: `{"tasks":[{"titel":"a mistyped task column","status":"OPEN"}],` +
+			`"epics":[{"slug":"e","goal":"g","criteria":[{"text":"t","titel":"coincidence"}]}]}`,
+		wantKey: "titel",
+	}, {
+		// Item 3's converse: a genuine criteria typo keeps its redirect even
+		// though a LATER epic is malformed in an unrelated way. A scope check
+		// that decoded into a criteria-shaped value would fail on the string
+		// entry below and silently drop the redirect.
+		name: "unrelated-malformation-elsewhere-keeps-the-redirect",
+		corpus: `{"epics":[{"slug":"a","goal":"g","criteria":[{"criterion_text":"x"}]},` +
+			`{"slug":"b","goal":"g","criteria":["not an object at all"]}]}`,
+		wantKey:      "criterion_text",
+		wantRedirect: true,
+	}, {
+		name:         "unique-to-criteria",
+		corpus:       `{"epics":[{"slug":"e","goal":"g","criteria":[{"criterion_text":"x"}]}]}`,
+		wantKey:      "criterion_text",
+		wantRedirect: true,
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseJSON([]byte(tc.corpus))
+			if err == nil {
+				t.Fatal("an unknown key must be refused")
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, `"`+tc.wantKey+`"`) {
+				t.Fatalf("the refusal must name the rejected key %q; got %q", tc.wantKey, msg)
+			}
+			for _, framing := range redirectFraming {
+				got := strings.Contains(msg, framing)
+				if got != tc.wantRedirect {
+					t.Fatalf("redirect framing %q present=%v, want %v; message %q",
+						framing, got, tc.wantRedirect, msg)
+				}
+			}
+		})
+	}
+}
+
+// TestImportCriterionRedirectBoundsTheRejectedKey pins the echo's bound. A
+// JSON key has no character-class restriction and no length limit, and this
+// refusal reaches an agent's context, so a corpus must not be able to paste
+// an arbitrary payload through it. The key is attacker-controlled input on a
+// message-shaped sink — the same defect class as the identifier refusals,
+// closed by the same helper.
+func TestImportCriterionRedirectBoundsTheRejectedKey(t *testing.T) {
+	t.Parallel()
+	const keyLen = 300_000
+	huge := strings.Repeat("k", keyLen)
+	_, err := parseJSON([]byte(
+		`{"epics":[{"slug":"e","goal":"g","criteria":[{"` + huge + `":"x"}]}]}`))
+	if err == nil {
+		t.Fatal("an unknown criteria key must be refused")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, redirectFraming[0]) {
+		t.Fatalf("this corpus must still take the redirect, or the bound is untested; got %q", msg)
+	}
+	if strings.Contains(msg, huge) {
+		t.Fatal("the refusal reproduced the whole key verbatim")
+	}
+	// A generous ceiling: the point is that the message's size is a property
+	// of the message and not of the corpus.
+	const ceiling = 512
+	if len(msg) > ceiling {
+		t.Fatalf("the refusal is %d bytes for a %d-byte key; it must stay under %d",
+			len(msg), keyLen, ceiling)
+	}
+}
+
+// TestImportUnknownFieldBoundsTheRejectedKeyEverywhere pins the same bound on
+// the path the redirect does NOT take. Scoping the redirect to keys unique to
+// criteria objects closed a misattribution, and in doing so it routed every
+// other unknown key back to the generic branch — which echoed the stdlib's
+// message, and that message embeds the rejected key whole. Measured at 300086
+// bytes for a 300000-byte key on a `tasks[]` row, i.e. the flood door was not
+// closed but moved. Only the unknown-field shape is rebuilt here: the third
+// case below is the reason, since a decode error that names an offset is
+// short and useful and truncating it would buy nothing.
+func TestImportUnknownFieldBoundsTheRejectedKeyEverywhere(t *testing.T) {
+	t.Parallel()
+	const keyLen = 300_000
+	huge := strings.Repeat("k", keyLen)
+
+	_, err := parseJSON([]byte(
+		`{"tasks":[{"title":"t","status":"OPEN","` + huge + `":"x"}]}`))
+	if err == nil {
+		t.Fatal("an unknown task key must be refused")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, huge) {
+		t.Fatal("the refusal reproduced the whole key verbatim")
+	}
+	const ceiling = 512
+	if len(msg) > ceiling {
+		t.Fatalf("the refusal is %d bytes for a %d-byte key; it must stay under %d",
+			len(msg), keyLen, ceiling)
+	}
+
+	// An ordinary key is still named in full: the bound is a ceiling, not a
+	// blanket truncation, and a refusal that hid the key would be worse than
+	// the one it replaced.
+	_, err = parseJSON([]byte(`{"tasks":[{"title":"t","status":"OPEN","titel":"x"}]}`))
+	if err == nil || !strings.Contains(err.Error(), `"titel"`) {
+		t.Fatalf("an ordinary unknown key must still be named: %v", err)
+	}
+
+	// A decode error that is not the unknown-field shape keeps its own text.
+	_, err = parseJSON([]byte(`{"tasks":[{"title":"t",,}]}`))
+	if err == nil || !strings.Contains(err.Error(), "invalid character") {
+		t.Fatalf("a malformed document must keep the stdlib's diagnostic: %v", err)
+	}
+}
+
+// TestImportCriterionMissingTextRefused pins the corpus door's half of one
+// field's rules: a criteria row with no text is refused BEFORE the INSERT,
+// in the same class the verb door refuses it (`usage`), naming both accepted
+// spellings and where in the corpus the row sits. Left to the schema it
+// would arrive as SQLite's `constraint` refusal quoting the non-empty CHECK
+// on `epic_criteria.criterion`, which names neither.
+func TestImportCriterionMissingTextRefused(t *testing.T) {
+	t.Parallel()
+	for _, criteria := range []string{`{}`, `{"text":null,"criterion":null}`, `{"met":false}`} {
+		t.Run(criteria, func(t *testing.T) {
+			t.Parallel()
+			c, err := parseJSON([]byte(
+				`{"epics":[{"slug":"e","goal":"g","criteria":[{"text":"first"},` + criteria + `]}]}`))
+			if err != nil {
+				t.Fatalf("the corpus must decode; the defect is semantic: %v", err)
+			}
+			err = c.validate(true)
+			if err == nil {
+				t.Fatalf("a criteria row carrying no text must be refused: %s", criteria)
+			}
+			var coded *cli.CodedError
+			if !errors.As(err, &coded) || coded.Code != "usage" {
+				t.Fatalf("the verb door refuses this as `usage`; the corpus door gave %v", err)
+			}
+			msg := err.Error()
+			for _, want := range []string{
+				"epics[] row 1", `epic "e"`, "criteria[] row 2",
+				`"` + criterionName + `"`, `"` + criterionAlias + `"`,
+			} {
+				if !strings.Contains(msg, want) {
+					t.Fatalf("the refusal must carry %s; got %q", want, msg)
+				}
+			}
+		})
+	}
+}
+
+// TestUnknownJSONFieldMatchesStdlib pins the one thing the criteria redirect
+// borrows from outside this repository: encoding/json returns a bare
+// error string for `DisallowUnknownFields`, with no typed error and no field
+// path, so `unknownJSONField` matches its wording. A toolchain that reworded
+// it must fail a test rather than silently drop every redirect back to the
+// generic message, which is a regression nothing else would notice.
+func TestUnknownJSONFieldMatchesStdlib(t *testing.T) {
+	t.Parallel()
+	var v struct {
+		Known string `json:"known"`
+	}
+	dec := json.NewDecoder(strings.NewReader(`{"stranger":1}`))
+	dec.DisallowUnknownFields()
+	err := dec.Decode(&v)
+	if err == nil {
+		t.Fatal("DisallowUnknownFields must reject an undeclared key")
+	}
+	got, ok := unknownJSONField(err)
+	if !ok || got != "stranger" {
+		t.Fatalf("encoding/json's unknown-field wording changed (%v): unknownJSONField gave (%q, %v). "+
+			"parseJSON's criteria redirect reads that wording — re-derive it there.", err, got, ok)
+	}
+	// A different decode failure must NOT be mistaken for an unknown field:
+	// the redirect would then fire on a corpus that never named a bad key.
+	// The counter-example is a real stdlib error, not a hand-built one, so
+	// it stays a decode failure the importer can actually meet.
+	other := json.NewDecoder(strings.NewReader(`{"known":1}`)).Decode(&v)
+	if other == nil {
+		t.Fatal("a type mismatch must fail the decode")
+	}
+	if name, ok := unknownJSONField(other); ok {
+		t.Fatalf("a non-unknown-field error must not yield a field name, got %q (from %v)", name, other)
 	}
 }
 

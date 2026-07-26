@@ -1,0 +1,93 @@
+# Amendment `one-name-for-the-criterion-field` (spec §6.2), corpus door.
+# The verb door is criteria-one-name.txtar.
+#
+# The cost this fixture guards was paid twice on the tool's own repository,
+# once in each direction: a corpus written with `text` was refused `unknown
+# field` because the corpus spelled it `criterion`, and a `criteria add`
+# written with `--criterion` was refused `flag provided but not defined`
+# because the flag spelled it `text`. Each refusal was produced by the OTHER
+# surface's name and named neither.
+
+exec git init
+exec git config user.email importer@test.invalid
+exec git config user.name importer
+expectexit 0 selftracked init
+
+# The tool-wide name imports.
+expectexit 0 selftracked import --legacy --file by-text.json
+grep 'VALUES \(.by-text., 1, .the criterion text., 1, .owner noted.\);' .selftracked/dump.sql
+
+# So does the corpus's historical spelling, into the same column, with the
+# same row shape — the alias is not a second field that lands elsewhere.
+expectexit 0 selftracked import --legacy --file by-criterion.json
+grep 'VALUES \(.by-criterion., 1, .the criterion text., 1, .owner noted.\);' .selftracked/dump.sql
+
+# Both keys carrying the SAME value: redundant, not contradictory. It lands,
+# once, under the one column both spellings name.
+expectexit 0 selftracked import --legacy --file both-same.json
+grep 'VALUES \(.both-same., 1, .the criterion text., 1, .owner noted.\);' .selftracked/dump.sql
+
+# Both keys with DIFFERENT values: a `usage` refusal (§6.2). This is the case
+# that obliges the decoded fields to tell absent from present — see
+# empty-vs-absent below, which is where a plain string would fail.
+expectexit 1 selftracked import --legacy --file both-differ.json
+stderr '"code":"usage"'
+stderr 'one field under two names'
+stderr 'both-differ'
+! grep 'contradicting value' .selftracked/dump.sql
+! grep 'both-differ' .selftracked/dump.sql
+
+# `"text": ""` is PRESENT and empty, which contradicts a non-empty
+# `criterion`; `{"criterion": …}` alone is ABSENT and does not. Two plain
+# strings render these two corpora identically, so a decoder that could not
+# tell them apart would have to either import the first silently or refuse
+# the second — and both files here pin which way each must go.
+expectexit 1 selftracked import --legacy --file empty-vs-absent.json
+stderr 'one field under two names'
+! grep 'a value the empty key contradicts' .selftracked/dump.sql
+
+# An unknown THIRD spelling is refused naming BOTH accepted ones — the
+# reader who guessed is redirected rather than left to guess again. The
+# stdlib's own message names only the key it rejected, which is the one
+# thing the author already knows.
+expectexit 1 selftracked import --legacy --file third-name.json
+stderr 'unknown criteria field ..criterion_text..'
+stderr 'the criterion text is ..text..'
+stderr 'criteria add --text'
+stderr '..criterion.., the corpus.s historical spelling, is still accepted'
+
+# The redirect is SCOPED to criteria rows: an unknown key anywhere else is
+# still the plain unknown-field refusal, because the criterion's two
+# spellings have nothing to say about a mistyped task column.
+expectexit 1 selftracked import --legacy --file elsewhere.json
+stderr 'unknown field ..titel..'
+! stderr 'criteria field'
+! stderr 'historical spelling'
+
+-- by-text.json --
+{"epics":[{"slug":"by-text","goal":"g",
+  "criteria":[{"text":"the criterion text","met":true,"evidence":"owner noted"}]}]}
+
+-- by-criterion.json --
+{"epics":[{"slug":"by-criterion","goal":"g",
+  "criteria":[{"criterion":"the criterion text","met":true,"evidence":"owner noted"}]}]}
+
+-- both-same.json --
+{"epics":[{"slug":"both-same","goal":"g",
+  "criteria":[{"text":"the criterion text","criterion":"the criterion text",
+               "met":true,"evidence":"owner noted"}]}]}
+
+-- both-differ.json --
+{"epics":[{"slug":"both-differ","goal":"g",
+  "criteria":[{"text":"one claim","criterion":"contradicting value"}]}]}
+
+-- empty-vs-absent.json --
+{"epics":[{"slug":"empty-vs-absent","goal":"g",
+  "criteria":[{"text":"","criterion":"a value the empty key contradicts"}]}]}
+
+-- third-name.json --
+{"epics":[{"slug":"third-name","goal":"g",
+  "criteria":[{"criterion_text":"a spelling neither door accepts"}]}]}
+
+-- elsewhere.json --
+{"tasks":[{"titel":"a mistyped task column","status":"OPEN","date":"2026-01-02"}]}
