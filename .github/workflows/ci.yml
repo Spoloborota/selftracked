@@ -102,5 +102,14 @@ jobs:
       - name: go fix exit-code behaviour on the pinned toolchain
         run: ./scripts/probe-gofix.sh
 
+      # The fixture first, then the comparison, mirroring `make check-copies`:
+      # the comparison reporting "no drift" means nothing until something has
+      # shown it can report drift. A gate that only `make` runs binds only
+      # whoever types `make`, and every commit passes through here instead.
+      - name: installed copies match the templates they ship
+        run: |
+          ./scripts/check-installed-copies-fixture.sh
+          ./scripts/check-installed-copies.sh
+
       # traceability accounting retired at S10 with the inventory it checked
       # (plan section 9); scripts/check-inventory.py stays for the file in git history.
