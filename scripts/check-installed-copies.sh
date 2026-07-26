@@ -130,6 +130,14 @@ irregular() {
   _walk=$1
   _rest=$2
   irregular_at=''
+  # An empty REL names no file: refuse it rather than fall through to
+  # testing ROOT itself (the review round found that latent branch would
+  # also leave irregular_at absolute, breaking this comment's contract).
+  # Unreachable from the row guards above; kept true rather than assumed.
+  [ -n "$_rest" ] || {
+    irregular_at=.
+    return 0
+  }
   while [ -n "$_rest" ]; do
     _comp=${_rest%%/*}
     if [ "$_comp" = "$_rest" ]; then _rest=''; else _rest=${_rest#*/}; fi
