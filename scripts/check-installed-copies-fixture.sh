@@ -120,6 +120,37 @@ $out"
   fi
   cp "$work/$template" "$work/$installed"
 
+  # A symlink standing in for the copy: cmp follows it and calls the pair
+  # identical, so the gate must refuse before comparing. Proven by hand at
+  # the S6 close; folded into the fixture by S8 so it stays proven.
+  mv "$work/$installed" "$work/$installed.real"
+  ln -s "$(basename "$installed").real" "$work/$installed"
+  run_gate
+  if [ "$status" -eq 0 ]; then
+    fail "a symlink standing in for $installed did not fail the gate"
+  fi
+  rm "$work/$installed"
+  mv "$work/$installed.real" "$work/$installed"
+
+  # The same swap one level up — task #80's gap: a symlinked ANCESTOR
+  # directory of the installed copy, pointing at a real directory holding
+  # identical files, must fail the gate even though every file compares
+  # equal through it. Only rows with a directory component have an
+  # ancestor under ROOT to swap.
+  case "$installed" in
+  */*)
+    top=${installed%%/*}
+    mv "$work/$top" "$work/$top.real"
+    ln -s "$top.real" "$work/$top"
+    run_gate
+    if [ "$status" -eq 0 ]; then
+      fail "a symlinked parent directory $top of $installed did not fail the gate"
+    fi
+    rm "$work/$top"
+    mv "$work/$top.real" "$work/$top"
+    ;;
+  esac
+
   run_gate
   if [ "$status" -ne 0 ]; then
     fail "restoring $installed left the gate red ($status):
@@ -129,4 +160,4 @@ done <<ROWS
 $rows
 ROWS
 
-echo "check-installed-copies-fixture: identity exits 0; a one-character divergence and a missing copy each exit non-zero, on each of the $count guarded rows"
+echo "check-installed-copies-fixture: identity exits 0; a one-character divergence, a missing copy, a symlink standing in for a copy and a symlinked parent directory each exit non-zero, on each of the $count guarded rows"

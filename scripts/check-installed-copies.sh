@@ -111,20 +111,40 @@ check-installed-copies: NOT compared — $unguarded pairs. init installs
 NOTE
 }
 
-# True when PATH exists but is not a regular file. Both [ -f ] and cmp follow
-# symlinks, so an installed copy replaced by a link to an identical file
-# elsewhere would compare equal while the tracked file has stopped being a
-# copy at all; the guarantee here is over the file itself. git does surface
-# such a swap as a typechange (` T path` in git status), so this is a second
-# line of defence rather than the only one.
+# irregular ROOT REL — true when REL under ROOT is not a plain file reached
+# through plain directories: any path component that is a symlink — the
+# final one or an ancestor — or a final component that exists but is not a
+# regular file. Both [ -f ] and cmp follow symlinks, so a copy replaced by
+# a link to an identical file elsewhere would compare equal while the
+# tracked file has stopped being a copy at all — and the same swap one
+# level up, a symlinked PARENT directory, was the gap filed as task #80:
+# the first cut tested only the last component and passed it. The
+# guarantee here is over the whole relative path. ROOT itself is the
+# caller's business and is not walked: the fixture points this gate at a
+# temporary directory that on macOS legitimately sits behind /var, a
+# symlink. git does surface both swaps in `git status` (a typechange for
+# the file, a deletion plus an untracked entry for the directory), so this
+# stays a second line of defence rather than the only one. On return 0,
+# $irregular_at names the offending path relative to ROOT.
 irregular() {
-  if [ -h "$1" ]; then
-    return 0 # a symlink, however it resolves
+  _walk=$1
+  _rest=$2
+  irregular_at=''
+  while [ -n "$_rest" ]; do
+    _comp=${_rest%%/*}
+    if [ "$_comp" = "$_rest" ]; then _rest=''; else _rest=${_rest#*/}; fi
+    [ -n "$_comp" ] || continue
+    _walk="$_walk/$_comp"
+    if [ -h "$_walk" ]; then
+      irregular_at="${_walk#"$1"/}" # a symlink component, however it resolves
+      return 0
+    fi
+  done
+  if [ -e "$_walk" ] && [ ! -f "$_walk" ]; then
+    irregular_at="${_walk#"$1"/}" # a directory, a fifo, a device
+    return 0
   fi
-  if [ -e "$1" ] && [ ! -f "$1" ]; then
-    return 0 # a directory, a fifo, a device
-  fi
-  return 1 # absent, or a regular file
+  return 1 # absent, or a regular file behind regular directories
 }
 
 failed=0
@@ -144,15 +164,16 @@ while read -r installed template extra; do
 
   # Before the existence tests, which follow symlinks and would report a
   # linked-away copy as present and equal.
-  if irregular "$root/$template"; then
-    echo "check-installed-copies: the template side of the pair is not a regular file: $template" >&2
+  if irregular "$root" "$template"; then
+    echo "check-installed-copies: the template side of the pair is not a regular file behind regular directories: $template (at $irregular_at)" >&2
     failed=1
     continue
   fi
-  if irregular "$root/$installed"; then
-    echo "check-installed-copies: DRIFT the installed side of the pair is not a regular file: $installed" >&2
-    echo "  A copy is a file, not a link to one: cmp would follow the link and" >&2
-    echo "  call it identical while $installed is no longer the copy." >&2
+  if irregular "$root" "$installed"; then
+    echo "check-installed-copies: DRIFT the installed side of the pair is not a regular file behind regular directories: $installed (at $irregular_at)" >&2
+    echo "  A copy is a file behind real directories, not a link to either:" >&2
+    echo "  cmp would follow the link and call it identical while $installed" >&2
+    echo "  is no longer the copy." >&2
     failed=1
     continue
   fi
