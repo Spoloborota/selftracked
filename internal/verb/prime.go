@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/Spoloborota/selftracked/internal/cli"
 	"github.com/Spoloborota/selftracked/internal/dump"
 	"github.com/Spoloborota/selftracked/internal/ref"
+	"github.com/Spoloborota/selftracked/internal/rules"
 	"github.com/Spoloborota/selftracked/internal/schema"
 )
 
@@ -35,6 +37,7 @@ type primeOutput struct {
 	InReview     []string     `json:"in_review"`
 	Stale        []string     `json:"stale"`
 	SprintGoals  []sprintGoal `json:"sprint_goals"`
+	Notices      []notice     `json:"notices"`
 	Totals       primeTotals  `json:"totals"`
 
 	DumpDivergence          bool `json:"dump_divergence"`
@@ -55,12 +58,19 @@ type activeEpic struct {
 	CriteriaUnmet int         `json:"criteria_unmet"`
 }
 
-// epicStories tallies a single epic's stories: done/in_progress as counts,
-// ready/blocked as story-id lists (the attention-worthy ones). Uncapped —
-// bounded by the epic's own story count (INV-458/468).
+// epicStories tallies a single epic's stories: done/in_progress/planned as
+// counts, ready/blocked as story-id lists (the attention-worthy ones).
+// Uncapped — bounded by the epic's own story count (INV-458/468).
+//
+// `planned` joined the tally with amendment
+// `prime-names-an-epic-that-cannot-receive-work`: without it an epic holding
+// three PLANNED stories and an epic holding none render identically, and the
+// ABSENCE of a no-workable-story notice becomes the only way to tell them
+// apart — a contract whose signal is a field's silence.
 type epicStories struct {
 	Done       int      `json:"done"`
 	InProgress int      `json:"in_progress"`
+	Planned    int      `json:"planned"`
 	Ready      []string `json:"ready"`
 	Blocked    []string `json:"blocked"`
 }
@@ -71,6 +81,27 @@ type sprintGoal struct {
 	Epic  string `json:"epic"`
 	Story string `json:"story"`
 	Title string `json:"title"`
+}
+
+// noticeNoWorkableStory is v0's ONLY notice code (§11.1): an ACTIVE epic
+// with no story in a non-terminal status, so work can be recorded nowhere
+// under it. The predicate is rules.EpicsWithoutWorkableStory — the same one
+// §7's R10 trigger (a) reads, never a second copy of the story-status
+// vocabulary.
+const noticeNoWorkableStory = "no-workable-story"
+
+// notice is one condition prime STATES rather than leaves to be inferred
+// from a counter: a fixed code token plus the identifier it is about. It is
+// a typed enumeration, NOT prose — so §11.1's rule that the epic goal and
+// the story title are the contract's only prose-class payload holds
+// unchanged (INV-469).
+//
+// The condition is stated, not enforced: no verb requires the agent to act
+// on it, and the interactive protocol that puts the choice to the owner is
+// deliberately v0.1.
+type notice struct {
+	Code string `json:"code"`
+	Epic string `json:"epic"`
 }
 
 // primeTotals is the full count of every capped list plus parked — the one
@@ -125,7 +156,8 @@ func primeRun(e *cli.Env) error {
 func buildPrime(ctx context.Context, db *sql.DB, out *primeOutput) error {
 	capN := primeCap(ctx, db)
 	steps := []func(context.Context, *sql.DB, *primeOutput, int) error{
-		fillActiveEpics, fillEpicLists, fillTaskLists, fillStale, fillSprintGoals, fillDivergence,
+		fillActiveEpics, fillEpicLists, fillTaskLists, fillStale, fillSprintGoals,
+		fillNotices, fillDivergence,
 	}
 	for _, step := range steps {
 		if err := step(ctx, db, out, capN); err != nil {
@@ -191,8 +223,9 @@ func fillActiveEpics(ctx context.Context, db *sql.DB, out *primeOutput, _ int) e
 	return nil
 }
 
-// epicStoryTally counts an epic's done/in_progress stories and lists its
-// ready/blocked story ids (id ASC).
+// epicStoryTally counts an epic's done/in_progress/planned stories and lists
+// its ready/blocked story ids (id ASC). DISSOLVED is counted nowhere, as
+// before: a dissolved story is not a story the epic still holds.
 func epicStoryTally(ctx context.Context, db *sql.DB, slug string) (epicStories, error) {
 	st := epicStories{Ready: []string{}, Blocked: []string{}}
 	rows, err := db.QueryContext(ctx,
@@ -211,6 +244,8 @@ func epicStoryTally(ctx context.Context, db *sql.DB, slug string) (epicStories, 
 			st.Done++
 		case storyInProgress:
 			st.InProgress++
+		case storyPlanned:
+			st.Planned++
 		case storyReady:
 			st.Ready = append(st.Ready, id)
 		case storyBlocked:
@@ -385,6 +420,43 @@ func fillSprintGoals(ctx context.Context, db *sql.DB, out *primeOutput, _ int) e
 	return nil
 }
 
+// fillNotices fills notices[] — the §11.1 conditions prime states outright.
+// Never capped: it is bounded by the ACTIVE-epic count, like epics_active[]
+// itself, and capping it would hide exactly the epics it exists to name
+// (§2's "nothing hides").
+//
+// The one v0 code comes from rules.EpicsWithoutWorkableStory, which is also
+// R10's trigger (a). Calling it here rather than re-asking the question in
+// SQL is the point of the shared package: two hand-written copies of the
+// non-terminal story vocabulary is the drift this surface pair exists to
+// avoid.
+func fillNotices(ctx context.Context, db *sql.DB, out *primeOutput, _ int) error {
+	homeless, err := rules.EpicsWithoutWorkableStory(ctx, db)
+	if err != nil {
+		return fmt.Errorf("prime: notices: %w", err)
+	}
+	for _, slug := range homeless {
+		out.Notices = append(out.Notices, notice{Code: noticeNoWorkableStory, Epic: slug})
+	}
+	// The contract's order is code ASC, then epic ASC.
+	//
+	// IN v0 THIS SORT IS WHOLLY UNEXERCISED, and no test can make it fail:
+	// there is one code, and rules.EpicsWithoutWorkableStory already ends
+	// `ORDER BY e.slug`, so both legs are no-ops on every input reachable
+	// today — deleting the whole block leaves the suite green. It is kept
+	// because the ordering is the CONTRACT's, not the predicate's: stating
+	// it at the emitting site is what stops a second code from being
+	// appended into a silently wrong order, and it becomes load-bearing the
+	// moment that code exists.
+	slices.SortFunc(out.Notices, func(a, b notice) int {
+		if c := strings.Compare(a.Code, b.Code); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Epic, b.Epic)
+	})
+	return nil
+}
+
 // fillDivergence sets the two §8-sourced booleans, both read-only:
 // dump_divergence (the tracked dump moved under this DB, §8.4) and
 // dump_requires_newer_binary (the tracked dump's header schema_version is
@@ -470,6 +542,9 @@ func ensureEmpty(out *primeOutput) {
 	if out.SprintGoals == nil {
 		out.SprintGoals = []sprintGoal{}
 	}
+	if out.Notices == nil {
+		out.Notices = []notice{}
+	}
 }
 
 // printPrimeDigest is the human fallback when --json is absent: a terse
@@ -480,6 +555,13 @@ func printPrimeDigest(e *cli.Env, out *primeOutput) {
 	for _, ep := range out.EpicsActive {
 		_, _ = fmt.Fprintf(e.Stdout, "  %s — %s (unmet criteria: %d)\n", ep.Slug, ep.Goal, ep.CriteriaUnmet)
 	}
+	// Each notice renders as a sentence BEFORE the counter line — the whole
+	// point of the field: a bare `sprint goals: 0` reads the same for a
+	// healthy epic between two stories as for one nothing can be recorded
+	// against.
+	for _, n := range out.Notices {
+		_, _ = fmt.Fprintln(e.Stdout, noticeSentence(n))
+	}
 	_, _ = fmt.Fprintf(e.Stdout, "sprint goals: %d · ready: %d · triage: %d · in review: %d · stale: %d · parked: %d\n",
 		len(out.SprintGoals), out.Totals.Ready, out.Totals.Triage, out.Totals.InReview, out.Totals.Stale, out.Totals.Parked)
 	if out.DumpDivergence {
@@ -487,5 +569,28 @@ func printPrimeDigest(e *cli.Env, out *primeOutput) {
 	}
 	if out.DumpRequiresNewerBinary {
 		_, _ = fmt.Fprintln(e.Stdout, "dump_requires_newer_binary: upgrade selftracked")
+	}
+}
+
+// noticeSentence renders one notice for the human digest. The sentence lives
+// here and not in the JSON on purpose: the digest is explicitly outside the
+// stable contract, and the contract carries the typed code so a consumer
+// never parses prose. The fallback is not decoration — a code added without
+// its sentence must still print its subject rather than vanish from the
+// digest.
+//
+// EVERY interpolated identifier is %q-quoted, matching `worklog add`'s
+// refusals. `import` does not apply the kebab-case rule `epic create`
+// enforces and `epics.slug` carries no shape CHECK, so a slug can be an
+// arbitrary string; dropped raw into a fluent English sentence it reads as
+// part of the sentence. Quoting does not sanitize it — it marks where the
+// data starts and ends, which is what a reader needs to see.
+func noticeSentence(n notice) string {
+	switch n.Code {
+	case noticeNoWorkableStory:
+		return fmt.Sprintf("notice: epic %q has no story that can receive work — "+
+			"new work has no home; opening a story is the owner's call", n.Epic)
+	default:
+		return fmt.Sprintf("notice: %q (epic %q)", n.Code, n.Epic)
 	}
 }

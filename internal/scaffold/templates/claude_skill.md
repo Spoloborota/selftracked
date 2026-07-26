@@ -18,6 +18,16 @@ description: The selftracked working loop — how to prime, refine the backlog, 
 3. **Pick** from `ready[]`, honoring `sprint_goals[]` — every IN-PROGRESS
    story is a sprint goal; multiple entries mean "finish or choose
    explicitly", never a silent pick.
+   **Work that did not come from `ready[]`** — an owner's request, a defect
+   found mid-task, a follow-up, which is how most work arrives — is
+   classified before any write by PROMPT.md's "Where new work goes": work
+   advancing an ACTIVE epic's goal is a **story** under it, and that branch
+   **stops for the owner**, because opening a story is a scope change an
+   implementing agent never authorizes for itself; anything else is a
+   **task**. Work matching no existing task, story or epic is named out
+   loud first — `prime`'s `no-workable-story` notice names the epic-scoped
+   case. This branch is for work you are **taking up now**; work you merely
+   *notice* while a story is in progress is the drift rule below.
 4. **Execute:** `story start` → do the work → commit with `#NN` and/or the
    epic slug in the message → `story done --commits … --gate …`.
 5. **At epic end:** `epic close` (it runs the criteria, sweeps the stories,
@@ -30,8 +40,11 @@ description: The selftracked working loop — how to prime, refine the backlog, 
 
 ## Drift rule
 
-A new idea while working is **`create` + park, one command** — capture it,
-do not pivot to it.
+A new idea **discovered while a story is in progress** is **`create` +
+park, one command** — capture it, do not pivot to it, whatever its size.
+Work you are taking up now, with no story holding it, is step 3's
+classification instead: the two answer different questions, and this one
+answers only "something surfaced mid-story".
 
 ## When the product owner is absent
 

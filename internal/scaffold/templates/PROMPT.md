@@ -28,6 +28,32 @@ The explicit `git add` matters: the pre-commit hook refreshes and stages
 the pair itself, but when the index started empty, git refuses the commit
 anyway — hook-staged content alone does not count.
 
+## Where new work goes
+
+Work that is not already in the backlog is classified **before the first
+write**, never guessed at:
+
+- Work that advances an **ACTIVE epic's goal** is a **story** under that
+  epic. Opening one is a **scope change**: the owner authorizes it, and an
+  implementing agent never authorizes its own.
+- Work that does **not** advance an active epic's goal — a defect, a
+  question, a follow-up, anything standalone — is a **task**
+  (`create --title …`), homed to an epic with `--epic` only when it
+  genuinely belongs to one.
+- Work matching **no existing task, story or epic** is said out loud before
+  the first write and the choice put to the owner, rather than worked
+  off-book. `prime` names the epic-scoped case — an active epic with no
+  story that can receive work — as a `no-workable-story` notice; the rest
+  is your own judgement, unenforced, until the v0.1 interactive protocol.
+
+"Advances the epic's goal" is a judgement, and a wrong call is cheap to
+correct (`edit --epic` / `--detach`). The rule exists to stop the *silent*
+guess, not to remove the judgement. Like the durable-doc rules below, it is
+guidance in this generated file: no verb refuses on it. That is a statement
+about the tool, not permission — unenforced is not optional, and where the
+rule says the choice is the owner's, an agent's own classification is what
+raises the question, never what settles it.
+
 ## Sync (§8.4)
 
 Git is the only sync channel: `.selftracked/dump.sql` and the generated docs

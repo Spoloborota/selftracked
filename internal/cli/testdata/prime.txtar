@@ -12,6 +12,7 @@ stdout '"ready":\[\]'
 stdout '"triage":\[\]'
 stdout '"in_review":\[\]'
 stdout '"sprint_goals":\[\]'
+stdout '"notices":\[\]'
 stdout '"totals":\{'
 stdout '"dump_divergence":false'
 stdout '"dump_requires_newer_binary":false'
@@ -27,6 +28,34 @@ stdout '"triage":\["#1"\]'
 # prime without --json is a human digest, not the contract.
 expectexit 0 selftracked prime
 stdout 'triage: 1'
+
+# §11.1's notices[]: an ACTIVE epic with no story that can receive work is
+# named, not left to be inferred from `sprint goals: 0`. Through the real
+# verbs — `epic create` + `epic activate` — so the notice is asserted against
+# the state a user can actually reach.
+expectexit 0 selftracked epic create homeless --goal 'nothing can be recorded here'
+expectexit 0 selftracked epic activate homeless
+expectexit 0 selftracked prime --json
+stdout '"notices":\[\{"code":"no-workable-story","epic":"homeless"\}\]'
+# The typed notice sits between sprint_goals[] and totals{} (field order is
+# part of the contract), and the epic's tally now carries `planned`.
+stdout '"sprint_goals":\[\],"notices":\[\{"code":"no-workable-story","epic":"homeless"\}\],"totals":\{'
+stdout '"stories":\{"done":0,"in_progress":0,"planned":0,"ready":\[\],"blocked":\[\]\}'
+
+# The digest says it in a sentence, before the counter line. The slug is
+# %q-quoted: it is interpolated into fluent English and `import` can mint one
+# with any shape at all, so the boundary between sentence and data is drawn.
+expectexit 0 selftracked prime
+stdout 'notice: epic "homeless" has no story that can receive work — new work has no home; opening a story is the owner''s call'
+
+# A PLANNED story is a home: the notice goes silent and `planned` counts it —
+# without that field this epic and an empty one would render identically.
+expectexit 0 selftracked story add homeless --title 'the home'
+expectexit 0 selftracked prime --json
+stdout '"notices":\[\]'
+stdout '"stories":\{"done":0,"in_progress":0,"planned":1,"ready":\[\],"blocked":\[\]\}'
+expectexit 0 selftracked prime
+! stdout 'notice: epic homeless'
 
 # A moved tracked dump (a pull) flips dump_divergence — read-only: prime must
 # not rewrite the dump it reports on.
